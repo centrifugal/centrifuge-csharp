@@ -1,0 +1,775 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Centrifugal.Centrifuge.Protocol;
+using Google.Protobuf;
+
+namespace Centrifugal.Centrifuge
+{
+    /// <summary>
+    /// Represents a subscription to a channel.
+    /// </summary>
+    public class CentrifugeSubscription
+    {
+        private readonly CentrifugeClient _client;
+        private readonly SubscriptionOptions _options;
+        private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
+        private readonly object _stateChangeLock = new object();
+
+        private SubscriptionState _state = SubscriptionState.Unsubscribed;
+        private int _resubscribeAttempts;
+        private CancellationTokenSource? _resubscribeCts;
+        private StreamPosition? _streamPosition;
+        private bool _deltaNegotiated;
+        private byte[]? _prevValue;
+        private Timer? _refreshTimer;
+        private int _refreshAttempts;
+        private bool _refreshRequired;
+
+        /// <summary>
+        /// Gets the channel name.
+        /// </summary>
+        public string Channel { get; }
+
+        /// <summary>
+        /// Gets the current subscription state.
+        /// </summary>
+        public SubscriptionState State => _state;
+
+        /// <summary>
+        /// Event raised when subscription state changes.
+        /// </summary>
+        public event EventHandler<SubscriptionStateEventArgs>? StateChanged;
+
+        /// <summary>
+        /// Event raised when subscription is subscribing.
+        /// </summary>
+        public event EventHandler<SubscribingEventArgs>? Subscribing;
+
+        /// <summary>
+        /// Event raised when subscription is subscribed.
+        /// </summary>
+        public event EventHandler<SubscribedEventArgs>? Subscribed;
+
+        /// <summary>
+        /// Event raised when subscription is unsubscribed.
+        /// </summary>
+        public event EventHandler<UnsubscribedEventArgs>? Unsubscribed;
+
+        /// <summary>
+        /// Event raised when a publication is received.
+        /// </summary>
+        public event EventHandler<PublicationEventArgs>? Publication;
+
+        /// <summary>
+        /// Event raised when a join event is received.
+        /// </summary>
+        public event EventHandler<JoinEventArgs>? Join;
+
+        /// <summary>
+        /// Event raised when a leave event is received.
+        /// </summary>
+        public event EventHandler<LeaveEventArgs>? Leave;
+
+        /// <summary>
+        /// Event raised when an error occurs.
+        /// </summary>
+        public event EventHandler<ErrorEventArgs>? Error;
+
+        internal CentrifugeSubscription(CentrifugeClient client, string channel, SubscriptionOptions? options)
+        {
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            Channel = channel ?? throw new ArgumentNullException(nameof(channel));
+            _options = options ?? new SubscriptionOptions();
+            _options.Validate();
+
+            if (_options.Since != null)
+            {
+                _streamPosition = _options.Since;
+            }
+        }
+
+        /// <summary>
+        /// Subscribes to the channel.
+        /// </summary>
+        public async Task SubscribeAsync()
+        {
+            await _stateLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_state != SubscriptionState.Unsubscribed)
+                {
+                    return;
+                }
+
+                _resubscribeAttempts = 0;
+                await StartSubscribingAsync(SubscribingCodes.SubscribeCalled, "subscribe called").ConfigureAwait(false);
+            }
+            finally
+            {
+                _stateLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Unsubscribes from the channel.
+        /// </summary>
+        public async Task UnsubscribeAsync()
+        {
+            await SetUnsubscribedAsync(UnsubscribedCodes.UnsubscribeCalled, "unsubscribe called").ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Sets the subscription data. This only affects the next subscription attempt.
+        /// Note that if GetData callback is configured, it will override this value during resubscriptions.
+        /// </summary>
+        /// <param name="data">New subscription data.</param>
+        public void SetData(byte[]? data)
+        {
+            _options.Data = data;
+        }
+
+        /// <summary>
+        /// Sets server-side publication filter based on publication tags.
+        /// This allows filtering publications on the server side before they are sent to the client.
+        /// The filter is applied on the next subscription/resubscription attempt.
+        /// Cannot be used together with delta compression.
+        /// </summary>
+        /// <param name="tagsFilter">The filter expression, or null to remove filtering.</param>
+        /// <exception cref="InvalidOperationException">Thrown when trying to set tags filter while delta compression is enabled.</exception>
+        /// <example>
+        /// // Simple equality filter
+        /// sub.SetTagsFilter(FilterNodeBuilder.Eq("ticker", "BTC"));
+        ///
+        /// // Complex filter with logical operators
+        /// sub.SetTagsFilter(
+        ///     FilterNodeBuilder.And(
+        ///         FilterNodeBuilder.Eq("ticker", "BTC"),
+        ///         FilterNodeBuilder.Gt("price", "50000")
+        ///     )
+        /// );
+        ///
+        /// // Filter with IN operator
+        /// sub.SetTagsFilter(FilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL"));
+        /// </example>
+        public void SetTagsFilter(FilterNode? tagsFilter)
+        {
+            if (tagsFilter != null && !string.IsNullOrEmpty(_options.Delta))
+            {
+                throw new InvalidOperationException("Cannot use delta and TagsFilter together");
+            }
+            _options.TagsFilter = tagsFilter;
+        }
+
+        /// <summary>
+        /// Publishes data to the channel.
+        /// </summary>
+        /// <param name="data">Data to publish.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task PublishAsync(byte[] data, CancellationToken cancellationToken = default)
+        {
+            var cmd = new Command
+            {
+                Id = _client.NextCommandId(),
+                Publish = new PublishRequest
+                {
+                    Channel = Channel,
+                    Data = ByteString.CopyFrom(data)
+                }
+            };
+
+            var reply = await _client.SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+        }
+
+        /// <summary>
+        /// Gets the channel history.
+        /// </summary>
+        /// <param name="options">History options.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>History result.</returns>
+        public async Task<HistoryResult> HistoryAsync(HistoryOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            var request = new HistoryRequest
+            {
+                Channel = Channel
+            };
+
+            if (options != null)
+            {
+                if (options.Limit.HasValue)
+                {
+                    request.Limit = options.Limit.Value;
+                }
+
+                if (options.Since != null)
+                {
+                    request.Since = new Centrifugal.Centrifuge.Protocol.StreamPosition
+                    {
+                        Offset = options.Since.Offset,
+                        Epoch = options.Since.Epoch
+                    };
+                }
+
+                request.Reverse = options.Reverse;
+            }
+
+            var cmd = new Command
+            {
+                Id = _client.NextCommandId(),
+                History = request
+            };
+
+            var reply = await _client.SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            var publications = new List<PublicationEventArgs>();
+            foreach (var pub in reply.History.Publications)
+            {
+                publications.Add(CentrifugeClient.CreatePublicationArgs(Channel, pub));
+            }
+
+            return new HistoryResult(
+                publications.ToArray(),
+                reply.History.Epoch,
+                reply.History.Offset
+            );
+        }
+
+        /// <summary>
+        /// Gets the channel presence.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Presence result.</returns>
+        public async Task<PresenceResult> PresenceAsync(CancellationToken cancellationToken = default)
+        {
+            var cmd = new Command
+            {
+                Id = _client.NextCommandId(),
+                Presence = new PresenceRequest
+                {
+                    Channel = Channel
+                }
+            };
+
+            var reply = await _client.SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            var clients = new Dictionary<string, ClientInfo>();
+            foreach (var kvp in reply.Presence.Presence)
+            {
+                var info = kvp.Value;
+                clients[kvp.Key] = new ClientInfo(
+                    info.User,
+                    info.Client,
+                    info.ConnInfo.ToByteArray(),
+                    info.ChanInfo.ToByteArray()
+                );
+            }
+
+            return new PresenceResult(clients);
+        }
+
+        /// <summary>
+        /// Gets the channel presence stats.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Presence stats result.</returns>
+        public async Task<PresenceStatsResult> PresenceStatsAsync(CancellationToken cancellationToken = default)
+        {
+            var cmd = new Command
+            {
+                Id = _client.NextCommandId(),
+                PresenceStats = new PresenceStatsRequest
+                {
+                    Channel = Channel
+                }
+            };
+
+            var reply = await _client.SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            return new PresenceStatsResult(
+                reply.PresenceStats.NumClients,
+                reply.PresenceStats.NumUsers
+            );
+        }
+
+        internal async Task ResubscribeAsync()
+        {
+            await _stateLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_state == SubscriptionState.Unsubscribed)
+                {
+                    return;
+                }
+
+                await StartSubscribingAsync(SubscribingCodes.TransportClosed, "transport closed").ConfigureAwait(false);
+            }
+            finally
+            {
+                _stateLock.Release();
+            }
+        }
+
+        private async Task StartSubscribingAsync(int code, string reason)
+        {
+            SetState(SubscriptionState.Subscribing);
+            Subscribing?.Invoke(this, new SubscribingEventArgs(code, reason));
+
+            if (_client.State != ClientState.Connected)
+            {
+                // Wait for client to connect
+                return;
+            }
+
+            try
+            {
+                await SendSubscribeCommandAsync().ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // Subscribe timeout should trigger client reconnect, just like in centrifuge-js
+                OnError("subscribe", new CentrifugeException(ErrorCodes.Timeout, "subscribe timeout", true));
+                // Trigger client disconnect with reconnect
+                await _client.HandleSubscribeTimeoutAsync().ConfigureAwait(false);
+            }
+            catch (UnauthorizedException)
+            {
+                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                OnError("subscribe", ex);
+                await ScheduleResubscribeAsync().ConfigureAwait(false);
+            }
+        }
+
+        private async Task SendSubscribeCommandAsync()
+        {
+            string? token = _options.Token;
+
+            // If refresh is required or token is empty, try to get a new token
+            if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
+            {
+                try
+                {
+                    token = await _options.GetToken(Channel).ConfigureAwait(false);
+                    _options.Token = token;
+                }
+                catch (UnauthorizedException)
+                {
+                    await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                    return;
+                }
+            }
+
+            var request = new SubscribeRequest
+            {
+                Channel = Channel,
+                Token = token ?? string.Empty,
+                Positioned = _options.Positioned,
+                Recoverable = _options.Recoverable,
+                JoinLeave = _options.JoinLeave
+            };
+
+            if (_streamPosition != null)
+            {
+                request.Recover = true;
+                request.Epoch = _streamPosition.Epoch;
+                request.Offset = _streamPosition.Offset;
+            }
+
+            if (_options.Data != null)
+            {
+                request.Data = ByteString.CopyFrom(_options.Data);
+            }
+
+            if (_options.TagsFilter != null)
+            {
+                request.Tf = _options.TagsFilter;
+            }
+
+            if (!string.IsNullOrEmpty(_options.Delta))
+            {
+                request.Delta = _options.Delta;
+            }
+
+            var cmd = new Command
+            {
+                Id = _client.NextCommandId(),
+                Subscribe = request
+            };
+
+            var reply = await _client.SendCommandAsync(cmd, CancellationToken.None).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                // Error code 109 means token expired - mark for refresh on next subscribe
+                if (reply.Error.Code == 109)
+                {
+                    _refreshRequired = true;
+                }
+
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            HandleSubscribeReply(reply.Subscribe);
+        }
+
+        private void HandleSubscribeReply(SubscribeResult result)
+        {
+            bool wasRecovering = _streamPosition != null;
+            bool recovered = result.Recovered;
+
+            if (result.Positioned)
+            {
+                _streamPosition = new StreamPosition(result.Offset, result.Epoch);
+            }
+
+            // Check if delta compression was negotiated with server
+            if (result.Delta)
+            {
+                _deltaNegotiated = true;
+            }
+            else
+            {
+                _deltaNegotiated = false;
+                _prevValue = null;
+            }
+
+            // Clear refresh timer and reset attempts
+            ClearRefreshTimer();
+            _refreshAttempts = 0;
+            _refreshRequired = false;
+
+            // Schedule token refresh if token expires
+            if (result.Expires)
+            {
+                ScheduleTokenRefresh(result.Ttl);
+            }
+
+            SetState(SubscriptionState.Subscribed);
+            Subscribed?.Invoke(this, new SubscribedEventArgs(
+                wasRecovering,
+                recovered,
+                result.Recoverable,
+                result.Positioned,
+                _streamPosition,
+                result.Data.ToByteArray()
+            ));
+
+            _resubscribeAttempts = 0;
+
+            // Dispatch recovered publications
+            foreach (var pub in result.Publications)
+            {
+                var pubArgs = ApplyDeltaIfNeeded(pub);
+                Publication?.Invoke(this, pubArgs);
+
+                if (result.Positioned && pub.Offset > 0)
+                {
+                    _streamPosition = new StreamPosition(pub.Offset, result.Epoch);
+                }
+            }
+        }
+
+        internal void HandlePublication(Publication pub)
+        {
+            var pubArgs = ApplyDeltaIfNeeded(pub);
+            Publication?.Invoke(this, pubArgs);
+
+            if (pub.Offset > 0 && _streamPosition != null)
+            {
+                _streamPosition = new StreamPosition(pub.Offset, _streamPosition.Epoch);
+            }
+        }
+
+        private PublicationEventArgs ApplyDeltaIfNeeded(Publication pub)
+        {
+            var data = pub.Data.ToByteArray();
+
+            // Apply delta decompression if negotiated with server
+            if (!string.IsNullOrEmpty(_options.Delta) && _deltaNegotiated)
+            {
+                try
+                {
+                    if (_prevValue != null && data.Length > 0)
+                    {
+                        // Apply fossil delta to get the actual publication data
+                        data = Fossil.ApplyDelta(_prevValue, data);
+                    }
+                    _prevValue = data;
+                }
+                catch (Exception ex)
+                {
+                    OnError("delta", ex);
+                    // Fall through to use original data on delta error
+                }
+            }
+
+            return CentrifugeClient.CreatePublicationArgs(Channel, pub, data);
+        }
+
+        internal void HandleJoin(Join join)
+        {
+            if (join.Info == null) return;
+
+            var info = new ClientInfo(
+                join.Info.User,
+                join.Info.Client,
+                join.Info.ConnInfo.ToByteArray(),
+                join.Info.ChanInfo.ToByteArray()
+            );
+
+            Join?.Invoke(this, new JoinEventArgs(Channel, info));
+        }
+
+        internal void HandleLeave(Leave leave)
+        {
+            if (leave.Info == null) return;
+
+            var info = new ClientInfo(
+                leave.Info.User,
+                leave.Info.Client,
+                leave.Info.ConnInfo.ToByteArray(),
+                leave.Info.ChanInfo.ToByteArray()
+            );
+
+            Leave?.Invoke(this, new LeaveEventArgs(Channel, info));
+        }
+
+        private async Task ScheduleResubscribeAsync()
+        {
+            if (_state != SubscriptionState.Subscribing)
+            {
+                return;
+            }
+
+            _resubscribeCts?.Cancel();
+            _resubscribeCts = new CancellationTokenSource();
+
+            int delay = Utilities.CalculateBackoff(
+                _resubscribeAttempts++,
+                _options.MinResubscribeDelay,
+                _options.MaxResubscribeDelay
+            );
+
+            try
+            {
+                await Task.Delay(delay, _resubscribeCts.Token).ConfigureAwait(false);
+                await SendSubscribeCommandAsync().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Resubscribe was cancelled
+            }
+        }
+
+        internal async Task SetUnsubscribedAsync(int code, string reason)
+        {
+            // Change state synchronously first
+            lock (_stateChangeLock)
+            {
+                if (_state == SubscriptionState.Unsubscribed)
+                {
+                    return;
+                }
+
+                SetState(SubscriptionState.Unsubscribed);
+                Unsubscribed?.Invoke(this, new UnsubscribedEventArgs(code, reason));
+            }
+
+            // Now do async cleanup without holding locks
+            await _stateLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                _resubscribeCts?.Cancel();
+                ClearRefreshTimer();
+
+                if (_client.State == ClientState.Connected)
+                {
+                    try
+                    {
+                        var cmd = new Command
+                        {
+                            Id = _client.NextCommandId(),
+                            Unsubscribe = new UnsubscribeRequest
+                            {
+                                Channel = Channel
+                            }
+                        };
+
+                        await _client.SendCommandAsync(cmd, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // Ignore errors during unsubscribe
+                    }
+                }
+            }
+            finally
+            {
+                _stateLock.Release();
+            }
+        }
+
+        private void SetState(SubscriptionState newState)
+        {
+            var oldState = _state;
+            _state = newState;
+
+            if (oldState != newState)
+            {
+                StateChanged?.Invoke(this, new SubscriptionStateEventArgs(oldState, newState));
+            }
+        }
+
+        private void OnError(string type, Exception exception)
+        {
+            Error?.Invoke(this, new ErrorEventArgs(type, 0, exception.Message, false, exception));
+        }
+
+        private void ScheduleTokenRefresh(uint ttl)
+        {
+            _refreshTimer?.Dispose();
+            var delay = Utilities.TtlToMilliseconds(ttl);
+            _refreshTimer = new Timer(_ => _ = RefreshTokenAsync(), null, delay, Timeout.Infinite);
+        }
+
+        private void ClearRefreshTimer()
+        {
+            _refreshTimer?.Dispose();
+            _refreshTimer = null;
+        }
+
+        private async Task RefreshTokenAsync()
+        {
+            if (_state != SubscriptionState.Subscribed || _options.GetToken == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var token = await _options.GetToken(Channel).ConfigureAwait(false);
+                _options.Token = token;
+
+                var cmd = new Command
+                {
+                    Id = _client.NextCommandId(),
+                    SubRefresh = new SubRefreshRequest
+                    {
+                        Channel = Channel,
+                        Token = token
+                    }
+                };
+
+                var reply = await _client.SendCommandAsync(cmd, CancellationToken.None).ConfigureAwait(false);
+
+                if (reply.Error != null)
+                {
+                    HandleRefreshError(new CentrifugeException(
+                        (int)reply.Error.Code,
+                        reply.Error.Message,
+                        reply.Error.Temporary
+                    ));
+                }
+                else
+                {
+                    HandleRefreshReply(reply.SubRefresh);
+                }
+            }
+            catch (UnauthorizedException)
+            {
+                // Token refresh unauthorized - unsubscribe
+                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Network or temporary error - retry with exponential backoff
+                OnError("refresh", ex);
+                var delay = Utilities.CalculateBackoff(
+                    _refreshAttempts,
+                    _options.MinResubscribeDelay,
+                    _options.MaxResubscribeDelay
+                );
+                _refreshAttempts++;
+                _refreshTimer?.Dispose();
+                _refreshTimer = new Timer(_ => _ = RefreshTokenAsync(), null, delay, Timeout.Infinite);
+            }
+        }
+
+        private void HandleRefreshReply(SubRefreshResult result)
+        {
+            _refreshAttempts = 0;
+
+            // Schedule next refresh if token still expires
+            if (result.Expires)
+            {
+                ScheduleTokenRefresh(result.Ttl);
+            }
+        }
+
+        private void HandleRefreshError(CentrifugeException error)
+        {
+            OnError("refresh", error);
+
+            // For temporary errors, retry with exponential backoff
+            if (error.Temporary)
+            {
+                var delay = Utilities.CalculateBackoff(
+                    _refreshAttempts,
+                    _options.MinResubscribeDelay,
+                    _options.MaxResubscribeDelay
+                );
+                _refreshAttempts++;
+                _refreshTimer?.Dispose();
+                _refreshTimer = new Timer(_ => _ = RefreshTokenAsync(), null, delay, Timeout.Infinite);
+            }
+            else
+            {
+                // Permanent error - unsubscribe
+                _ = SetUnsubscribedAsync(error.Code, error.Message);
+            }
+        }
+    }
+}

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Multi-target for maximum compatibility -->
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Namespace and Assembly -->
+    <RootNamespace>Centrifugal.Centrifuge</RootNamespace>
+    <AssemblyName>Centrifugal.Centrifuge</AssemblyName>
+
+    <!-- Package Information -->
+    <PackageId>Centrifugal.Centrifuge</PackageId>
+    <Version>0.0.1</Version>
+    <Authors>Centrifugal Labs</Authors>
+    <Company>Centrifugal Labs</Company>
+    <Description>Official C# client SDK for Centrifugo and Centrifuge real-time messaging servers. Supports WebSocket, SSE, and HTTP-streaming transports.</Description>
+    <PackageProjectUrl>https://github.com/centrifugal/centrifuge-csharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/centrifugal/centrifuge-csharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>centrifugo;centrifuge;websocket;real-time;messaging;protobuf;sse;streaming</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Enable SourceLink for debugging -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Protobuf support - allow minor/patch updates -->
+    <PackageReference Include="Google.Protobuf" Version="3.25.1" />
+
+    <!-- For older frameworks, add compatibility packages -->
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0' OR '$(TargetFramework)' == 'netstandard2.1'" />
+    <PackageReference Include="System.Memory" Version="4.5.5" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+
+    <!-- Source link for better debugging experience -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../icon.png" Pack="true" PackagePath="/" Condition="Exists('../../icon.png')" />
+  </ItemGroup>
+
+</Project>

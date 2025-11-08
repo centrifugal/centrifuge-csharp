@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['6.0.x', '7.0.x', '8.0.x', '9.0.x']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Run Unit Tests
+      if: matrix.os != 'ubuntu-latest'
+      run: dotnet test --no-build --configuration Release --verbosity normal --filter "FullyQualifiedName!~IntegrationTests"
+
+    - name: Start Centrifugo
+      if: matrix.os == 'ubuntu-latest'
+      run: docker compose up -d --wait
+
+    - name: Run All Tests (Unit + Integration)
+      if: matrix.os == 'ubuntu-latest'
+      run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+
+    - name: Stop Centrifugo
+      if: matrix.os == 'ubuntu-latest' && always()
+      run: docker compose down
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.os == 'ubuntu-latest' && matrix.dotnet-version == '9.0.x'
+      with:
+        file: ./coverage.cobertura.xml
+        fail_ci_if_error: false

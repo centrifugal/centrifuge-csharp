@@ -1,0 +1,32 @@
+root = true
+
+# All files
+[*]
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+# Code files
+[*.{cs,csx,vb,vbx}]
+indent_size = 4
+
+# C# files
+[*.cs]
+
+# IDE0130: Namespace does not match folder structure
+# VS Code's C# extension incorrectly suggests namespace should match filename
+# Disable this rule since our namespaces correctly match folder structure
+dotnet_diagnostic.IDE0130.severity = none
+
+# IDE0005: Using directive is unnecessary
+# VS Code's C# extension sometimes incorrectly flags necessary usings
+# Set to suggestion instead of warning to reduce noise
+dotnet_diagnostic.IDE0005.severity = none
+
+# Namespace style preference
+csharp_style_namespace_declarations = block_scoped:warning
+
+# Using directives preferences
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
