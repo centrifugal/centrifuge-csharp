@@ -27,6 +27,9 @@ namespace Centrifugal.Centrifuge.Transports
         public string Name => "websocket";
 
         /// <inheritdoc/>
+        public bool UsesEmulation => false;
+
+        /// <inheritdoc/>
         public event EventHandler? Opened;
 
         /// <inheritdoc/>
@@ -54,13 +57,14 @@ namespace Centrifugal.Centrifuge.Transports
         }
 
         /// <inheritdoc/>
-        public async Task OpenAsync(CancellationToken cancellationToken = default)
+        public async Task OpenAsync(CancellationToken cancellationToken = default, byte[]? initialData = null)
         {
             if (_webSocket != null)
             {
                 throw new InvalidOperationException("Transport is already open");
             }
 
+            // WebSocket doesn't use initialData parameter
             _webSocket = new ClientWebSocket();
             _webSocket.Options.AddSubProtocol(_subProtocol);
 
@@ -109,6 +113,12 @@ namespace Centrifugal.Centrifuge.Transports
             {
                 _sendLock.Release();
             }
+        }
+
+        /// <inheritdoc/>
+        public Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("WebSocket transport does not use emulation mode");
         }
 
         /// <inheritdoc/>

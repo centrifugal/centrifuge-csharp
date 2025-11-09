@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Centrifugal.Centrifuge
 {
@@ -65,6 +66,44 @@ namespace Centrifugal.Centrifuge
     internal static class VarintCodec
     {
         /// <summary>
+        /// Reads a varint-delimited message from a stream asynchronously.
+        /// </summary>
+        /// <param name="stream">The stream to read from.</param>
+        /// <param name="buffer">Buffer for reading.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The message bytes, or null if stream ended.</returns>
+        public static async Task<byte[]?> ReadDelimitedMessageAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
+        {
+            // Read the varint length prefix
+            int length = await ReadVarintAsync(stream, cancellationToken).ConfigureAwait(false);
+            if (length < 0)
+            {
+                return null; // End of stream
+            }
+
+            if (length == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            // Read the message data
+            byte[] data = new byte[length];
+            int offset = 0;
+            while (offset < length)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                int read = await stream.ReadAsync(data, offset, length - offset, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    throw new IOException("Unexpected end of stream while reading message data");
+                }
+                offset += read;
+            }
+
+            return data;
+        }
+
+        /// <summary>
         /// Reads a varint-delimited message from a stream.
         /// </summary>
         /// <param name="stream">The stream to read from.</param>
@@ -114,6 +153,44 @@ namespace Centrifugal.Centrifuge
 
             // Write the message data
             stream.Write(data, 0, data.Length);
+        }
+
+        /// <summary>
+        /// Reads a varint from a stream asynchronously.
+        /// </summary>
+        /// <param name="stream">The stream to read from.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The decoded varint value, or -1 if end of stream.</returns>
+        private static async Task<int> ReadVarintAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            int result = 0;
+            int shift = 0;
+            byte[] buffer = new byte[1];
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                int bytesRead = await stream.ReadAsync(buffer, 0, 1, cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    return shift == 0 ? -1 : throw new IOException("Unexpected end of stream while reading varint");
+                }
+
+                byte b = buffer[0];
+                result |= (b & 0x7F) << shift;
+
+                if ((b & 0x80) == 0)
+                {
+                    return result;
+                }
+
+                shift += 7;
+                if (shift >= 32)
+                {
+                    throw new IOException("Varint too long");
+                }
+            }
         }
 
         /// <summary>

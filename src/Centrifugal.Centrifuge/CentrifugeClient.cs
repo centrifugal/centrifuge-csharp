@@ -44,6 +44,9 @@ namespace Centrifugal.Centrifuge
         private uint _serverPingInterval;
         private bool _sendPong;
         private string? _clientId;
+        private string _session = string.Empty;
+        private string _node = string.Empty;
+        private Command? _pendingConnectCommand; // For emulation transports, stores the connect command sent in initialData
         private bool _disposed;
         private int _refreshAttempts;
         private bool _refreshRequired;
@@ -413,7 +416,22 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                await _transport.SendAsync(command.ToByteArray(), cancellationToken).ConfigureAwait(false);
+                // Don't send connect command for emulation transports - it was already sent during OpenAsync
+                bool isConnectCommand = command.Connect != null;
+                if (!isConnectCommand || !_transport.UsesEmulation)
+                {
+                    if (_transport.UsesEmulation)
+                    {
+                        // For emulation transports (non-connect commands), use SendEmulationAsync with session and node
+                        var emulationEndpoint = GetEmulationEndpoint();
+                        await _transport.SendEmulationAsync(command.ToByteArray(), _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // For WebSocket, use regular SendAsync
+                        await _transport.SendAsync(command.ToByteArray(), cancellationToken).ConfigureAwait(false);
+                    }
+                }
 
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(_options.Timeout);
@@ -432,6 +450,21 @@ namespace Centrifugal.Centrifuge
             {
                 _pendingCalls.TryRemove(command.Id, out _);
             }
+        }
+
+        private string GetEmulationEndpoint()
+        {
+            if (!string.IsNullOrEmpty(_options.EmulationEndpoint))
+            {
+                return _options.EmulationEndpoint;
+            }
+
+            // Auto-construct emulation endpoint from transport endpoint
+            // Emulation endpoint is at root level: http://host:port/emulation
+            string endpoint = _endpoint ?? _transportEndpoints?[_currentTransportIndex].Endpoint ?? throw new ConfigurationException("No endpoint configured");
+
+            var uri = new Uri(endpoint);
+            return $"{uri.Scheme}://{uri.Authority}/emulation";
         }
 
         private async Task StartConnectingAsync(int code, string reason)
@@ -530,7 +563,16 @@ namespace Centrifugal.Centrifuge
             _transport.Closed += OnTransportClosed;
             _transport.Error += OnTransportError;
 
-            await _transport.OpenAsync().ConfigureAwait(false);
+            // For emulation transports, build connect command and send it during OpenAsync
+            byte[]? initialData = null;
+            if (_transport.UsesEmulation)
+            {
+                // Build and store the connect command for later use in SendConnectCommandAsync
+                _pendingConnectCommand = await BuildConnectCommandObjectAsync().ConfigureAwait(false);
+                initialData = _pendingConnectCommand.ToByteArray();
+            }
+
+            await _transport.OpenAsync(initialData: initialData).ConfigureAwait(false);
         }
 
         private ITransport CreateTransport(TransportType transportType, string endpoint)
@@ -540,7 +582,7 @@ namespace Centrifugal.Centrifuge
                 case TransportType.WebSocket:
                     return new WebSocketTransport(endpoint);
                 case TransportType.SSE:
-                    return new SseTransport(endpoint);
+                    throw new ConfigurationException("SSE transport is not currently supported in this client. SSE requires JSON protocol which is not yet implemented. Use WebSocket or HttpStream instead.");
                 case TransportType.HttpStream:
                     return new HttpStreamTransport(endpoint);
                 default:
@@ -589,8 +631,121 @@ namespace Centrifugal.Centrifuge
             }
         }
 
+        private async Task<Command> BuildConnectCommandObjectAsync()
+        {
+            string? token = _options.Token;
+
+            // If refresh is required or token is empty, try to get a new token
+            if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
+            {
+                try
+                {
+                    token = await _options.GetToken().ConfigureAwait(false);
+                    _options.Token = token;
+                }
+                catch (UnauthorizedException)
+                {
+                    throw;
+                }
+            }
+
+            byte[]? data = _options.Data;
+            if (data == null && _options.GetData != null)
+            {
+                try
+                {
+                    data = await _options.GetData().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Ignore GetData errors
+                }
+            }
+
+            var connectRequest = new ConnectRequest
+            {
+                Token = token ?? string.Empty,
+                Name = _options.Name,
+                Version = _options.Version
+            };
+
+            if (data != null)
+            {
+                connectRequest.Data = ByteString.CopyFrom(data);
+            }
+
+            if (_options.Headers != null && _options.Headers.Count > 0)
+            {
+                foreach (var kvp in _options.Headers)
+                {
+                    connectRequest.Headers.Add(kvp.Key, kvp.Value);
+                }
+            }
+
+            // Include server subscriptions for recovery
+            foreach (var kvp in _serverSubscriptions)
+            {
+                var channel = kvp.Key;
+                var serverSub = kvp.Value;
+
+                if (serverSub.Recoverable)
+                {
+                    var subRequest = new Centrifugal.Centrifuge.Protocol.SubscribeRequest
+                    {
+                        Channel = channel,
+                        Recover = true,
+                        Offset = serverSub.Offset,
+                        Epoch = serverSub.Epoch
+                    };
+                    connectRequest.Subs.Add(channel, subRequest);
+                }
+            }
+
+            var cmd = new Command
+            {
+                Id = NextCommandId(),
+                Connect = connectRequest
+            };
+
+            return cmd;
+        }
+
         private async Task SendConnectCommandAsync()
         {
+            // For emulation transports, reuse the command that was already sent during OpenAsync
+            if (_transport!.UsesEmulation && _pendingConnectCommand != null)
+            {
+                var pendingCmd = _pendingConnectCommand;
+                _pendingConnectCommand = null; // Clear it so it's not reused on reconnect
+
+                // Register the pending call and wait for reply
+                var tcs = new TaskCompletionSource<Reply>();
+                _pendingCalls[pendingCmd.Id] = tcs;
+
+                using var timeoutCts = new CancellationTokenSource();
+                timeoutCts.CancelAfter(_options.Timeout);
+
+                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token))
+                    .ConfigureAwait(false);
+
+                if (completedTask != tcs.Task)
+                {
+                    _pendingCalls.TryRemove(pendingCmd.Id, out _);
+                    throw new TimeoutException();
+                }
+
+                var connectReply = await tcs.Task.ConfigureAwait(false);
+
+                if (connectReply.Error != null)
+                {
+                    var error = new CentrifugeException((int)connectReply.Error.Code, connectReply.Error.Message, connectReply.Error.Temporary);
+                    throw error;
+                }
+
+                HandleConnectReply(connectReply.Connect);
+                return;
+            }
+
             string? token = _options.Token;
 
             // If refresh is required or token is empty, try to get a new token
@@ -674,6 +829,8 @@ namespace Centrifugal.Centrifuge
         private void HandleConnectReply(ConnectResult connectResult)
         {
             _clientId = connectResult.Client;
+            _session = connectResult.Session;
+            _node = connectResult.Node;
 
             SetState(ClientState.Connected);
             Connected?.Invoke(this, new ConnectedEventArgs(

@@ -110,6 +110,13 @@ namespace Centrifugal.Centrifuge
         public Dictionary<string, string>? Headers { get; set; }
 
         /// <summary>
+        /// Gets or sets the emulation endpoint for SSE and HTTP Stream transports.
+        /// This endpoint is used to send commands when using unidirectional transports.
+        /// If not set, will be auto-constructed from the transport endpoint by replacing the last path segment with "emulation".
+        /// </summary>
+        public string? EmulationEndpoint { get; set; }
+
+        /// <summary>
         /// Validates the options.
         /// </summary>
         public void Validate()

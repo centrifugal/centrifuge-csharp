@@ -3,14 +3,18 @@ using System.Buffers;
 using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Centrifugal.Centrifuge.Protocol;
+using Google.Protobuf;
+using Google.Protobuf.Reflection;
 
 namespace Centrifugal.Centrifuge.Transports
 {
     /// <summary>
     /// Server-Sent Events (SSE) transport for Centrifugo.
-    /// SSE is unidirectional (server to client), so commands are sent via HTTP POST.
+    /// SSE is unidirectional (server to client), so commands are sent via HTTP POST to emulation endpoint.
     /// </summary>
     internal class SseTransport : ITransport
     {
@@ -26,6 +30,9 @@ namespace Centrifugal.Centrifuge.Transports
 
         /// <inheritdoc/>
         public string Name => "sse";
+
+        /// <inheritdoc/>
+        public bool UsesEmulation => true;
 
         /// <inheritdoc/>
         public event EventHandler? Opened;
@@ -56,7 +63,7 @@ namespace Centrifugal.Centrifuge.Transports
         }
 
         /// <inheritdoc/>
-        public async Task OpenAsync(CancellationToken cancellationToken = default)
+        public async Task OpenAsync(CancellationToken cancellationToken = default, byte[]? initialData = null)
         {
             if (_isOpen)
             {
@@ -65,23 +72,46 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                _receiveCts = new CancellationTokenSource();
-                _receiveTask = ReceiveLoopAsync(_receiveCts.Token);
+                var openedTcs = new TaskCompletionSource<bool>();
 
-                // Wait a bit to ensure connection is established
-                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                EventHandler? openedHandler = null;
+                openedHandler = (s, e) =>
+                {
+                    openedTcs.TrySetResult(true);
+                    Opened -= openedHandler;
+                };
+                Opened += openedHandler;
+
+                _receiveCts = new CancellationTokenSource();
+                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), _receiveCts.Token);
+
+                // Wait for the connection to open or timeout
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+                var completedTask = await Task.WhenAny(openedTcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token)).ConfigureAwait(false);
+                if (completedTask != openedTcs.Task)
+                {
+                    throw new TimeoutException("Timeout waiting for SSE connection to open");
+                }
 
                 _isOpen = true;
-                Opened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
+                _receiveCts?.Cancel();
                 throw new CentrifugeException(ErrorCodes.TransportClosed, "Failed to open SSE connection", true, ex);
             }
         }
 
         /// <inheritdoc/>
-        public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
+        public Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("SSE transport uses emulation mode. Use SendEmulationAsync instead.");
+        }
+
+        /// <inheritdoc/>
+        public async Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
         {
             if (!_isOpen)
             {
@@ -90,11 +120,18 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                // SSE is unidirectional, so we send commands via HTTP POST
-                using var content = new ByteArrayContent(data);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+                // SSE uses JSON for emulation requests (like JavaScript client)
+                var emulationRequest = new
+                {
+                    session = session,
+                    node = node,
+                    data = Convert.ToBase64String(data)
+                };
 
-                var response = await _httpClient.PostAsync(_endpoint, content, cancellationToken).ConfigureAwait(false);
+                var json = JsonSerializer.Serialize(emulationRequest);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
             }
             catch (Exception ex)
@@ -127,16 +164,46 @@ namespace Centrifugal.Centrifuge.Transports
             }
         }
 
-        private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
+        private async Task ReceiveLoopAsync(byte[] initialData, CancellationToken cancellationToken)
         {
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, _endpoint);
+                // Build URL with cf_connect query parameter
+                var uriBuilder = new UriBuilder(_endpoint);
+
+                // SSE uses JSON protocol, so we need to convert protobuf Command to JSON
+                string connectDataJson;
+                if (initialData.Length > 0)
+                {
+                    var command = Command.Parser.ParseFrom(initialData);
+                    var settings = new JsonFormatter.Settings(false); // Don't format for readability
+                    var formatter = new JsonFormatter(settings);
+                    connectDataJson = formatter.Format(command);
+                }
+                else
+                {
+                    connectDataJson = "{}";
+                }
+
+                // Append query parameter
+                if (string.IsNullOrEmpty(uriBuilder.Query))
+                {
+                    uriBuilder.Query = $"cf_connect={Uri.EscapeDataString(connectDataJson)}";
+                }
+                else
+                {
+                    uriBuilder.Query = uriBuilder.Query.Substring(1) + $"&cf_connect={Uri.EscapeDataString(connectDataJson)}";
+                }
+
+                var request = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
                 request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
 
                 var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                     .ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
+
+                // Connection established successfully
+                Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -164,7 +231,7 @@ namespace Centrifugal.Centrifuge.Transports
 
                     if (line.StartsWith("data: ", StringComparison.Ordinal))
                     {
-                        dataBuilder.AppendLine(line.Substring(6));
+                        dataBuilder.Append(line.Substring(6));
                     }
                     // Ignore comment lines starting with ':'
                 }
@@ -184,8 +251,13 @@ namespace Centrifugal.Centrifuge.Transports
         {
             try
             {
-                // SSE data is base64 encoded Protobuf
-                byte[] messageData = Convert.FromBase64String(data.Trim());
+                // SSE uses JSON protocol, so parse JSON and convert to protobuf Reply
+                var jsonData = data.Trim();
+                var parser = new JsonParser(JsonParser.Settings.Default);
+                var reply = parser.Parse<Reply>(jsonData);
+
+                // Convert Reply back to protobuf bytes for the message handler
+                byte[] messageData = reply.ToByteArray();
 
                 _ = Task.Run(() =>
                 {

@@ -4,13 +4,15 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Centrifugal.Centrifuge.Protocol;
+using Google.Protobuf;
 
 namespace Centrifugal.Centrifuge.Transports
 {
     /// <summary>
     /// HTTP streaming transport for Centrifugo.
     /// Uses HTTP chunked transfer encoding for server-to-client streaming.
-    /// Commands are sent via separate HTTP POST requests.
+    /// Commands are sent via separate HTTP POST requests to emulation endpoint.
     /// </summary>
     internal class HttpStreamTransport : ITransport
     {
@@ -26,6 +28,9 @@ namespace Centrifugal.Centrifuge.Transports
 
         /// <inheritdoc/>
         public string Name => "http_stream";
+
+        /// <inheritdoc/>
+        public bool UsesEmulation => true;
 
         /// <inheritdoc/>
         public event EventHandler? Opened;
@@ -56,7 +61,7 @@ namespace Centrifugal.Centrifuge.Transports
         }
 
         /// <inheritdoc/>
-        public async Task OpenAsync(CancellationToken cancellationToken = default)
+        public async Task OpenAsync(CancellationToken cancellationToken = default, byte[]? initialData = null)
         {
             if (_isOpen)
             {
@@ -65,23 +70,46 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                _receiveCts = new CancellationTokenSource();
-                _receiveTask = ReceiveLoopAsync(_receiveCts.Token);
+                var openedTcs = new TaskCompletionSource<bool>();
 
-                // Wait a bit to ensure connection is established
-                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                EventHandler? openedHandler = null;
+                openedHandler = (s, e) =>
+                {
+                    openedTcs.TrySetResult(true);
+                    Opened -= openedHandler;
+                };
+                Opened += openedHandler;
+
+                _receiveCts = new CancellationTokenSource();
+                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), _receiveCts.Token);
+
+                // Wait for the connection to open or timeout
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+
+                var completedTask = await Task.WhenAny(openedTcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token)).ConfigureAwait(false);
+                if (completedTask != openedTcs.Task)
+                {
+                    throw new TimeoutException("Timeout waiting for HTTP stream connection to open");
+                }
 
                 _isOpen = true;
-                Opened?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
             {
+                _receiveCts?.Cancel();
                 throw new CentrifugeException(ErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
             }
         }
 
         /// <inheritdoc/>
-        public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
+        public Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("HTTP Stream transport uses emulation mode. Use SendEmulationAsync instead.");
+        }
+
+        /// <inheritdoc/>
+        public async Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
         {
             if (!_isOpen)
             {
@@ -90,11 +118,19 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                // Send command via HTTP POST
-                using var content = new ByteArrayContent(data);
+                // Create EmulationRequest
+                var emulationRequest = new EmulationRequest
+                {
+                    Session = session,
+                    Node = node,
+                    Data = ByteString.CopyFrom(data)
+                };
+
+                // Send to emulation endpoint
+                using var content = new ByteArrayContent(emulationRequest.ToByteArray());
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
-                var response = await _httpClient.PostAsync(_endpoint, content, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
             }
             catch (Exception ex)
@@ -127,14 +163,28 @@ namespace Centrifugal.Centrifuge.Transports
             }
         }
 
-        private async Task ReceiveLoopAsync(CancellationToken cancellationToken)
+        private async Task ReceiveLoopAsync(byte[] initialData, CancellationToken cancellationToken)
         {
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, _endpoint);
+                // Send initial POST request with varint-delimited connect command
+                using var ms = new MemoryStream();
+                VarintCodec.WriteDelimitedMessage(ms, initialData);
+                using var content = new ByteArrayContent(ms.ToArray());
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
+                {
+                    Content = content
+                };
+                request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
+
                 var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                     .ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
+
+                // Connection established successfully
+                Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 byte[] tempBuffer = new byte[8192];
@@ -142,22 +192,20 @@ namespace Centrifugal.Centrifuge.Transports
                 // Read varint-delimited messages from the stream
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    byte[]? message = VarintCodec.ReadDelimitedMessage(stream, tempBuffer, cancellationToken);
+                    byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, tempBuffer, cancellationToken).ConfigureAwait(false);
                     if (message == null) break;
 
-                    // Dispatch message on thread pool to avoid blocking receive loop
-                    var messageCopy = message;
-                    _ = Task.Run(() =>
+                    // Invoke MessageReceived event synchronously
+                    // Note: Unlike WebSocket which uses Task.Run to avoid blocking,
+                    // HTTP stream reading is already async so we can invoke directly
+                    try
                     {
-                        try
-                        {
-                            MessageReceived?.Invoke(this, messageCopy);
-                        }
-                        catch (Exception ex)
-                        {
-                            Error?.Invoke(this, ex);
-                        }
-                    }, CancellationToken.None);
+                        MessageReceived?.Invoke(this, message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Error?.Invoke(this, ex);
+                    }
                 }
             }
             catch (OperationCanceledException)

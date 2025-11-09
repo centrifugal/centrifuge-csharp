@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Centrifugal.Centrifuge;
@@ -15,10 +16,25 @@ namespace Centrifugal.Centrifuge.Tests
     {
         public WebSocketIntegrationTests() : base("ws://localhost:8000/connection/websocket") { }
 
-        [Fact]
-        public async Task ConnectsAndDisconnects()
+        public static IEnumerable<object[]> GetTransportEndpoints()
         {
-            using var client = CreateClient();
+            yield return new object[]
+            {
+                TransportType.WebSocket,
+                "ws://localhost:8000/connection/websocket"
+            };
+            yield return new object[]
+            {
+                TransportType.HttpStream,
+                "http://localhost:8000/connection/http_stream"
+            };
+        }
+
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task ConnectsAndDisconnects(TransportType transport, string endpoint)
+        {
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             var disconnectedEvent = new TaskCompletionSource<DisconnectedEventArgs>();
 
@@ -38,10 +54,11 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal(DisconnectedCodes.DisconnectCalled, disconnected.Code);
         }
 
-        [Fact]
-        public async Task SubscribeAndUnsubscribe()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task SubscribeAndUnsubscribe(TransportType transport, string endpoint)
         {
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -71,10 +88,11 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal(UnsubscribedCodes.UnsubscribeCalled, ctx.Code);
         }
 
-        [Fact]
-        public async Task PublishAndReceiveMessage()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task PublishAndReceiveMessage(TransportType transport, string endpoint)
         {
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -102,10 +120,11 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.NotNull(receivedData);
         }
 
-        [Fact]
-        public async Task SubscribeAndPresence()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task SubscribeAndPresence(TransportType transport, string endpoint)
         {
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -132,10 +151,11 @@ namespace Centrifugal.Centrifuge.Tests
             await client.DisconnectAsync();
         }
 
-        [Fact]
-        public async Task ConnectDisconnectLoop()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task ConnectDisconnectLoop(TransportType transport, string endpoint)
         {
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var disconnectedEvent = new TaskCompletionSource<DisconnectedEventArgs>();
 
             client.Disconnected += (s, e) => disconnectedEvent.TrySetResult(e);
@@ -150,10 +170,11 @@ namespace Centrifugal.Centrifuge.Tests
             await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
-        [Fact]
-        public async Task SubscribeAndUnsubscribeLoop()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task SubscribeAndUnsubscribeLoop(TransportType transport, string endpoint)
         {
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -210,8 +231,9 @@ namespace Centrifugal.Centrifuge.Tests
             await client.DisconnectAsync();
         }
 
-        [Fact]
-        public async Task ConnectsWithToken()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task ConnectsWithToken(TransportType transport, string endpoint)
         {
             // Connection token for anonymous user without ttl (using HMAC secret "secret")
             const string connectToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MzgwNzg4MjR9.MTb3higWfFW04E9-8wmTFOcf4MEm-rMDQaNKJ1VU_n4";
@@ -221,7 +243,7 @@ namespace Centrifugal.Centrifuge.Tests
                 Token = connectToken
             };
 
-            using var client = new CentrifugeClient(Endpoint, options);
+            using var client = CreateClient(transport, endpoint, options);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -233,13 +255,14 @@ namespace Centrifugal.Centrifuge.Tests
             await client.DisconnectAsync();
         }
 
-        [Fact]
-        public async Task SubscribesWithToken()
+        [Theory]
+        [MemberData(nameof(GetTransportEndpoints))]
+        public async Task SubscribesWithToken(TransportType transport, string endpoint)
         {
             // Subscription token for anonymous user for channel "test1" (using HMAC secret "secret")
             const string subscriptionToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzNDgsImNoYW5uZWwiOiJ0ZXN0MSJ9.eqPQxbBtyYxL8Hvbkm-P6aH7chUsSG_EMWe-rTwF_HI";
 
-            using var client = CreateClient();
+            using var client = CreateClient(transport, endpoint);
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
@@ -280,6 +303,12 @@ namespace Centrifugal.Centrifuge.Tests
         protected CentrifugeClient CreateClient(CentrifugeClientOptions? options = null)
         {
             return new CentrifugeClient(Endpoint, options);
+        }
+
+        protected CentrifugeClient CreateClient(TransportType transport, string endpoint, CentrifugeClientOptions? options = null)
+        {
+            var transportEndpoint = new TransportEndpoint(transport, endpoint);
+            return new CentrifugeClient(new[] { transportEndpoint }, options);
         }
     }
 
