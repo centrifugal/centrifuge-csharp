@@ -57,7 +57,16 @@ namespace Centrifugal.Centrifuge.Transports
             }
 
             _endpoint = endpoint;
-            _httpClient = httpClient ?? new HttpClient();
+            if (httpClient == null)
+            {
+                _httpClient = new HttpClient();
+                // Configure for streaming - no timeout on the connection itself
+                _httpClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+            }
+            else
+            {
+                _httpClient = httpClient;
+            }
         }
 
         /// <inheritdoc/>
@@ -126,8 +135,10 @@ namespace Centrifugal.Centrifuge.Transports
                     Data = ByteString.CopyFrom(data)
                 };
 
+                var requestBytes = emulationRequest.ToByteArray();
+
                 // Send to emulation endpoint
-                using var content = new ByteArrayContent(emulationRequest.ToByteArray());
+                using var content = new ByteArrayContent(requestBytes);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
                 var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
@@ -178,6 +189,7 @@ namespace Centrifugal.Centrifuge.Transports
                     Content = content
                 };
                 request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                request.Headers.ConnectionClose = false; // Keep connection alive for streaming
 
                 var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                     .ConfigureAwait(false);
@@ -193,11 +205,12 @@ namespace Centrifugal.Centrifuge.Transports
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, tempBuffer, cancellationToken).ConfigureAwait(false);
-                    if (message == null) break;
+                    if (message == null)
+                    {
+                        break;
+                    }
 
                     // Invoke MessageReceived event synchronously
-                    // Note: Unlike WebSocket which uses Task.Run to avoid blocking,
-                    // HTTP stream reading is already async so we can invoke directly
                     try
                     {
                         MessageReceived?.Invoke(this, message);

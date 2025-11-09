@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -423,8 +424,13 @@ namespace Centrifugal.Centrifuge
                     if (_transport.UsesEmulation)
                     {
                         // For emulation transports (non-connect commands), use SendEmulationAsync with session and node
+                        // The command must be varint-delimited
+                        using var ms = new MemoryStream();
+                        VarintCodec.WriteDelimitedMessage(ms, command.ToByteArray());
+                        var delimitedCommand = ms.ToArray();
+
                         var emulationEndpoint = GetEmulationEndpoint();
-                        await _transport.SendEmulationAsync(command.ToByteArray(), _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
+                        await _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
                     }
                     else
                     {
@@ -565,11 +571,17 @@ namespace Centrifugal.Centrifuge
 
             // For emulation transports, build connect command and send it during OpenAsync
             byte[]? initialData = null;
+            TaskCompletionSource<Reply>? connectTcs = null;
             if (_transport.UsesEmulation)
             {
                 // Build and store the connect command for later use in SendConnectCommandAsync
                 _pendingConnectCommand = await BuildConnectCommandObjectAsync().ConfigureAwait(false);
                 initialData = _pendingConnectCommand.ToByteArray();
+
+                // Register the pending call BEFORE opening the transport to avoid race condition
+                // where reply arrives before registration
+                connectTcs = new TaskCompletionSource<Reply>();
+                _pendingCalls[_pendingConnectCommand.Id] = connectTcs;
             }
 
             await _transport.OpenAsync(initialData: initialData).ConfigureAwait(false);
@@ -718,9 +730,11 @@ namespace Centrifugal.Centrifuge
                 var pendingCmd = _pendingConnectCommand;
                 _pendingConnectCommand = null; // Clear it so it's not reused on reconnect
 
-                // Register the pending call and wait for reply
-                var tcs = new TaskCompletionSource<Reply>();
-                _pendingCalls[pendingCmd.Id] = tcs;
+                // The pending call was already registered before OpenAsync, just wait for reply
+                if (!_pendingCalls.TryGetValue(pendingCmd.Id, out var tcs))
+                {
+                    throw new CentrifugeException(ErrorCodes.ClientDisconnected, "Connect command not registered");
+                }
 
                 using var timeoutCts = new CancellationTokenSource();
                 timeoutCts.CancelAfter(_options.Timeout);
@@ -828,6 +842,9 @@ namespace Centrifugal.Centrifuge
 
         private void HandleConnectReply(ConnectResult connectResult)
         {
+            // Check if this is a reconnection (we had a client ID from a previous connection)
+            bool isReconnect = !string.IsNullOrEmpty(_clientId);
+
             _clientId = connectResult.Client;
             _session = connectResult.Session;
             _node = connectResult.Node;
@@ -868,17 +885,20 @@ namespace Centrifugal.Centrifuge
             // Process server-side subscriptions
             ProcessServerSubscriptions(connectResult.Subs);
 
-            // Resubscribe existing subscriptions
-            _ = Task.Run(async () =>
+            // Resubscribe existing subscriptions (only on reconnection, not on first connect)
+            if (isReconnect)
             {
-                foreach (var sub in _subscriptions.Values)
+                _ = Task.Run(async () =>
                 {
-                    if (sub.State != SubscriptionState.Unsubscribed)
+                    foreach (var sub in _subscriptions.Values)
                     {
-                        await sub.ResubscribeAsync().ConfigureAwait(false);
+                        if (sub.State != SubscriptionState.Unsubscribed)
+                        {
+                            await sub.ResubscribeAsync().ConfigureAwait(false);
+                        }
                     }
-                }
-            });
+                });
+            }
         }
 
         private void OnTransportMessage(object? sender, byte[] data)
