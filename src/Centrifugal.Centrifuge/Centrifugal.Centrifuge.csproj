@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Multi-target for maximum compatibility -->
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <!-- Multi-target for modern .NET and Unity support -->
+    <TargetFrameworks>netstandard2.1;net6.0;net8.0;net9.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -39,10 +39,8 @@
     <!-- Protobuf support - allow minor/patch updates -->
     <PackageReference Include="Google.Protobuf" Version="3.25.1" />
 
-    <!-- For older frameworks, add compatibility packages -->
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0' OR '$(TargetFramework)' == 'netstandard2.1'" />
-    <PackageReference Include="System.Memory" Version="4.5.5" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
-    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <!-- For .NET Standard 2.1, add compatibility packages -->
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
 
     <!-- Source link for better debugging experience -->
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>

@@ -15,7 +15,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x'
+        dotnet-version: '9.0.x'
 
     - name: Extract version from tag
       id: get_version
@@ -23,7 +23,7 @@ jobs:
 
     - name: Update project version
       run: |
-        sed -i "s/<Version>.*<\/Version>/<Version>${{ steps.get_version.outputs.VERSION }}<\/Version>/" src/Centrifuge/Centrifuge.csproj
+        sed -i "s/<Version>.*<\/Version>/<Version>${{ steps.get_version.outputs.VERSION }}<\/Version>/" src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj
 
     - name: Restore dependencies
       run: dotnet restore
@@ -35,7 +35,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Pack
-      run: dotnet pack src/Centrifuge/Centrifuge.csproj --configuration Release --no-build --output ./artifacts
+      run: dotnet pack src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj --configuration Release --no-build --output ./artifacts
 
     - name: Publish to NuGet
       run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

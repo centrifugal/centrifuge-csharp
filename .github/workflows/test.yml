@@ -1,18 +1,16 @@
-name: CI
+name: Test
 
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    # Prevent duplicate builds on internal PRs.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository    
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        dotnet-version: ['6.0.x', '7.0.x', '8.0.x', '9.0.x']
+        dotnet-version: ['6.0.x', '8.0.x', '9.0.x']
 
     steps:
     - uses: actions/checkout@v4
@@ -43,10 +41,3 @@ jobs:
     - name: Stop Centrifugo
       if: matrix.os == 'ubuntu-latest' && always()
       run: docker compose down
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      if: matrix.os == 'ubuntu-latest' && matrix.dotnet-version == '9.0.x'
-      with:
-        file: ./coverage.cobertura.xml
-        fail_ci_if_error: false

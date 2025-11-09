@@ -23,23 +23,22 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 
 ## Platform Support
 
-The library targets multiple frameworks for maximum compatibility:
+The library targets modern .NET frameworks:
 
-- .NET 9.0+
-- .NET 8.0
-- .NET 7.0
-- .NET 6.0
-- .NET Standard 2.1
-- .NET Standard 2.0 (.NET Framework 4.6.1+, .NET Core 2.0+)
+- .NET 9.0 (STS)
+- .NET 8.0 (LTS)
+- .NET 6.0 (LTS)
+- .NET Standard 2.1 (for Unity support)
 
 This means it works on:
 
-- ✅ Server-side: .NET 5/6/7/8/9, .NET Core, .NET Framework
-- ✅ Desktop: Windows, macOS, Linux
-- ✅ Mobile: Xamarin.iOS, Xamarin.Android, .NET MAUI
-- ✅ Web: Blazor WebAssembly, Blazor Server
-- ✅ Unity: All platforms (including WebGL with proper WebSocket plugin)
-- ✅ UWP: Universal Windows Platform
+- ✅ **Server-side**: .NET 6/8/9
+- ✅ **Desktop**: Windows, macOS, Linux (via modern .NET)
+- ✅ **Mobile**: .NET MAUI (iOS, Android)
+- ✅ **Web**: Blazor WebAssembly, Blazor Server
+- ✅ **Unity**: 2021.2+ with .NET Standard 2.1 support
+
+> **Note**: UWP is not recommended for new projects. Consider using Windows App SDK / WinUI 3 instead, which work with modern .NET targets.
 
 ## Installation
 
@@ -298,10 +297,11 @@ catch (CentrifugeException ex)
 
 ## Unity Support
 
-The library works with Unity, but you'll need:
+The library works with Unity 2021.2+ (requires .NET Standard 2.1 support).
 
-1. Use .NET Standard 2.1 or .NET 4.x scripting runtime
-2. For WebGL, use a WebSocket plugin that provides `System.Net.WebSockets` support (like [NativeWebSocket](https://github.com/endel/NativeWebSocket))
+**Requirements:**
+1. Unity 2021.2 or later
+2. For WebGL builds, use a WebSocket plugin that provides `System.Net.WebSockets` support (like [NativeWebSocket](https://github.com/endel/NativeWebSocket))
 
 Example for Unity:
 
