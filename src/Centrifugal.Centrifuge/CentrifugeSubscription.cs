@@ -404,8 +404,9 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
-            // If connected, send subscribe command in background
-            _ = SendSubscribeIfNeededAsync();
+            // If connected, schedule subscribe command to be sent in a batch
+            // This allows multiple subscribe calls to be automatically batched together
+            _client.ScheduleSubscribeBatch();
         }
 
         internal async Task SendSubscribeIfNeededAsync()

@@ -35,6 +35,7 @@ namespace Centrifugal.Centrifuge
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
         private readonly object _stateChangeLock = new object();
         private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _readyPromises = new();
+        private readonly object _subscribeBatchLock = new object();
 
         private ITransport? _transport;
         private ClientState _state = ClientState.Disconnected;
@@ -56,6 +57,8 @@ namespace Centrifugal.Centrifuge
         private bool _transportWasOpen;
         private int _promiseId;
         private bool _transportIsOpen;
+        private Timer? _subscribeBatchTimer;
+        private bool _subscribeBatchPending;
 
         /// <summary>
         /// Gets the current client state.
@@ -1003,14 +1006,55 @@ namespace Centrifugal.Centrifuge
         {
             _ = Task.Run(async () =>
             {
-                foreach (var sub in _subscriptions.Values)
-                {
-                    if (sub.State == SubscriptionState.Subscribing)
-                    {
-                        await sub.SendSubscribeIfNeededAsync().ConfigureAwait(false);
-                    }
-                }
+                await FlushSubscribeBatchAsync().ConfigureAwait(false);
             });
+        }
+
+        /// <summary>
+        /// Schedules a batch of subscribe commands to be sent after a short delay.
+        /// This allows multiple subscribe requests to be automatically batched together.
+        /// </summary>
+        internal void ScheduleSubscribeBatch()
+        {
+            lock (_subscribeBatchLock)
+            {
+                if (_subscribeBatchPending)
+                {
+                    // Batch already scheduled
+                    return;
+                }
+
+                _subscribeBatchPending = true;
+
+                // Use a 1ms delay to collect subscribe requests
+                _subscribeBatchTimer?.Dispose();
+                _subscribeBatchTimer = new Timer(_ =>
+                {
+                    lock (_subscribeBatchLock)
+                    {
+                        _subscribeBatchPending = false;
+                    }
+                    _ = Task.Run(async () => await FlushSubscribeBatchAsync().ConfigureAwait(false));
+                }, null, TimeSpan.FromMilliseconds(1), Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        private async Task FlushSubscribeBatchAsync()
+        {
+            // Check client state before processing batch
+            if (_state != ClientState.Connected || !_transportIsOpen)
+            {
+                return;
+            }
+
+            foreach (var sub in _subscriptions.Values)
+            {
+                // Validate subscription state at send time
+                if (sub.State == SubscriptionState.Subscribing)
+                {
+                    await sub.SendSubscribeIfNeededAsync().ConfigureAwait(false);
+                }
+            }
         }
 
         private void OnTransportMessage(object? sender, byte[] data)
@@ -1684,6 +1728,7 @@ namespace Centrifugal.Centrifuge
             _reconnectCts?.Dispose();
             _pingTimer?.Dispose();
             _refreshTimer?.Dispose();
+            _subscribeBatchTimer?.Dispose();
         }
     }
 }
