@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Centrifugal.Centrifuge.Tests
 {
+    [Collection("Integration")]
     public class BatchingTests
     {
         private const string ServerUrl = "ws://localhost:8000/connection/websocket";
