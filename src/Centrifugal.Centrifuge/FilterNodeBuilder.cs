@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Centrifugal.Centrifuge.Protocol;
 
 namespace Centrifugal.Centrifuge
 {
@@ -17,12 +16,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for equality comparison.</returns>
         public static FilterNode Eq(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "eq",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -33,12 +32,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for inequality comparison.</returns>
         public static FilterNode Neq(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "neq",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -49,13 +48,13 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for set inclusion.</returns>
         public static FilterNode In(string key, params string[] values)
         {
-            var node = new FilterNode
+            var node = new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "in"
             };
             node.Vals.AddRange(values);
-            return node;
+            return new FilterNode(node);
         }
 
         /// <summary>
@@ -66,13 +65,13 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for set exclusion.</returns>
         public static FilterNode Nin(string key, params string[] values)
         {
-            var node = new FilterNode
+            var node = new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "nin"
             };
             node.Vals.AddRange(values);
-            return node;
+            return new FilterNode(node);
         }
 
         /// <summary>
@@ -82,11 +81,11 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured to check tag existence.</returns>
         public static FilterNode Ex(string key)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ex"
-            };
+            });
         }
 
         /// <summary>
@@ -96,11 +95,11 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured to check tag non-existence.</returns>
         public static FilterNode Nex(string key)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "nex"
-            };
+            });
         }
 
         /// <summary>
@@ -111,12 +110,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for prefix matching.</returns>
         public static FilterNode StartsWith(string key, string prefix)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "sw",
                 Val = prefix
-            };
+            });
         }
 
         /// <summary>
@@ -127,12 +126,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for suffix matching.</returns>
         public static FilterNode EndsWith(string key, string suffix)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ew",
                 Val = suffix
-            };
+            });
         }
 
         /// <summary>
@@ -143,12 +142,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for substring matching.</returns>
         public static FilterNode Contains(string key, string substring)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ct",
                 Val = substring
-            };
+            });
         }
 
         /// <summary>
@@ -159,12 +158,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for less-than comparison.</returns>
         public static FilterNode Lt(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "lt",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -175,12 +174,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for less-than-or-equal comparison.</returns>
         public static FilterNode Lte(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "lte",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -191,12 +190,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for greater-than comparison.</returns>
         public static FilterNode Gt(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "gt",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -207,12 +206,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for greater-than-or-equal comparison.</returns>
         public static FilterNode Gte(string key, string value)
         {
-            return new FilterNode
+            return new FilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "gte",
                 Val = value
-            };
+            });
         }
 
         /// <summary>
@@ -223,12 +222,15 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for logical AND.</returns>
         public static FilterNode And(params FilterNode[] nodes)
         {
-            var node = new FilterNode
+            var node = new Protocol.FilterNode
             {
                 Op = "and"
             };
-            node.Nodes.AddRange(nodes);
-            return node;
+            foreach (var n in nodes)
+            {
+                node.Nodes.Add(n.InternalNode);
+            }
+            return new FilterNode(node);
         }
 
         /// <summary>
@@ -239,12 +241,15 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for logical OR.</returns>
         public static FilterNode Or(params FilterNode[] nodes)
         {
-            var node = new FilterNode
+            var node = new Protocol.FilterNode
             {
                 Op = "or"
             };
-            node.Nodes.AddRange(nodes);
-            return node;
+            foreach (var n in nodes)
+            {
+                node.Nodes.Add(n.InternalNode);
+            }
+            return new FilterNode(node);
         }
 
         /// <summary>
@@ -255,12 +260,12 @@ namespace Centrifugal.Centrifuge
         /// <returns>A FilterNode configured for logical NOT.</returns>
         public static FilterNode Not(FilterNode filterNode)
         {
-            var node = new FilterNode
+            var node = new Protocol.FilterNode
             {
                 Op = "not"
             };
-            node.Nodes.Add(filterNode);
-            return node;
+            node.Nodes.Add(filterNode.InternalNode);
+            return new FilterNode(node);
         }
     }
 }

@@ -36,6 +36,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Centrifugal.Centrifuge.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Protobuf support - allow minor/patch updates -->
     <PackageReference Include="Google.Protobuf" Version="3.25.1" />
 

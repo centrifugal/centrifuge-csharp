@@ -421,7 +421,7 @@ namespace Centrifugal.Centrifuge
 
             if (_options.TagsFilter != null)
             {
-                request.Tf = _options.TagsFilter;
+                request.Tf = _options.TagsFilter.InternalNode;
             }
 
             if (!string.IsNullOrEmpty(_options.Delta))
