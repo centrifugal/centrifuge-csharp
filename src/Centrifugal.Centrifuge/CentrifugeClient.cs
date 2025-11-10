@@ -249,27 +249,37 @@ namespace Centrifugal.Centrifuge
         /// <param name="token">New connection token (JWT).</param>
         public void SetToken(string? token)
         {
-            _options.Token = token;
+            lock (_stateChangeLock)
+            {
+                _options.Token = token;
+            }
         }
 
         /// <summary>
-        /// Sets the connection data. This only affects the next connection attempt.
-        /// Note that if GetData callback is configured, it will override this value during reconnects.
+        /// Sets the connection data. This will be used for all subsequent connection attempts.
+        /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New connection data.</param>
         public void SetData(byte[]? data)
         {
-            _options.Data = data;
+            lock (_stateChangeLock)
+            {
+                _options.Data = data != null ? (byte[])data.Clone() : null;
+            }
         }
 
         /// <summary>
         /// Sets the connection headers (emulated headers sent with first protocol message).
         /// Requires Centrifugo v6+.
+        /// The headers dictionary is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="headers">Headers to set.</param>
         public void SetHeaders(Dictionary<string, string>? headers)
         {
-            _options.Headers = headers;
+            lock (_stateChangeLock)
+            {
+                _options.Headers = headers != null ? new Dictionary<string, string>(headers) : null;
+            }
         }
 
         /// <summary>
@@ -645,7 +655,11 @@ namespace Centrifugal.Centrifuge
 
         private async Task<Command> BuildConnectCommandObjectAsync()
         {
-            string? token = _options.Token;
+            string? token;
+            lock (_stateChangeLock)
+            {
+                token = _options.Token;
+            }
 
             // If refresh is required or token is empty, try to get a new token
             if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
@@ -653,7 +667,10 @@ namespace Centrifugal.Centrifuge
                 try
                 {
                     token = await _options.GetToken().ConfigureAwait(false);
-                    _options.Token = token;
+                    lock (_stateChangeLock)
+                    {
+                        _options.Token = token;
+                    }
                 }
                 catch (UnauthorizedException)
                 {
@@ -661,17 +678,12 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            byte[]? data = _options.Data;
-            if (data == null && _options.GetData != null)
+            byte[]? data;
+            Dictionary<string, string>? headers;
+            lock (_stateChangeLock)
             {
-                try
-                {
-                    data = await _options.GetData().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Ignore GetData errors
-                }
+                data = _options.Data;
+                headers = _options.Headers;
             }
 
             var connectRequest = new ConnectRequest
@@ -686,9 +698,9 @@ namespace Centrifugal.Centrifuge
                 connectRequest.Data = ByteString.CopyFrom(data);
             }
 
-            if (_options.Headers != null && _options.Headers.Count > 0)
+            if (headers != null && headers.Count > 0)
             {
-                foreach (var kvp in _options.Headers)
+                foreach (var kvp in headers)
                 {
                     connectRequest.Headers.Add(kvp.Key, kvp.Value);
                 }
@@ -760,7 +772,11 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
-            string? token = _options.Token;
+            string? token;
+            lock (_stateChangeLock)
+            {
+                token = _options.Token;
+            }
 
             // If refresh is required or token is empty, try to get a new token
             if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
@@ -768,13 +784,24 @@ namespace Centrifugal.Centrifuge
                 try
                 {
                     token = await _options.GetToken().ConfigureAwait(false);
-                    _options.Token = token;
+                    lock (_stateChangeLock)
+                    {
+                        _options.Token = token;
+                    }
                 }
                 catch (UnauthorizedException)
                 {
                     await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                     return;
                 }
+            }
+
+            byte[]? data;
+            Dictionary<string, string>? headers;
+            lock (_stateChangeLock)
+            {
+                data = _options.Data;
+                headers = _options.Headers;
             }
 
             var connectRequest = new ConnectRequest
@@ -784,14 +811,14 @@ namespace Centrifugal.Centrifuge
                 Version = _options.Version
             };
 
-            if (_options.Data != null)
+            if (data != null)
             {
-                connectRequest.Data = ByteString.CopyFrom(_options.Data);
+                connectRequest.Data = ByteString.CopyFrom(data);
             }
 
-            if (_options.Headers != null && _options.Headers.Count > 0)
+            if (headers != null && headers.Count > 0)
             {
-                foreach (var kvp in _options.Headers)
+                foreach (var kvp in headers)
                 {
                     connectRequest.Headers.Add(kvp.Key, kvp.Value);
                 }
@@ -1248,7 +1275,10 @@ namespace Centrifugal.Centrifuge
                     return;
                 }
 
-                _options.Token = token;
+                lock (_stateChangeLock)
+                {
+                    _options.Token = token;
+                }
 
                 // Send refresh request to server
                 var cmd = new Command

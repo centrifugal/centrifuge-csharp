@@ -121,13 +121,16 @@ namespace Centrifugal.Centrifuge
         }
 
         /// <summary>
-        /// Sets the subscription data. This only affects the next subscription attempt.
-        /// Note that if GetData callback is configured, it will override this value during resubscriptions.
+        /// Sets the subscription data. This will be used for all subsequent subscription attempts.
+        /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New subscription data.</param>
         public void SetData(byte[]? data)
         {
-            _options.Data = data;
+            lock (_stateChangeLock)
+            {
+                _options.Data = data != null ? (byte[])data.Clone() : null;
+            }
         }
 
         /// <summary>
@@ -155,11 +158,14 @@ namespace Centrifugal.Centrifuge
         /// </example>
         public void SetTagsFilter(FilterNode? tagsFilter)
         {
-            if (tagsFilter != null && !string.IsNullOrEmpty(_options.Delta))
+            lock (_stateChangeLock)
             {
-                throw new InvalidOperationException("Cannot use delta and TagsFilter together");
+                if (tagsFilter != null && !string.IsNullOrEmpty(_options.Delta))
+                {
+                    throw new InvalidOperationException("Cannot use delta and TagsFilter together");
+                }
+                _options.TagsFilter = tagsFilter;
             }
-            _options.TagsFilter = tagsFilter;
         }
 
         /// <summary>
@@ -381,7 +387,11 @@ namespace Centrifugal.Centrifuge
 
         private async Task SendSubscribeCommandAsync()
         {
-            string? token = _options.Token;
+            string? token;
+            lock (_stateChangeLock)
+            {
+                token = _options.Token;
+            }
 
             // If refresh is required or token is empty, try to get a new token
             if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
@@ -389,13 +399,24 @@ namespace Centrifugal.Centrifuge
                 try
                 {
                     token = await _options.GetToken(Channel).ConfigureAwait(false);
-                    _options.Token = token;
+                    lock (_stateChangeLock)
+                    {
+                        _options.Token = token;
+                    }
                 }
                 catch (UnauthorizedException)
                 {
                     await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                     return;
                 }
+            }
+
+            byte[]? data;
+            FilterNode? tagsFilter;
+            lock (_stateChangeLock)
+            {
+                data = _options.Data;
+                tagsFilter = _options.TagsFilter;
             }
 
             var request = new SubscribeRequest
@@ -414,14 +435,14 @@ namespace Centrifugal.Centrifuge
                 request.Offset = _streamPosition.Offset;
             }
 
-            if (_options.Data != null)
+            if (data != null)
             {
-                request.Data = ByteString.CopyFrom(_options.Data);
+                request.Data = ByteString.CopyFrom(data);
             }
 
-            if (_options.TagsFilter != null)
+            if (tagsFilter != null)
             {
-                request.Tf = _options.TagsFilter.InternalNode;
+                request.Tf = tagsFilter.InternalNode;
             }
 
             if (!string.IsNullOrEmpty(_options.Delta))
@@ -691,7 +712,10 @@ namespace Centrifugal.Centrifuge
             try
             {
                 var token = await _options.GetToken(Channel).ConfigureAwait(false);
-                _options.Token = token;
+                lock (_stateChangeLock)
+                {
+                    _options.Token = token;
+                }
 
                 var cmd = new Command
                 {

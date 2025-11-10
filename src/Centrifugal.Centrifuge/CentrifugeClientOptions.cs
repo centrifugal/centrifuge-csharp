@@ -57,11 +57,6 @@ namespace Centrifugal.Centrifuge
         public byte[]? Data { get; set; }
 
         /// <summary>
-        /// Gets or sets the callback to get/renew connection data (called upon reconnects).
-        /// </summary>
-        public Func<Task<byte[]>>? GetData { get; set; }
-
-        /// <summary>
         /// Gets or sets the client name (not unique per connection, identifies where client connected from).
         /// Default is "csharp".
         /// </summary>
@@ -162,11 +157,6 @@ namespace Centrifugal.Centrifuge
         /// Gets or sets the subscription data (attached to every subscribe/resubscribe request).
         /// </summary>
         public byte[]? Data { get; set; }
-
-        /// <summary>
-        /// Gets or sets the callback to get/renew subscription data (called upon resubscribes).
-        /// </summary>
-        public Func<Task<byte[]>>? GetData { get; set; }
 
         /// <summary>
         /// Gets or sets the minimum delay between resubscribe attempts.
