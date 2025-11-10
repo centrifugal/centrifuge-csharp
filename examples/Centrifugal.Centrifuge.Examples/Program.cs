@@ -51,12 +51,6 @@ namespace Centrifuge.Examples
                 Console.WriteLine($"[Client] Error: {e.Type} - {e.Message}");
             };
 
-            client.Message += (sender, e) =>
-            {
-                var message = Encoding.UTF8.GetString(e.Data);
-                Console.WriteLine($"[Client] Message received: {message}");
-            };
-
             try
             {
                 // Connect to server
