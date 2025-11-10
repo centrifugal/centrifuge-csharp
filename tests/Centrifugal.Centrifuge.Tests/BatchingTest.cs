@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -6,53 +7,181 @@ namespace Centrifugal.Centrifuge.Tests
 {
     public class BatchingTests
     {
+        private const string ServerUrl = "ws://localhost:8000/connection/websocket";
+
         [Fact]
-        public async Task MultipleSubscribes_BeforeConnect_BatchedTogether()
+        public async Task MultipleSubscribes_BeforeConnect_AllSubscribeSuccessfully()
         {
-            // This test demonstrates that subscribing to multiple channels before connect
-            // will batch all subscribe requests together when connection is established
+            // This test verifies that subscribing to multiple channels before connect
+            // results in all subscriptions being established successfully when connection completes
 
-            var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
+            var client = new CentrifugeClient(ServerUrl);
+            var connectedEvent = new TaskCompletionSource<bool>();
 
-            // Subscribe to 10 channels before connecting
-            var subscriptions = new CentrifugeSubscription[10];
-            for (int i = 0; i < 10; i++)
+            client.Connected += (s, e) => connectedEvent.TrySetResult(true);
+
+            try
             {
-                var sub = client.NewSubscription($"channel{i}");
-                sub.Subscribe();  // Non-blocking, queues for later
-                subscriptions[i] = sub;
-            }
+                // Subscribe to 10 channels before connecting
+                var subscriptions = new CentrifugeSubscription[10];
+                var subscribedTasks = new Task<bool>[10];
 
-            // Verify all are in Subscribing state
-            foreach (var sub in subscriptions)
+                for (int i = 0; i < 10; i++)
+                {
+                    var sub = client.NewSubscription($"test_batch_{i}");
+                    var tcs = new TaskCompletionSource<bool>();
+                    subscribedTasks[i] = tcs.Task;
+
+                    sub.Subscribed += (s, e) => tcs.TrySetResult(true);
+                    sub.Error += (s, e) => tcs.TrySetException(new Exception($"Subscription error: {e.Message}"));
+
+                    sub.Subscribe();  // Non-blocking, queues for later
+                    subscriptions[i] = sub;
+                }
+
+                // Verify all are in Subscribing state before connect
+                foreach (var sub in subscriptions)
+                {
+                    Assert.Equal(SubscriptionState.Subscribing, sub.State);
+                }
+
+                // Connect - this should batch all subscribe requests
+                client.Connect();
+                await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Wait for all subscriptions to complete (with timeout)
+                await Task.WhenAll(subscribedTasks).WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Verify all subscriptions are now subscribed
+                foreach (var sub in subscriptions)
+                {
+                    Assert.Equal(SubscriptionState.Subscribed, sub.State);
+                }
+
+                // Cleanup
+                foreach (var sub in subscriptions)
+                {
+                    sub.Unsubscribe();
+                }
+                client.Disconnect();
+            }
+            catch
             {
-                Assert.Equal(SubscriptionState.Subscribing, sub.State);
+                client.Dispose();
+                throw;
             }
-
-            // Note: In a real test with a server, you would:
-            // 1. Connect to the server
-            // 2. Verify all subscriptions complete
-            // 3. Monitor network traffic to confirm only ONE batch was sent with all 10 subscribes
         }
 
         [Fact]
-        public async Task MultipleSubscribes_AfterConnect_AutoBatchedWithDelay()
+        public async Task MultipleSubscribes_AfterConnect_AllSubscribeSuccessfully()
         {
-            // This test demonstrates that subscribing to multiple channels quickly after connect
-            // will automatically batch them together with a 1ms delay window
+            // This test verifies that subscribing to multiple channels after connect
+            // results in all subscriptions being established successfully (auto-batched with 1ms delay)
 
-            var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
+            var client = new CentrifugeClient(ServerUrl);
+            var connectedEvent = new TaskCompletionSource<bool>();
 
-            // Note: In a real test with a server, you would:
-            // 1. Connect and wait for connection
-            // 2. Quickly subscribe to 10 channels (within 1ms)
-            // 3. Monitor network traffic to confirm subscribes were batched
-            // 4. If you wait >1ms between subscribes, they would be in separate batches
+            client.Connected += (s, e) => connectedEvent.TrySetResult(true);
 
-            // The batching logic:
-            // - First subscribe starts 1ms timer
-            // - Subsequent subscribes within that 1ms are collected
-            // - When timer fires, all collected subscribes sent in one batch
+            try
+            {
+                // Connect first
+                client.Connect();
+                await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Subscribe to 10 channels quickly (should be auto-batched)
+                var subscriptions = new CentrifugeSubscription[10];
+                var subscribedTasks = new Task<bool>[10];
+
+                for (int i = 0; i < 10; i++)
+                {
+                    var sub = client.NewSubscription($"test_batch_after_{i}");
+                    var tcs = new TaskCompletionSource<bool>();
+                    subscribedTasks[i] = tcs.Task;
+
+                    sub.Subscribed += (s, e) => tcs.TrySetResult(true);
+                    sub.Error += (s, e) => tcs.TrySetException(new Exception($"Subscription error: {e.Message}"));
+
+                    sub.Subscribe();  // Auto-batched with 1ms delay
+                    subscriptions[i] = sub;
+                }
+
+                // Wait for all subscriptions to complete
+                await Task.WhenAll(subscribedTasks).WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Verify all subscriptions are subscribed
+                foreach (var sub in subscriptions)
+                {
+                    Assert.Equal(SubscriptionState.Subscribed, sub.State);
+                }
+
+                // Cleanup
+                foreach (var sub in subscriptions)
+                {
+                    sub.Unsubscribe();
+                }
+                client.Disconnect();
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
+        }
+
+        [Fact]
+        public async Task UnsubscribeDuringBatchWindow_SkipsUnsubscribed()
+        {
+            // This test verifies that if a subscription is unsubscribed during the batch window,
+            // it is skipped and doesn't attempt to subscribe
+
+            var client = new CentrifugeClient(ServerUrl);
+            var connectedEvent = new TaskCompletionSource<bool>();
+
+            client.Connected += (s, e) => connectedEvent.TrySetResult(true);
+
+            try
+            {
+                // Connect first
+                client.Connect();
+                await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+                var sub1 = client.NewSubscription("test_batch_unsub_1");
+                var sub2 = client.NewSubscription("test_batch_unsub_2");
+                var sub3 = client.NewSubscription("test_batch_unsub_3");
+
+                var sub1Subscribed = new TaskCompletionSource<bool>();
+                var sub3Subscribed = new TaskCompletionSource<bool>();
+
+                sub1.Subscribed += (s, e) => sub1Subscribed.TrySetResult(true);
+                sub3.Subscribed += (s, e) => sub3Subscribed.TrySetResult(true);
+
+                // Subscribe to all three
+                sub1.Subscribe();
+                sub2.Subscribe();
+                sub3.Subscribe();
+
+                // Immediately unsubscribe sub2 (before batch flushes)
+                sub2.Unsubscribe();
+
+                // Wait for sub1 and sub3 to subscribe
+                await Task.WhenAll(sub1Subscribed.Task, sub3Subscribed.Task).WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Verify states
+                Assert.Equal(SubscriptionState.Subscribed, sub1.State);
+                Assert.Equal(SubscriptionState.Unsubscribed, sub2.State);  // Should stay unsubscribed
+                Assert.Equal(SubscriptionState.Subscribed, sub3.State);
+
+                // Cleanup
+                sub1.Unsubscribe();
+                sub3.Unsubscribe();
+                client.Disconnect();
+            }
+            catch
+            {
+                client.Dispose();
+                throw;
+            }
         }
     }
 }
