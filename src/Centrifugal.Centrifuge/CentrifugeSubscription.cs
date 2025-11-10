@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ namespace Centrifugal.Centrifuge
         private readonly SubscriptionOptions _options;
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
         private readonly object _stateChangeLock = new object();
+        private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _readyPromises = new();
 
         private SubscriptionState _state = SubscriptionState.Unsubscribed;
         private int _resubscribeAttempts;
@@ -26,6 +28,8 @@ namespace Centrifugal.Centrifuge
         private Timer? _refreshTimer;
         private int _refreshAttempts;
         private bool _refreshRequired;
+        private int _promiseId;
+        private bool _inflight;
 
         /// <summary>
         /// Gets the channel name.
@@ -91,34 +95,71 @@ namespace Centrifugal.Centrifuge
         }
 
         /// <summary>
-        /// Subscribes to the channel.
+        /// Subscribes to the channel. This method returns immediately and starts the subscription process in the background.
+        /// Use ReadyAsync() to wait for the subscription to be established, or use the Subscribed event.
         /// </summary>
-        public async Task SubscribeAsync()
+        public void Subscribe()
         {
-            await _stateLock.WaitAsync().ConfigureAwait(false);
-            try
+            if (_state == SubscriptionState.Subscribed)
             {
-                if (_state != SubscriptionState.Unsubscribed)
-                {
-                    return;
-                }
+                return;
+            }
 
-                _resubscribeAttempts = 0;
-                await StartSubscribingAsync(SubscribingCodes.SubscribeCalled, "subscribe called").ConfigureAwait(false);
-            }
-            finally
+            if (_state == SubscriptionState.Subscribing)
             {
-                _stateLock.Release();
+                return;
             }
+
+            _resubscribeAttempts = 0;
+            StartSubscribing();
         }
 
         /// <summary>
-        /// Unsubscribes from the channel.
+        /// Unsubscribes from the channel. This method returns immediately and starts the unsubscription process in the background.
         /// </summary>
-        public async Task UnsubscribeAsync()
+        public void Unsubscribe()
         {
-            await SetUnsubscribedAsync(UnsubscribedCodes.UnsubscribeCalled, "unsubscribe called").ConfigureAwait(false);
+            _ = SetUnsubscribedAsync(UnsubscribedCodes.UnsubscribeCalled, "unsubscribe called");
         }
+
+        /// <summary>
+        /// Returns a Task that completes when the subscription is established.
+        /// If already subscribed, the Task completes immediately.
+        /// If unsubscribed, the Task is rejected.
+        /// </summary>
+        /// <param name="timeout">Optional timeout.</param>
+        /// <returns>A task that completes when subscribed.</returns>
+        public Task ReadyAsync(TimeSpan? timeout = null)
+        {
+            switch (_state)
+            {
+                case SubscriptionState.Unsubscribed:
+                    return Task.FromException(new CentrifugeException(ErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
+
+                case SubscriptionState.Subscribed:
+                    return Task.CompletedTask;
+
+                default:
+                    var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var promiseId = NextPromiseId();
+                    _readyPromises[promiseId] = tcs;
+
+                    if (timeout.HasValue)
+                    {
+                        var cts = new CancellationTokenSource(timeout.Value);
+                        cts.Token.Register(() =>
+                        {
+                            if (_readyPromises.TryRemove(promiseId, out var promise))
+                            {
+                                promise.TrySetException(new CentrifugeException(ErrorCodes.Timeout, "timeout"));
+                            }
+                        });
+                    }
+
+                    return tcs.Task;
+            }
+        }
+
 
         /// <summary>
         /// Sets the subscription data. This will be used for all subsequent subscription attempts.
@@ -352,6 +393,63 @@ namespace Centrifugal.Centrifuge
             }
         }
 
+        private void StartSubscribing()
+        {
+            SetState(SubscriptionState.Subscribing);
+            Subscribing?.Invoke(this, new SubscribingEventArgs(SubscribingCodes.SubscribeCalled, "subscribe called"));
+
+            // If not connected, the subscription will be sent when connection is established
+            if (_client.State != ClientState.Connected)
+            {
+                return;
+            }
+
+            // If connected, send subscribe command in background
+            _ = SendSubscribeIfNeededAsync();
+        }
+
+        internal async Task SendSubscribeIfNeededAsync()
+        {
+            // Check if transport is open and subscription is in subscribing state
+            if (!_client.TransportIsOpen)
+            {
+                return;
+            }
+
+            // Check if already inflight or not in subscribing state
+            if (_inflight || _state != SubscriptionState.Subscribing)
+            {
+                return;
+            }
+
+            _inflight = true;
+
+            try
+            {
+                await SendSubscribeCommandAsync().ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // Subscribe timeout should trigger client reconnect, just like in centrifuge-js
+                OnError("subscribe", new CentrifugeException(ErrorCodes.Timeout, "subscribe timeout", true));
+                // Trigger client disconnect with reconnect
+                await _client.HandleSubscribeTimeoutAsync().ConfigureAwait(false);
+            }
+            catch (UnauthorizedException)
+            {
+                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                OnError("subscribe", ex);
+                await ScheduleResubscribeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _inflight = false;
+            }
+        }
+
         private async Task StartSubscribingAsync(int code, string reason)
         {
             SetState(SubscriptionState.Subscribing);
@@ -509,6 +607,10 @@ namespace Centrifugal.Centrifuge
             }
 
             SetState(SubscriptionState.Subscribed);
+
+            // Resolve ready promises
+            ResolvePromises();
+
             Subscribed?.Invoke(this, new SubscribedEventArgs(
                 wasRecovering,
                 recovered,
@@ -636,6 +738,10 @@ namespace Centrifugal.Centrifuge
                 }
 
                 SetState(SubscriptionState.Unsubscribed);
+
+                // Reject ready promises
+                RejectPromises(new CentrifugeException(ErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
+
                 Unsubscribed?.Invoke(this, new UnsubscribedEventArgs(code, reason));
             }
 
@@ -793,6 +899,33 @@ namespace Centrifugal.Centrifuge
             {
                 // Permanent error - unsubscribe
                 _ = SetUnsubscribedAsync(error.Code, error.Message);
+            }
+        }
+
+        private int NextPromiseId()
+        {
+            return Interlocked.Increment(ref _promiseId);
+        }
+
+        private void ResolvePromises()
+        {
+            foreach (var kvp in _readyPromises)
+            {
+                if (_readyPromises.TryRemove(kvp.Key, out var promise))
+                {
+                    promise.TrySetResult(true);
+                }
+            }
+        }
+
+        private void RejectPromises(CentrifugeException error)
+        {
+            foreach (var kvp in _readyPromises)
+            {
+                if (_readyPromises.TryRemove(kvp.Key, out var promise))
+                {
+                    promise.TrySetException(error);
+                }
             }
         }
     }

@@ -55,7 +55,8 @@ namespace Centrifuge.Examples
             {
                 // Connect to server
                 Console.WriteLine("Connecting to Centrifugo...");
-                await client.ConnectAsync();
+                client.Connect();
+                await client.ReadyAsync();
 
                 // Create subscription
                 var subscription = client.NewSubscription("chat:index");
@@ -118,7 +119,8 @@ namespace Centrifuge.Examples
 
                 // Subscribe to channel
                 Console.WriteLine("\nSubscribing to channel 'chat:index'...");
-                await subscription.SubscribeAsync();
+                subscription.Subscribe();
+                await subscription.ReadyAsync();
 
                 // Publish a message
                 Console.WriteLine("\nPublishing message...");
@@ -186,10 +188,10 @@ namespace Centrifuge.Examples
 
                 // Cleanup
                 Console.WriteLine("\nUnsubscribing...");
-                await subscription.UnsubscribeAsync();
+                subscription.Unsubscribe();
 
                 Console.WriteLine("Disconnecting...");
-                await client.DisconnectAsync();
+                client.Disconnect();
             }
             catch (Exception ex)
             {

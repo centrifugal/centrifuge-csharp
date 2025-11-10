@@ -33,19 +33,21 @@ namespace Centrifugal.Centrifuge.Tests
         public async Task Client_Connect_ChangesStateToConnecting()
         {
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
-            var stateChanged = false;
+            var stateChangedTcs = new TaskCompletionSource<bool>();
 
             client.StateChanged += (sender, args) =>
             {
                 if (args.NewState == ClientState.Connecting)
                 {
-                    stateChanged = true;
+                    stateChangedTcs.TrySetResult(true);
                 }
             };
 
             // This will fail to connect since there's no server, but state should change
-            _ = client.ConnectAsync();
-            await Task.Delay(100);
+            client.Connect();
+
+            // Wait for state change event with timeout
+            var stateChanged = await stateChangedTcs.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
             Assert.True(stateChanged);
         }
@@ -90,10 +92,10 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Fact]
-        public async Task Client_Disconnect_ChangesStateToDisconnected()
+        public void Client_Disconnect_ChangesStateToDisconnected()
         {
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
-            await client.DisconnectAsync();
+            client.Disconnect();
 
             Assert.Equal(ClientState.Disconnected, client.State);
         }
@@ -113,11 +115,11 @@ namespace Centrifugal.Centrifuge.Tests
         //     client.Connected += (s, e) => connectedEvent.SetResult(true);
         //     client.Disconnected += (s, e) => disconnectedEvent.SetResult(true);
         //
-        //     await client.ConnectAsync();
+        //     client.Connect(); await client.ReadyAsync();
         //     await connectedEvent.Task.WithTimeout(TimeSpan.FromSeconds(5));
         //     Assert.Equal(ClientState.Connected, client.State);
         //
-        //     await client.DisconnectAsync();
+        //     client.Disconnect();
         //     await disconnectedEvent.Task.WithTimeout(TimeSpan.FromSeconds(5));
         //     Assert.Equal(ClientState.Disconnected, client.State);
         // }

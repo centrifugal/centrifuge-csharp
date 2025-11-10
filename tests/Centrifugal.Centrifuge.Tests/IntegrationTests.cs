@@ -41,13 +41,13 @@ namespace Centrifugal.Centrifuge.Tests
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
             client.Disconnected += (s, e) => disconnectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             var connected = await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(ClientState.Connected, client.State);
             Assert.NotEmpty(connected.ClientId);
 
-            await client.DisconnectAsync();
+            client.Disconnect();
             var disconnected = await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(ClientState.Disconnected, client.State);
@@ -62,7 +62,7 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
@@ -72,14 +72,14 @@ namespace Centrifugal.Centrifuge.Tests
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
             subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
 
-            await subscription.SubscribeAsync();
+            subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(SubscriptionState.Subscribed, subscription.State);
             Assert.Equal(ClientState.Connected, client.State);
 
-            await subscription.UnsubscribeAsync();
-            await client.DisconnectAsync();
+            subscription.Unsubscribe();
+            client.Disconnect();
 
             var ctx = await unsubscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -96,7 +96,7 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
@@ -106,7 +106,7 @@ namespace Centrifugal.Centrifuge.Tests
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
             subscription.Publication += (s, e) => publicationReceived.TrySetResult(e);
 
-            await subscription.SubscribeAsync();
+            subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var testData = new { my = "data" };
@@ -114,7 +114,7 @@ namespace Centrifugal.Centrifuge.Tests
             await subscription.PublishAsync(Encoding.UTF8.GetBytes(json));
 
             var ctx = await publicationReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await client.DisconnectAsync();
+            client.Disconnect();
 
             var receivedData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(Encoding.UTF8.GetString(ctx.Data));
             Assert.NotNull(receivedData);
@@ -128,14 +128,14 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
             var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
 
-            await subscription.SubscribeAsync();
+            subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(SubscriptionState.Subscribed, subscription.State);
@@ -148,7 +148,7 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.True(presenceStats.NumClients > 0);
             Assert.True(presenceStats.NumUsers > 0);
 
-            await client.DisconnectAsync();
+            client.Disconnect();
         }
 
         [Theory]
@@ -162,8 +162,8 @@ namespace Centrifugal.Centrifuge.Tests
 
             for (int i = 0; i < 10; i++)
             {
-                _ = client.ConnectAsync();
-                _ = client.DisconnectAsync();
+                client.Connect();
+                client.Disconnect();
             }
 
             Assert.Equal(ClientState.Disconnected, client.State);
@@ -178,7 +178,7 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
@@ -188,8 +188,8 @@ namespace Centrifugal.Centrifuge.Tests
 
             for (int i = 0; i < 10; i++)
             {
-                _ = subscription.SubscribeAsync();
-                _ = subscription.UnsubscribeAsync();
+                subscription.Subscribe();
+                subscription.Unsubscribe();
             }
 
             Assert.Equal(SubscriptionState.Unsubscribed, subscription.State);
@@ -200,7 +200,7 @@ namespace Centrifugal.Centrifuge.Tests
             {
                 var reconnectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
                 client.Connected += (s, e) => reconnectedEvent.TrySetResult(e);
-                await client.ConnectAsync();
+                client.Connect(); await client.ReadyAsync();
                 await reconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
             }
 
@@ -209,7 +209,7 @@ namespace Centrifugal.Centrifuge.Tests
             var subscribedEvent2 = new TaskCompletionSource<SubscribedEventArgs>();
             subscription2.Subscribed += (s, e) => subscribedEvent2.TrySetResult(e);
 
-            await subscription2.SubscribeAsync();
+            subscription2.Subscribe(); await subscription2.ReadyAsync();
             await subscribedEvent2.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(SubscriptionState.Subscribed, subscription2.State);
@@ -221,14 +221,14 @@ namespace Centrifugal.Centrifuge.Tests
             var unsubscribedEvent2 = new TaskCompletionSource<UnsubscribedEventArgs>();
             subscription2.Unsubscribed += (s, e) => unsubscribedEvent2.TrySetResult(e);
 
-            await subscription2.UnsubscribeAsync();
+            subscription2.Unsubscribe();
             await unsubscribedEvent2.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var presenceStats2 = await client.PresenceStatsAsync("test2");
             Assert.Equal(0u, presenceStats2.NumClients);
             Assert.Equal(0u, presenceStats2.NumUsers);
 
-            await client.DisconnectAsync();
+            client.Disconnect();
         }
 
         [Theory]
@@ -247,12 +247,12 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(ClientState.Connected, client.State);
 
-            await client.DisconnectAsync();
+            client.Disconnect();
         }
 
         [Theory]
@@ -266,7 +266,7 @@ namespace Centrifugal.Centrifuge.Tests
             var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
-            await client.ConnectAsync();
+            client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscriptionOptions = new SubscriptionOptions
@@ -278,13 +278,13 @@ namespace Centrifugal.Centrifuge.Tests
             var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
 
-            await subscription.SubscribeAsync();
+            subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(SubscriptionState.Subscribed, subscription.State);
 
-            await subscription.UnsubscribeAsync();
-            await client.DisconnectAsync();
+            subscription.Unsubscribe();
+            client.Disconnect();
         }
     }
 

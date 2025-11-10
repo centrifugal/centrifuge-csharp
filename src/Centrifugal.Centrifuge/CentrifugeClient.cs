@@ -34,6 +34,7 @@ namespace Centrifugal.Centrifuge
         private readonly ConcurrentDictionary<uint, TaskCompletionSource<Reply>> _pendingCalls = new();
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
         private readonly object _stateChangeLock = new object();
+        private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _readyPromises = new();
 
         private ITransport? _transport;
         private ClientState _state = ClientState.Disconnected;
@@ -53,11 +54,18 @@ namespace Centrifugal.Centrifuge
         private bool _refreshRequired;
         private int _currentTransportIndex;
         private bool _transportWasOpen;
+        private int _promiseId;
+        private bool _transportIsOpen;
 
         /// <summary>
         /// Gets the current client state.
         /// </summary>
         public ClientState State => _state;
+
+        /// <summary>
+        /// Gets whether the transport is currently open.
+        /// </summary>
+        internal bool TransportIsOpen => _transportIsOpen;
 
         /// <summary>
         /// Event raised when client state changes.
@@ -159,34 +167,71 @@ namespace Centrifugal.Centrifuge
         }
 
         /// <summary>
-        /// Connects to the Centrifugo server.
+        /// Connects to the Centrifugo server. This method returns immediately and starts the connection process in the background.
+        /// Use ReadyAsync() to wait for the connection to be established, or use the Connected event.
         /// </summary>
-        public async Task ConnectAsync()
+        public void Connect()
         {
-            await _stateLock.WaitAsync().ConfigureAwait(false);
-            try
+            if (_state == ClientState.Connected)
             {
-                if (_state != ClientState.Disconnected)
-                {
-                    return;
-                }
+                return;
+            }
 
-                _reconnectAttempts = 0;
-                await StartConnectingAsync(ConnectingCodes.ConnectCalled, "connect called").ConfigureAwait(false);
-            }
-            finally
+            if (_state == ClientState.Connecting)
             {
-                _stateLock.Release();
+                return;
             }
+
+            _reconnectAttempts = 0;
+            StartConnecting();
         }
 
         /// <summary>
-        /// Disconnects from the Centrifugo server.
+        /// Disconnects from the Centrifugo server. This method returns immediately and starts the disconnection process in the background.
         /// </summary>
-        public async Task DisconnectAsync()
+        public void Disconnect()
         {
-            await SetDisconnectedAsync(DisconnectedCodes.DisconnectCalled, "disconnect called").ConfigureAwait(false);
+            _ = SetDisconnectedAsync(DisconnectedCodes.DisconnectCalled, "disconnect called", false);
         }
+
+        /// <summary>
+        /// Returns a Task that completes when the client is connected.
+        /// If the client is already connected, the Task completes immediately.
+        /// If the client is disconnected, the Task is rejected.
+        /// </summary>
+        /// <param name="timeout">Optional timeout.</param>
+        /// <returns>A task that completes when connected.</returns>
+        public Task ReadyAsync(TimeSpan? timeout = null)
+        {
+            switch (_state)
+            {
+                case ClientState.Disconnected:
+                    return Task.FromException(new CentrifugeException(ErrorCodes.ClientDisconnected, "client disconnected"));
+
+                case ClientState.Connected:
+                    return Task.CompletedTask;
+
+                default:
+                    var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var promiseId = NextPromiseId();
+                    _readyPromises[promiseId] = tcs;
+
+                    if (timeout.HasValue)
+                    {
+                        var cts = new CancellationTokenSource(timeout.Value);
+                        cts.Token.Register(() =>
+                        {
+                            if (_readyPromises.TryRemove(promiseId, out var promise))
+                            {
+                                promise.TrySetException(new CentrifugeException(ErrorCodes.Timeout, "timeout"));
+                            }
+                        });
+                    }
+
+                    return tcs.Task;
+            }
+        }
+
 
         /// <summary>
         /// Creates a new subscription to a channel.
@@ -226,17 +271,18 @@ namespace Centrifugal.Centrifuge
         /// Removes a subscription.
         /// </summary>
         /// <param name="subscription">The subscription to remove.</param>
-        public async Task RemoveSubscriptionAsync(CentrifugeSubscription subscription)
+        public void RemoveSubscription(CentrifugeSubscription subscription)
         {
             if (subscription == null) throw new ArgumentNullException(nameof(subscription));
 
             if (subscription.State != SubscriptionState.Unsubscribed)
             {
-                await subscription.UnsubscribeAsync().ConfigureAwait(false);
+                subscription.Unsubscribe();
             }
 
             _subscriptions.TryRemove(subscription.Channel, out _);
         }
+
 
         /// <summary>
         /// Gets all subscriptions.
@@ -483,6 +529,36 @@ namespace Centrifugal.Centrifuge
             return $"{uri.Scheme}://{uri.Authority}/emulation";
         }
 
+        private void StartConnecting()
+        {
+            SetState(ClientState.Connecting);
+            Connecting?.Invoke(this, new ConnectingEventArgs(ConnectingCodes.ConnectCalled, "connect called"));
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await CreateTransportAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    // If using multi-transport fallback and transport failed before opening,
+                    // try the next transport in the list
+                    if (_transportEndpoints != null && !_transportWasOpen)
+                    {
+                        _currentTransportIndex++;
+                        if (_currentTransportIndex >= _transportEndpoints.Count)
+                        {
+                            _currentTransportIndex = 0;
+                        }
+                    }
+
+                    OnError("transport", ex);
+                    await ScheduleReconnectAsync().ConfigureAwait(false);
+                }
+            });
+        }
+
         private async Task StartConnectingAsync(int code, string reason)
         {
             SetState(ClientState.Connecting);
@@ -643,13 +719,13 @@ namespace Centrifugal.Centrifuge
                 {
                     // Permanent error - disconnect
                     OnError("connect", ex);
-                    await SetDisconnectedAsync(ex.Code, ex.Message).ConfigureAwait(false);
+                    await SetDisconnectedAsync(ex.Code, ex.Message, false).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
             {
                 OnError("connect", ex);
-                await SetDisconnectedAsync(DisconnectedCodes.BadProtocol, ex.Message).ConfigureAwait(false);
+                await SetDisconnectedAsync(DisconnectedCodes.BadProtocol, ex.Message, false).ConfigureAwait(false);
             }
         }
 
@@ -791,7 +867,7 @@ namespace Centrifugal.Centrifuge
                 }
                 catch (UnauthorizedException)
                 {
-                    await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                    await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
                     return;
                 }
             }
@@ -877,6 +953,9 @@ namespace Centrifugal.Centrifuge
             _node = connectResult.Node;
 
             SetState(ClientState.Connected);
+
+            _transportIsOpen = true;
+
             Connected?.Invoke(this, new ConnectedEventArgs(
                 connectResult.Client,
                 _transport?.Name ?? "unknown",
@@ -889,6 +968,9 @@ namespace Centrifugal.Centrifuge
             ClearRefreshTimer();
             _refreshAttempts = 0;
             _refreshRequired = false;
+
+            // Resolve ready promises
+            ResolvePromises();
 
             // Schedule token refresh if token expires
             if (connectResult.Expires)
@@ -912,20 +994,23 @@ namespace Centrifugal.Centrifuge
             // Process server-side subscriptions
             ProcessServerSubscriptions(connectResult.Subs);
 
-            // Resubscribe existing subscriptions (only on reconnection, not on first connect)
-            if (isReconnect)
+            // Send subscribe commands for all subscriptions in Subscribing state
+            // This handles both first connect and reconnect scenarios
+            SendSubscribeCommands();
+        }
+
+        private void SendSubscribeCommands()
+        {
+            _ = Task.Run(async () =>
             {
-                _ = Task.Run(async () =>
+                foreach (var sub in _subscriptions.Values)
                 {
-                    foreach (var sub in _subscriptions.Values)
+                    if (sub.State == SubscriptionState.Subscribing)
                     {
-                        if (sub.State != SubscriptionState.Unsubscribed)
-                        {
-                            await sub.ResubscribeAsync().ConfigureAwait(false);
-                        }
+                        await sub.SendSubscribeIfNeededAsync().ConfigureAwait(false);
                     }
-                });
-            }
+                }
+            });
         }
 
         private void OnTransportMessage(object? sender, byte[] data)
@@ -1065,7 +1150,7 @@ namespace Centrifugal.Centrifuge
             else
             {
                 // Permanent disconnect
-                _ = SetDisconnectedAsync(code, disconnect.Reason);
+                _ = SetDisconnectedAsync(code, disconnect.Reason, false);
             }
         }
 
@@ -1142,7 +1227,7 @@ namespace Centrifugal.Centrifuge
             }
         }
 
-        private async Task SetDisconnectedAsync(int code, string reason)
+        private async Task SetDisconnectedAsync(int code, string reason, bool shouldReconnect)
         {
             // Change state synchronously first
             lock (_stateChangeLock)
@@ -1152,8 +1237,21 @@ namespace Centrifugal.Centrifuge
                     return;
                 }
 
-                SetState(ClientState.Disconnected);
-                Disconnected?.Invoke(this, new DisconnectedEventArgs(code, reason));
+                if (shouldReconnect)
+                {
+                    SetState(ClientState.Connecting);
+                    Connecting?.Invoke(this, new ConnectingEventArgs(code, reason));
+                }
+                else
+                {
+                    SetState(ClientState.Disconnected);
+                    Disconnected?.Invoke(this, new DisconnectedEventArgs(code, reason));
+
+                    // Reject ready promises when disconnecting
+                    RejectPromises(new CentrifugeException(ErrorCodes.ClientDisconnected, "client disconnected"));
+                }
+
+                _transportIsOpen = false;
             }
 
             // Now do async cleanup without holding locks
@@ -1271,7 +1369,7 @@ namespace Centrifugal.Centrifuge
                 var token = await _options.GetToken().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(token))
                 {
-                    await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                    await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
                     return;
                 }
 
@@ -1306,7 +1404,7 @@ namespace Centrifugal.Centrifuge
             }
             catch (UnauthorizedException)
             {
-                await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                await SetDisconnectedAsync(DisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1351,7 +1449,7 @@ namespace Centrifugal.Centrifuge
             else
             {
                 // Permanent error - disconnect
-                _ = SetDisconnectedAsync((int)error.Code, error.Message);
+                _ = SetDisconnectedAsync((int)error.Code, error.Message, false);
             }
         }
 
@@ -1517,6 +1615,33 @@ namespace Centrifugal.Centrifuge
             return (uint)Interlocked.Increment(ref _commandId);
         }
 
+        private int NextPromiseId()
+        {
+            return Interlocked.Increment(ref _promiseId);
+        }
+
+        private void ResolvePromises()
+        {
+            foreach (var kvp in _readyPromises)
+            {
+                if (_readyPromises.TryRemove(kvp.Key, out var promise))
+                {
+                    promise.TrySetResult(true);
+                }
+            }
+        }
+
+        private void RejectPromises(CentrifugeException error)
+        {
+            foreach (var kvp in _readyPromises)
+            {
+                if (_readyPromises.TryRemove(kvp.Key, out var promise))
+                {
+                    promise.TrySetException(error);
+                }
+            }
+        }
+
         internal static PublicationEventArgs CreatePublicationArgs(string channel, Publication pub)
         {
             return CreatePublicationArgs(channel, pub, pub.Data.ToByteArray());
@@ -1554,7 +1679,7 @@ namespace Centrifugal.Centrifuge
             if (_disposed) return;
             _disposed = true;
 
-            DisconnectAsync().GetAwaiter().GetResult();
+            Disconnect();
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();
             _pingTimer?.Dispose();
