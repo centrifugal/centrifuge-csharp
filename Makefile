@@ -33,7 +33,7 @@ restore:
 .PHONY: run-example
 run-example:
 	@echo "Running console example program..."
-	dotnet run --project examples/Centrifugal.Centrifuge.Examples/Centrifugal.Centrifuge.Examples.csproj
+	dotnet run --project examples/Centrifugal.Centrifuge.ConsoleExample/Centrifugal.Centrifuge.ConsoleExample.csproj
 
 .PHONY: run-blazor-example
 run-blazor-example:

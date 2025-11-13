@@ -40,9 +40,9 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets or sets the minimum delay between reconnect attempts.
-        /// Default is 500ms.
+        /// Default is 200ms.
         /// </summary>
-        public TimeSpan MinReconnectDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+        public TimeSpan MinReconnectDelay { get; set; } = TimeSpan.FromMilliseconds(200);
 
         /// <summary>
         /// Gets or sets the maximum delay between reconnect attempts.

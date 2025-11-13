@@ -12,8 +12,9 @@ This directory contains example programs demonstrating how to use the Centrifuge
 
 2. **Run Centrifugo Server**
 
-   The easiest way is using Docker (note, we are using client insecure mode here and allowed origins `*`, it's only for the example purposes, avoid this in production app unti you know what you do):
-   ```bash
+The easiest way is using Docker (note, we are using client insecure mode here and allowed origins `*`, it's only for the example purposes, avoid this in production app unti you know what you do):
+
+```bash
 docker pull centrifugo/centrifugo:v6
 docker run -p 8000:8000 \
 -e CENTRIFUGO_CLIENT_INSECURE="true" \
@@ -31,16 +32,7 @@ docker run -p 8000:8000 \
 -e CENTRIFUGO_CLIENT_SUBSCRIBE_TO_USER_PERSONAL_CHANNEL_ENABLED="true" \
 -e CENTRIFUGO_LOG_LEVEL="trace" \
 centrifugo/centrifugo:v6 centrifugo
-   ```
-
-   Or download and run locally:
-   ```bash
-   # Download Centrifugo
-   curl -sSLf https://centrifugal.dev/install.sh | sh
-
-   # Run with insecure client mode (for testing only)
-   ./centrifugo --client.insecure
-   ```
+```
 
 ## Running the Examples
 
@@ -59,13 +51,13 @@ make run-example
 From the repository root:
 
 ```bash
-dotnet run --project examples/Centrifugal.Centrifuge.Examples/Centrifugal.Centrifuge.Examples.csproj
+dotnet run --project examples/Centrifugal.Centrifuge.ConsoleExample/Centrifugal.Centrifuge.ConsoleExample.csproj
 ```
 
 Or from the examples directory:
 
 ```bash
-cd examples/Centrifugal.Centrifuge.Examples
+cd examples/Centrifugal.Centrifuge.ConsoleExample
 dotnet run
 ```
 
