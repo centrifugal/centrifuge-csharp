@@ -417,13 +417,17 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
-            // Check if already inflight or not in subscribing state
-            if (_inflight || _state != CentrifugeSubscriptionState.Subscribing)
+            // Check state under lock to prevent race conditions with Unsubscribe()
+            lock (_stateChangeLock)
             {
-                return;
-            }
+                // Check if already inflight or not in subscribing state
+                if (_inflight || _state != CentrifugeSubscriptionState.Subscribing)
+                {
+                    return;
+                }
 
-            _inflight = true;
+                _inflight = true;
+            }
 
             try
             {
@@ -447,7 +451,10 @@ namespace Centrifugal.Centrifuge
             }
             finally
             {
-                _inflight = false;
+                lock (_stateChangeLock)
+                {
+                    _inflight = false;
+                }
             }
         }
 
