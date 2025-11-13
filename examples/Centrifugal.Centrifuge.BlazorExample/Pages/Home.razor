@@ -43,7 +43,7 @@
             }
             @if (_events.Count == 0)
             {
-                <div class="event-item empty">No events yet. Connecting...</div>
+                <div class="event-item empty">No events yet.</div>
             }
         </div>
     </div>
@@ -230,7 +230,6 @@
     {
         await LogAsync("Centrifuge C# SDK - Blazor WASM Example");
         await LogAsync("=========================================");
-        await LogAsync("");
 
         // Setup client event handlers
         Client.StateChanged += OnStateChanged;
@@ -260,19 +259,16 @@
             _subscription.Error += OnSubscriptionError;
 
             // Subscribe to channel
-            await LogAsync("");
             await LogAsync("Subscribing to channel 'chat'...");
             _subscription.Subscribe();
             await _subscription.ReadyAsync();
 
             // Publish a message
-            await LogAsync("");
             await LogAsync("Publishing message...");
             var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from Blazor WASM!\"}");
             await _subscription.PublishAsync(messageData);
 
             // Get presence
-            await LogAsync("");
             await LogAsync("Fetching presence...");
             try
             {
@@ -292,7 +288,6 @@
             }
 
             // Get history
-            await LogAsync("");
             await LogAsync("Fetching history...");
             try
             {
@@ -315,7 +310,6 @@
             }
 
             // RPC example
-            await LogAsync("");
             await LogAsync("Sending RPC...");
             try
             {
@@ -329,7 +323,6 @@
                 await LogAsync($"RPC failed: {ex.Message}");
             }
 
-            await LogAsync("");
             await LogAsync("Example completed! The connection will remain open for incoming messages.");
         }
         catch (Exception ex)
@@ -470,7 +463,6 @@
     {
         try
         {
-            await LogAsync("");
             await LogAsync("Disposing...");
 
             if (_subscription != null)
