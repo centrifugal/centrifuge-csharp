@@ -7,7 +7,8 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 
 ## Features
 
-- ✅ WebSocket, SSE, and HTTP-streaming transports with automatic fallback
+- ✅ WebSocket and HTTP-streaming transports with automatic fallback
+- ✅ Browser-native transports for Blazor WebAssembly (using JS interop)
 - ✅ Protobuf binary protocol for efficient communication
 - ✅ Automatic reconnection with exponential backoff and full jitter
 - ✅ Channel subscriptions with recovery and positioning
@@ -39,6 +40,19 @@ This means it works on:
 - ✅ **Unity**: 2021.2+ with .NET Standard 2.1 support
 
 > **Note**: UWP is not recommended for new projects. Consider using Windows App SDK / WinUI 3 instead, which work with modern .NET targets.
+
+## Transport Compatibility
+
+The SDK supports multiple transport protocols with platform-specific implementations for optimal performance:
+
+| Transport | Server/.NET Desktop | Blazor Server | Blazor WASM | Unity Desktop/Mobile | Unity WebGL |
+|-----------|---------------------|---------------|-------------|----------------------|-------------|
+| **WebSocket** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ⚠️ Plugin Required |
+| **HTTP Stream** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ❌ Not Supported |
+
+**\*Blazor WebAssembly**: Requires `IJSRuntime` parameter in constructor. The SDK automatically uses browser-native implementations via JavaScript interop for both WebSocket and HTTP Stream transports.
+
+**Unity WebGL**: Requires a third-party WebSocket plugin. HTTP Stream is not supported in WebGL.
 
 ## Installation
 
@@ -208,6 +222,36 @@ var response = Encoding.UTF8.GetString(result.Data);
 Console.WriteLine($"RPC result: {response}");
 ```
 
+### Multi-Transport Fallback
+
+For environments where WebSocket might be blocked, use automatic transport fallback:
+
+```csharp
+using Centrifugal.Centrifuge;
+
+// Define transport endpoints to try in order
+var transports = new[]
+{
+    new CentrifugeTransportEndpoint(
+        CentrifugeTransportType.WebSocket,
+        "ws://localhost:8000/connection/websocket"
+    ),
+    new CentrifugeTransportEndpoint(
+        CentrifugeTransportType.HttpStream,
+        "http://localhost:8000/connection/http_stream"
+    )
+};
+
+// For regular .NET apps
+var client = new CentrifugeClient(transports);
+
+// For Blazor WebAssembly (pass IJSRuntime)
+var client = new CentrifugeClient(transports, jsRuntime);
+
+// Client will try WebSocket first, then fall back to HTTP Stream if needed
+client.Connect();
+```
+
 ### Advanced Configuration
 
 ```csharp
@@ -299,11 +343,14 @@ catch (CentrifugeException ex)
 
 The library works with Unity 2021.2+ (requires .NET Standard 2.1 support).
 
-**Requirements:**
-1. Unity 2021.2 or later
-2. For WebGL builds, use a WebSocket plugin that provides `System.Net.WebSockets` support (like [NativeWebSocket](https://github.com/endel/NativeWebSocket))
+**Platform Support:**
+- ✅ **Standalone builds** (Windows, macOS, Linux): Works out of the box
+- ✅ **Mobile** (iOS, Android): Works out of the box
+- ⚠️ **WebGL**: Requires a WebSocket plugin that provides `System.Net.WebSockets` support, such as:
+  - [NativeWebSocket](https://github.com/endel/NativeWebSocket)
+  - [WebSocketSharp](https://github.com/sta/websocket-sharp) with Unity WebGL wrapper
 
-Example for Unity:
+Example for Unity (standalone/mobile):
 
 ```csharp
 using UnityEngine;
@@ -337,9 +384,15 @@ public class CentrifugeManager : MonoBehaviour
 }
 ```
 
+> **Note**: Unity WebGL builds run in the browser but don't have built-in `System.Net.WebSockets` support. You'll need a third-party WebSocket library that works in Unity WebGL.
+
 ## Blazor Support
 
-Works seamlessly in both Blazor Server and Blazor WebAssembly:
+The library works in both Blazor Server and Blazor WebAssembly.
+
+### Blazor Server
+
+Works out of the box - uses standard .NET WebSocket client:
 
 ```csharp
 @inject CentrifugeClient Client
@@ -356,6 +409,87 @@ Works seamlessly in both Blazor Server and Blazor WebAssembly:
         await Client.ConnectAsync();
     }
 }
+```
+
+### Blazor WebAssembly
+
+Requires IJSRuntime for browser WebSocket access. Register the client in `Program.cs`:
+
+```csharp
+using Centrifugal.Centrifuge;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+
+// Register CentrifugeClient as scoped service
+builder.Services.AddScoped(sp =>
+{
+    var jsRuntime = sp.GetRequiredService<IJSRuntime>();
+    var client = new CentrifugeClient(
+        "ws://localhost:8000/connection/websocket",
+        jsRuntime,
+        new CentrifugeClientOptions
+        {
+            // Your options here
+        }
+    );
+    return client;
+});
+
+await builder.Build().RunAsync();
+```
+
+Then inject and use in your components:
+
+```csharp
+@page "/"
+@inject CentrifugeClient Client
+@implements IAsyncDisposable
+
+<h3>Messages</h3>
+<ul>
+    @foreach (var msg in messages)
+    {
+        <li>@msg</li>
+    }
+</ul>
+
+@code {
+    private List<string> messages = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Client.Connected += (sender, e) =>
+        {
+            messages.Add($"Connected: {e.ClientId}");
+            InvokeAsync(StateHasChanged);
+        };
+
+        Client.Publication += (sender, e) =>
+        {
+            var data = Encoding.UTF8.GetString(e.Data);
+            messages.Add($"Received: {data}");
+            InvokeAsync(StateHasChanged);
+        };
+
+        Client.Connect();
+        await Client.ReadyAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.Disconnect();
+        await Task.Delay(100); // Give disconnect time to complete
+        Client.Dispose();
+    }
+}
+```
+
+**Important**: The JavaScript interop file is automatically included as a static asset. If you encounter module loading issues, ensure your `index.html` has the standard Blazor script tag:
+
+```html
+<script src="_framework/blazor.webassembly.js"></script>
 ```
 
 ## Building from Source

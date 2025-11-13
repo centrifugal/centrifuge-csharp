@@ -59,6 +59,9 @@ namespace Centrifugal.Centrifuge
         private bool _transportIsOpen;
         private Timer? _subscribeBatchTimer;
         private bool _subscribeBatchPending;
+#if NET6_0_OR_GREATER
+        private readonly Microsoft.JSInterop.IJSRuntime? _jsRuntime;
+#endif
 
         /// <summary>
         /// Gets the current client state.
@@ -168,6 +171,51 @@ namespace Centrifugal.Centrifuge
             _options = options ?? new CentrifugeClientOptions();
             _options.Validate();
         }
+
+#if NET6_0_OR_GREATER
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CentrifugeClient"/> class for Blazor WebAssembly.
+        /// </summary>
+        /// <param name="endpoint">WebSocket endpoint URL.</param>
+        /// <param name="jsRuntime">JavaScript runtime for Blazor interop.</param>
+        /// <param name="options">Client options.</param>
+        public CentrifugeClient(string endpoint, Microsoft.JSInterop.IJSRuntime jsRuntime, CentrifugeClientOptions? options = null)
+        {
+            if (endpoint == null)
+            {
+                throw new ArgumentNullException(nameof(endpoint));
+            }
+
+            if (string.IsNullOrWhiteSpace(endpoint))
+            {
+                throw new ArgumentException("Endpoint cannot be empty", nameof(endpoint));
+            }
+
+            _endpoint = endpoint;
+            _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
+            _options = options ?? new CentrifugeClientOptions();
+            _options.Validate();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CentrifugeClient"/> class with multi-transport fallback for Blazor WebAssembly.
+        /// </summary>
+        /// <param name="transportEndpoints">Array of transport endpoints to try in order.</param>
+        /// <param name="jsRuntime">JavaScript runtime for Blazor interop.</param>
+        /// <param name="options">Client options.</param>
+        public CentrifugeClient(CentrifugeTransportEndpoint[] transportEndpoints, Microsoft.JSInterop.IJSRuntime jsRuntime, CentrifugeClientOptions? options = null)
+        {
+            if (transportEndpoints == null || transportEndpoints.Length == 0)
+            {
+                throw new ArgumentException("Transport endpoints cannot be null or empty", nameof(transportEndpoints));
+            }
+
+            _transportEndpoints = new List<CentrifugeTransportEndpoint>(transportEndpoints);
+            _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
+            _options = options ?? new CentrifugeClientOptions();
+            _options.Validate();
+        }
+#endif
 
         /// <summary>
         /// Connects to the Centrifugo server. This method returns immediately and starts the connection process in the background.
@@ -681,8 +729,34 @@ namespace Centrifugal.Centrifuge
             switch (transportType)
             {
                 case CentrifugeTransportType.WebSocket:
+#if NET6_0_OR_GREATER
+                    // Use browser WebSocket transport if IJSRuntime is provided or running in browser
+                    if (_jsRuntime != null || OperatingSystem.IsBrowser())
+                    {
+                        if (_jsRuntime == null)
+                        {
+                            throw new CentrifugeConfigurationException(
+                                "Running in browser environment but IJSRuntime not provided. " +
+                                "Use the constructor overload that accepts IJSRuntime for Blazor WebAssembly support.");
+                        }
+                        return new BrowserWebSocketTransport(endpoint, _jsRuntime);
+                    }
+#endif
                     return new WebSocketTransport(endpoint);
                 case CentrifugeTransportType.HttpStream:
+#if NET6_0_OR_GREATER
+                    // Use browser HTTP stream transport if IJSRuntime is provided or running in browser
+                    if (_jsRuntime != null || OperatingSystem.IsBrowser())
+                    {
+                        if (_jsRuntime == null)
+                        {
+                            throw new CentrifugeConfigurationException(
+                                "Running in browser environment but IJSRuntime not provided. " +
+                                "Use the constructor overload that accepts IJSRuntime for Blazor WebAssembly support.");
+                        }
+                        return new BrowserHttpStreamTransport(endpoint, _jsRuntime);
+                    }
+#endif
                     return new HttpStreamTransport(endpoint);
                 default:
                     throw new CentrifugeConfigurationException($"Unsupported transport type: {transportType}");
