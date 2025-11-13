@@ -4,8 +4,8 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <RootNamespace>Centrifugal.Centrifuge.Examples</RootNamespace>
-    <AssemblyName>Centrifugal.Centrifuge.Examples</AssemblyName>
+    <RootNamespace>Centrifugal.Centrifuge.ConsoleExample</RootNamespace>
+    <AssemblyName>Centrifugal.Centrifuge.ConsoleExample</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

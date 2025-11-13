@@ -7,7 +7,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Centrifugal.Centrifuge", "s
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Centrifugal.Centrifuge.Tests", "tests\Centrifugal.Centrifuge.Tests\Centrifugal.Centrifuge.Tests.csproj", "{9E7F6D4C-9C6D-4E4F-8B2F-E4D3C9F6E8B2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Centrifugal.Centrifuge.Examples", "examples\Centrifugal.Centrifuge.Examples\Centrifugal.Centrifuge.Examples.csproj", "{A1B2C3D4-E5F6-7G8H-9I0J-K1L2M3N4O5P6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Centrifugal.Centrifuge.ConsoleExample", "examples\Centrifugal.Centrifuge.ConsoleExample\Centrifugal.Centrifuge.ConsoleExample.csproj", "{A1B2C3D4-E5F6-7G8H-9I0J-K1L2M3N4O5P6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Centrifugal.Centrifuge.BlazorExample", "examples\Centrifugal.Centrifuge.BlazorExample\Centrifugal.Centrifuge.BlazorExample.csproj", "{A1B2C3D4-E5F6-7G8H-9I0J-K1L2M3N4O5P6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
