@@ -1208,6 +1208,36 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
+            // Determine if we should reconnect based on close code
+            bool shouldReconnect = true;
+            int code = e.Code ?? 0;
+            string reason = e.Reason;
+
+            // Check for non-reconnectable disconnect codes (matching centrifuge-js behavior)
+            // Codes 3500-3999 and 4500-4999 mean permanent disconnect
+            if (e.Code.HasValue && ((code >= 3500 && code < 4000) || (code >= 4500 && code < 5000)))
+            {
+                shouldReconnect = false;
+            }
+
+            // Check for specific exceptions that indicate permanent failure
+            if (e.Exception != null && !e.Code.HasValue)
+            {
+                if (e.Exception is CentrifugeUnauthorizedException)
+                {
+                    shouldReconnect = false;
+                    code = CentrifugeDisconnectedCodes.Unauthorized;
+                    reason = "unauthorized";
+                }
+            }
+
+            if (!shouldReconnect)
+            {
+                // Permanent disconnect
+                await SetDisconnectedAsync(code, reason, false).ConfigureAwait(false);
+                return;
+            }
+
             // If using multi-transport fallback and transport closed before opening,
             // try the next transport in the list
             if (_transportEndpoints != null && !_transportWasOpen)
@@ -1219,7 +1249,9 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            await StartConnectingAsync(CentrifugeConnectingCodes.TransportClosed, e.Reason).ConfigureAwait(false);
+            // Schedule reconnection with backoff (don't reconnect immediately)
+            SetState(CentrifugeClientState.Connecting);
+            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.TransportClosed, reason));
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 
@@ -1266,6 +1298,25 @@ namespace Centrifugal.Centrifuge
             catch (OperationCanceledException)
             {
                 // Reconnect was cancelled
+            }
+            catch (Exception ex)
+            {
+                // CreateTransportAsync failed - report error and schedule next reconnection attempt
+                // If using multi-transport fallback and transport failed before opening,
+                // try the next transport in the list
+                if (_transportEndpoints != null && !_transportWasOpen)
+                {
+                    _currentTransportIndex++;
+                    if (_currentTransportIndex >= _transportEndpoints.Count)
+                    {
+                        _currentTransportIndex = 0;
+                    }
+                }
+
+                OnError("transport", ex);
+
+                // Schedule next reconnection attempt
+                await ScheduleReconnectAsync().ConfigureAwait(false);
             }
         }
 

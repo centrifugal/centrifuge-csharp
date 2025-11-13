@@ -30,13 +30,19 @@ restore:
 	@echo "Restoring NuGet packages..."
 	dotnet restore Centrifugal.Centrifuge.sln
 
+.PHONY: run-example
+run-example:
+	@echo "Running example program..."
+	dotnet run --project examples/Centrifugal.Centrifuge.Examples/Centrifugal.Centrifuge.Examples.csproj
+
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build      - Build the solution in Release mode"
-	@echo "  test       - Run all tests (unit + integration)"
-	@echo "  test-unit  - Run unit tests only (excludes integration tests)"
-	@echo "  clean      - Clean build artifacts"
-	@echo "  restore    - Restore NuGet packages"
-	@echo "  proto      - Regenerate C# protobuf code from client.proto"
-	@echo "  help       - Show this help message"
+	@echo "  build       - Build the solution in Release mode"
+	@echo "  test        - Run all tests (unit + integration)"
+	@echo "  test-unit   - Run unit tests only (excludes integration tests)"
+	@echo "  clean       - Clean build artifacts"
+	@echo "  restore     - Restore NuGet packages"
+	@echo "  proto       - Regenerate C# protobuf code from client.proto"
+	@echo "  run-example - Run the example program"
+	@echo "  help        - Show this help message"

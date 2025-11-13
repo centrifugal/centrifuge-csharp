@@ -193,7 +193,31 @@ namespace Centrifugal.Centrifuge.Transports
 
                 var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                     .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
+
+                // Check for HTTP errors and map to appropriate close codes
+                if (!response.IsSuccessStatusCode)
+                {
+                    int statusCode = (int)response.StatusCode;
+                    int closeCode;
+                    // Map HTTP 4xx (client errors) to 3500-3999 range (non-reconnectable)
+                    // Map HTTP 5xx (server errors) to 5000+ range (reconnectable)
+                    if (statusCode >= 400 && statusCode < 500)
+                    {
+                        closeCode = 3500 + (statusCode - 400); // 400 -> 3500, 404 -> 3504, etc.
+                    }
+                    else if (statusCode >= 500)
+                    {
+                        closeCode = 5000 + (statusCode - 500); // 500 -> 5000, 503 -> 5003, etc.
+                    }
+                    else
+                    {
+                        closeCode = 3000 + statusCode; // Other codes
+                    }
+                    string errorReason = $"http error {statusCode}";
+                    Closed?.Invoke(this, new TransportClosedEventArgs(code: closeCode, reason: errorReason));
+                    return;
+                }
+
 
                 // Connection established successfully
                 Opened?.Invoke(this, EventArgs.Empty);
@@ -228,6 +252,7 @@ namespace Centrifugal.Centrifuge.Transports
             catch (Exception ex)
             {
                 Error?.Invoke(this, ex);
+                // Close code should have been set by earlier status check if it was an HTTP error
                 Closed?.Invoke(this, new TransportClosedEventArgs(exception: ex));
             }
         }
