@@ -1,6 +1,9 @@
 # Centrifuge C# SDK Examples
 
-This directory contains example programs demonstrating how to use the Centrifuge C# SDK.
+This directory contains example programs demonstrating how to use the Centrifuge C# SDK in different environments:
+
+1. **Console Example** - .NET Console Application
+2. **Blazor Example** - Blazor WebAssembly Application (browser-based)
 
 ## Prerequisites
 
@@ -9,11 +12,12 @@ This directory contains example programs demonstrating how to use the Centrifuge
 
 2. **Run Centrifugo Server**
 
-   The easiest way is using Docker (note, we are using client insecure mode here, it's only for the example purposes):
+   The easiest way is using Docker (note, we are using client insecure mode here and allowed origins `*`, it's only for the example purposes, avoid this in production app unti you know what you do):
    ```bash
 docker pull centrifugo/centrifugo:v6
 docker run -p 8000:8000 \
 -e CENTRIFUGO_CLIENT_INSECURE="true" \
+-e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS="*" \
 -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_DELTA_PUBLISH="true" \
 -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_PRESENCE="true" \
 -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_JOIN_LEAVE="true" \
@@ -38,9 +42,11 @@ centrifugo/centrifugo:v6 centrifugo
    ./centrifugo --client.insecure
    ```
 
-## Running the Example
+## Running the Examples
 
-### Option 1: Using Make (recommended)
+### Console Example
+
+**Using Make (recommended):**
 
 From the repository root:
 
@@ -48,7 +54,7 @@ From the repository root:
 make run-example
 ```
 
-### Option 2: Using dotnet CLI
+**Using dotnet CLI:**
 
 From the repository root:
 
@@ -62,6 +68,37 @@ Or from the examples directory:
 cd examples/Centrifugal.Centrifuge.Examples
 dotnet run
 ```
+
+### Blazor WebAssembly Example
+
+**Using Make (recommended):**
+
+From the repository root:
+
+```bash
+make run-blazor-example
+```
+
+This will:
+- Start the Blazor dev server on port 5000
+- Automatically open your browser at `http://localhost:5000`
+- Display connection status with color-coded indicators
+- Show live event log with color-coded categories
+
+**Using dotnet CLI:**
+
+From the repository root:
+
+```bash
+cd examples/Centrifugal.Centrifuge.BlazorExample
+dotnet run --urls "http://localhost:5000" --launch-profile "http"
+```
+
+**What to see:**
+- Visual status bar with real-time connection and subscription states
+- Live event log with color-coded categories (client, subscription, errors, etc.)
+- Clear button to reset the event log
+- All the same features as the console example, running in the browser with a nice UI!
 
 ## What the Example Demonstrates
 

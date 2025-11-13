@@ -393,6 +393,23 @@ namespace Centrifugal.Centrifuge
             }
         }
 
+        /// <summary>
+        /// Moves subscription to subscribing state. Used when client connection is lost.
+        /// </summary>
+        internal void MoveToSubscribing(int code, string reason)
+        {
+            lock (_stateChangeLock)
+            {
+                if (_state != CentrifugeSubscriptionState.Subscribed)
+                {
+                    return;
+                }
+
+                SetState(CentrifugeSubscriptionState.Subscribing);
+                Subscribing?.Invoke(this, new CentrifugeSubscribingEventArgs(code, reason));
+            }
+        }
+
         private void StartSubscribing()
         {
             SetState(CentrifugeSubscriptionState.Subscribing);

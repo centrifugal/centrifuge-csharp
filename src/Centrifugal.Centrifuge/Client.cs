@@ -1332,7 +1332,16 @@ namespace Centrifugal.Centrifuge
 
             // Schedule reconnection with backoff (don't reconnect immediately)
             SetState(CentrifugeClientState.Connecting);
+
+            // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
+            // (matching centrifuge-js behavior - see _disconnect method)
+            foreach (var sub in _subscriptions.Values)
+            {
+                sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+            }
+
             Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.TransportClosed, reason));
+
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 

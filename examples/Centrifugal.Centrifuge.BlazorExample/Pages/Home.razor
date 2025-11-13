@@ -1,0 +1,494 @@
+@page "/"
+@inject CentrifugeClient Client
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@using System.Text
+
+<PageTitle>Centrifuge Blazor Example</PageTitle>
+
+<div class="container">
+    <h1>Centrifuge C# SDK - Blazor WebAssembly Example</h1>
+
+    <p>This example demonstrates the Centrifuge SDK in Blazor WebAssembly using browser-native WebSocket.</p>
+
+    <div class="status-bar">
+        <div class="status-item">
+            <span class="status-label">Client:</span>
+            <span class="status-value @GetStateClass(_clientState)">@_clientState</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Subscription:</span>
+            <span class="status-value @GetStateClass(_subscriptionState)">@_subscriptionState</span>
+        </div>
+        @if (!string.IsNullOrEmpty(_lastMessage))
+        {
+            <div class="status-item">
+                <span class="status-label">Last Message:</span>
+                <span class="status-value">@_lastMessage</span>
+            </div>
+        }
+    </div>
+
+    <div class="events-container">
+        <div class="events-header">
+            <h3>Events Log</h3>
+            <button class="clear-btn" @onclick="ClearEvents">Clear</button>
+        </div>
+        <div class="events-list">
+            @foreach (var msg in _events.AsEnumerable().Reverse())
+            {
+                <div class="event-item @GetEventClass(msg)">
+                    @msg
+                </div>
+            }
+            @if (_events.Count == 0)
+            {
+                <div class="event-item empty">No events yet. Connecting...</div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    h1 {
+        color: #2c3e50;
+        margin-bottom: 1rem;
+    }
+
+    .status-bar {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+        color: white;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .status-label {
+        font-weight: 600;
+        opacity: 0.9;
+    }
+
+    .status-value {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+    }
+
+    .status-value.connected {
+        background: #10b981;
+    }
+
+    .status-value.subscribed {
+        background: #10b981;
+    }
+
+    .status-value.connecting,
+    .status-value.subscribing {
+        background: #f59e0b;
+    }
+
+    .status-value.disconnected,
+    .status-value.unsubscribed {
+        background: #ef4444;
+    }
+
+    .events-container {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .events-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .events-header h3 {
+        margin: 0;
+        color: #2c3e50;
+    }
+
+    .clear-btn {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: background 0.2s;
+    }
+
+    .clear-btn:hover {
+        background: #5a6268;
+    }
+
+    .events-list {
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+
+    .event-item {
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        border-left: 4px solid #0078d4;
+        background: #f8f9fa;
+        transition: all 0.2s;
+    }
+
+    .event-item:hover {
+        background: #e9ecef;
+        transform: translateX(2px);
+    }
+
+    .event-item.client {
+        border-left-color: #0078d4;
+        background: #e3f2fd;
+    }
+
+    .event-item.subscription {
+        border-left-color: #00bcd4;
+        background: #e0f7fa;
+    }
+
+    .event-item.error {
+        border-left-color: #f44336;
+        background: #ffebee;
+    }
+
+    .event-item.success {
+        border-left-color: #4caf50;
+        background: #e8f5e9;
+    }
+
+    .event-item.info {
+        border-left-color: #ff9800;
+        background: #fff3e0;
+    }
+
+    .event-item.empty {
+        border-left-color: #9e9e9e;
+        background: #fafafa;
+        text-align: center;
+        font-style: italic;
+        color: #757575;
+    }
+
+    @@media (max-width: 768px) {
+        .container {
+            padding: 1rem;
+        }
+
+        .status-bar {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .events-list {
+            max-height: 400px;
+        }
+    }
+</style>
+
+@code {
+    private CentrifugeSubscription? _subscription;
+    private string _clientState = "Initializing";
+    private string _subscriptionState = "Not Created";
+    private string _lastMessage = "";
+    private List<string> _events = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LogAsync("Centrifuge C# SDK - Blazor WASM Example");
+        await LogAsync("=========================================");
+        await LogAsync("");
+
+        // Setup client event handlers
+        Client.StateChanged += OnStateChanged;
+        Client.Connecting += OnConnecting;
+        Client.Connected += OnConnected;
+        Client.Disconnected += OnDisconnected;
+        Client.Error += OnError;
+
+        try
+        {
+            // Connect to server
+            await LogAsync("Connecting to server...");
+            Client.Connect();
+            await Client.ReadyAsync();
+
+            // Create subscription
+            _subscription = Client.NewSubscription("chat");
+
+            // Setup subscription event handlers
+            _subscription.StateChanged += OnSubscriptionStateChanged;
+            _subscription.Subscribing += OnSubscribing;
+            _subscription.Subscribed += OnSubscribed;
+            _subscription.Unsubscribed += OnUnsubscribed;
+            _subscription.Publication += OnPublication;
+            _subscription.Join += OnJoin;
+            _subscription.Leave += OnLeave;
+            _subscription.Error += OnSubscriptionError;
+
+            // Subscribe to channel
+            await LogAsync("");
+            await LogAsync("Subscribing to channel 'chat'...");
+            _subscription.Subscribe();
+            await _subscription.ReadyAsync();
+
+            // Publish a message
+            await LogAsync("");
+            await LogAsync("Publishing message...");
+            var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from Blazor WASM!\"}");
+            await _subscription.PublishAsync(messageData);
+
+            // Get presence
+            await LogAsync("");
+            await LogAsync("Fetching presence...");
+            try
+            {
+                var presence = await _subscription.PresenceAsync();
+                await LogAsync($"Clients in channel: {presence.Clients.Count}");
+                foreach (var (clientId, clientInfo) in presence.Clients)
+                {
+                    await LogAsync($"  - {clientId}: user={clientInfo.User}");
+                }
+
+                var stats = await _subscription.PresenceStatsAsync();
+                await LogAsync($"Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
+            }
+            catch (Exception ex)
+            {
+                await LogAsync($"Presence not available: {ex.Message}");
+            }
+
+            // Get history
+            await LogAsync("");
+            await LogAsync("Fetching history...");
+            try
+            {
+                var history = await _subscription.HistoryAsync(new CentrifugeHistoryOptions
+                {
+                    Limit = 10,
+                    Reverse = true
+                });
+
+                await LogAsync($"History: {history.Publications.Length} messages");
+                foreach (var pub in history.Publications)
+                {
+                    var data = Encoding.UTF8.GetString(pub.Data);
+                    await LogAsync($"  - {data}");
+                }
+            }
+            catch (Exception ex)
+            {
+                await LogAsync($"History not available: {ex.Message}");
+            }
+
+            // RPC example
+            await LogAsync("");
+            await LogAsync("Sending RPC...");
+            try
+            {
+                var rpcData = Encoding.UTF8.GetBytes("{\"method\":\"getCurrentTime\"}");
+                var rpcResult = await Client.RpcAsync("time", rpcData);
+                var response = Encoding.UTF8.GetString(rpcResult.Data);
+                await LogAsync($"RPC response: {response}");
+            }
+            catch (Exception ex)
+            {
+                await LogAsync($"RPC failed: {ex.Message}");
+            }
+
+            await LogAsync("");
+            await LogAsync("Example completed! The connection will remain open for incoming messages.");
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Error: {ex.Message}");
+            await LogAsync($"Stack trace: {ex.StackTrace}");
+        }
+    }
+
+    private void OnStateChanged(object? sender, CentrifugeStateEventArgs e)
+    {
+        _clientState = e.NewState.ToString();
+        _ = LogAsync($"[Client] State: {e.OldState} -> {e.NewState}");
+    }
+
+    private void OnConnecting(object? sender, CentrifugeConnectingEventArgs e)
+    {
+        _ = LogAsync($"[Client] Connecting: {e.Code} - {e.Reason}");
+    }
+
+    private void OnConnected(object? sender, CentrifugeConnectedEventArgs e)
+    {
+        _ = LogAsync($"[Client] Connected!");
+        _ = LogAsync($"  Client ID: {e.ClientId}");
+        _ = LogAsync($"  Transport: {e.Transport}");
+    }
+
+    private void OnDisconnected(object? sender, CentrifugeDisconnectedEventArgs e)
+    {
+        _ = LogAsync($"[Client] Disconnected: {e.Code} - {e.Reason}");
+    }
+
+    private void OnError(object? sender, CentrifugeErrorEventArgs e)
+    {
+        _ = LogAsync($"[Client] Error: {e.Type} - {e.Message}");
+    }
+
+    private void OnSubscriptionStateChanged(object? sender, CentrifugeSubscriptionStateEventArgs e)
+    {
+        _subscriptionState = e.NewState.ToString();
+        _ = LogAsync($"[Subscription] State: {e.OldState} -> {e.NewState}");
+    }
+
+    private void OnSubscribing(object? sender, CentrifugeSubscribingEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Subscribing: {e.Code} - {e.Reason}");
+    }
+
+    private void OnSubscribed(object? sender, CentrifugeSubscribedEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Subscribed!");
+        if (e.WasRecovering)
+        {
+            _ = LogAsync($"  Recovery attempted, recovered: {e.Recovered}");
+        }
+    }
+
+    private void OnUnsubscribed(object? sender, CentrifugeUnsubscribedEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Unsubscribed: {e.Code} - {e.Reason}");
+    }
+
+    private void OnPublication(object? sender, CentrifugePublicationEventArgs e)
+    {
+        var data = Encoding.UTF8.GetString(e.Data);
+        _lastMessage = data;
+        _ = LogAsync($"[Subscription] Publication received:");
+        _ = LogAsync($"  Channel: {e.Channel}");
+        _ = LogAsync($"  Data: {data}");
+        if (e.Offset.HasValue)
+        {
+            _ = LogAsync($"  Offset: {e.Offset}");
+        }
+        if (e.Info != null)
+        {
+            _ = LogAsync($"  From: {e.Info.Client} (user: {e.Info.User})");
+        }
+    }
+
+    private void OnJoin(object? sender, CentrifugeJoinEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Client joined: {e.Info.Client}");
+    }
+
+    private void OnLeave(object? sender, CentrifugeLeaveEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Client left: {e.Info.Client}");
+    }
+
+    private void OnSubscriptionError(object? sender, CentrifugeErrorEventArgs e)
+    {
+        _ = LogAsync($"[Subscription] Error: {e.Type} - {e.Message}");
+    }
+
+    private async Task LogAsync(string message)
+    {
+        // Optionally log to browser console for debugging (uncomment if needed)
+        // await JS.InvokeVoidAsync("console.log", message);
+
+        // Add to events list for UI
+        _events.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        if (_events.Count > 200)
+        {
+            _events.RemoveAt(0);
+        }
+
+        // Update UI
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ClearEvents()
+    {
+        _events.Clear();
+        StateHasChanged();
+    }
+
+    private string GetStateClass(string state)
+    {
+        return state.ToLower();
+    }
+
+    private string GetEventClass(string message)
+    {
+        if (message.Contains("[Client]"))
+            return "client";
+        if (message.Contains("[Subscription]"))
+            return "subscription";
+        if (message.Contains("Error") || message.Contains("failed") || message.Contains("not available"))
+            return "error";
+        if (message.Contains("Connected") || message.Contains("Subscribed") || message.Contains("Publishing"))
+            return "success";
+        if (message.Contains("Fetching") || message.Contains("Presence") || message.Contains("History") || message.Contains("RPC"))
+            return "info";
+        return "";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await LogAsync("");
+            await LogAsync("Disposing...");
+
+            if (_subscription != null)
+            {
+                await LogAsync("Unsubscribing...");
+                _subscription.Unsubscribe();
+            }
+
+            await LogAsync("Disconnecting...");
+            Client.Disconnect();
+            await Task.Delay(100); // Give disconnect time to complete
+            Client.Dispose();
+
+            await LogAsync("Done!");
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Error during disposal: {ex.Message}");
+        }
+    }
+}
