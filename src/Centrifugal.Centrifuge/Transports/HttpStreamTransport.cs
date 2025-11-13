@@ -199,21 +199,21 @@ namespace Centrifugal.Centrifuge.Transports
                 {
                     int statusCode = (int)response.StatusCode;
                     int closeCode;
-                    // Map HTTP 4xx (client errors) to 3500-3999 range (non-reconnectable)
-                    // Map HTTP 5xx (server errors) to 5000+ range (reconnectable)
-                    if (statusCode >= 400 && statusCode < 500)
+                    string errorReason = $"http error {statusCode}";
+
+                    // Map specific HTTP 4xx client errors to BadProtocol (non-reconnectable)
+                    // Only 400, 401, 403, 404, 405 are considered permanent client errors
+                    if (statusCode == 400 || statusCode == 401 || statusCode == 403 ||
+                        statusCode == 404 || statusCode == 405)
                     {
-                        closeCode = 3500 + (statusCode - 400); // 400 -> 3500, 404 -> 3504, etc.
-                    }
-                    else if (statusCode >= 500)
-                    {
-                        closeCode = 5000 + (statusCode - 500); // 500 -> 5000, 503 -> 5003, etc.
+                        closeCode = CentrifugeDisconnectedCodes.BadProtocol;
                     }
                     else
                     {
-                        closeCode = 3000 + statusCode; // Other codes
+                        // All other errors use TransportClosed (reconnectable)
+                        closeCode = CentrifugeConnectingCodes.TransportClosed;
                     }
-                    string errorReason = $"http error {statusCode}";
+
                     Closed?.Invoke(this, new TransportClosedEventArgs(code: closeCode, reason: errorReason));
                     return;
                 }

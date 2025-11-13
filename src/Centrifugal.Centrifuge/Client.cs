@@ -1215,9 +1215,16 @@ namespace Centrifugal.Centrifuge
 
             // Check for non-reconnectable disconnect codes (matching centrifuge-js behavior)
             // Codes 3500-3999 and 4500-4999 mean permanent disconnect
-            if (e.Code.HasValue && ((code >= 3500 && code < 4000) || (code >= 4500 && code < 5000)))
+            // Also BadProtocol, Unauthorized, and MessageSizeLimit are permanent
+            if (e.Code.HasValue)
             {
-                shouldReconnect = false;
+                if ((code >= 3500 && code < 4000) || (code >= 4500 && code < 5000) ||
+                    code == CentrifugeDisconnectedCodes.BadProtocol ||
+                    code == CentrifugeDisconnectedCodes.Unauthorized ||
+                    code == CentrifugeDisconnectedCodes.MessageSizeLimit)
+                {
+                    shouldReconnect = false;
+                }
             }
 
             // Check for specific exceptions that indicate permanent failure
