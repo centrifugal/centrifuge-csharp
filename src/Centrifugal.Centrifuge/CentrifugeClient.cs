@@ -682,8 +682,6 @@ namespace Centrifugal.Centrifuge
             {
                 case TransportType.WebSocket:
                     return new WebSocketTransport(endpoint);
-                case TransportType.SSE:
-                    throw new ConfigurationException("SSE transport is not currently supported in this client. SSE requires JSON protocol which is not yet implemented. Use WebSocket or HttpStream instead.");
                 case TransportType.HttpStream:
                     return new HttpStreamTransport(endpoint);
                 default:

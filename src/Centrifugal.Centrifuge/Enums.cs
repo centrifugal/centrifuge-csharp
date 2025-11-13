@@ -55,13 +55,6 @@ namespace Centrifugal.Centrifuge
         WebSocket,
 
         /// <summary>
-        /// Server-Sent Events (SSE) transport.
-        /// Note: SSE is not currently supported in this client version as it requires JSON protocol.
-        /// Use WebSocket or HttpStream instead.
-        /// </summary>
-        SSE,
-
-        /// <summary>
         /// HTTP streaming transport.
         /// </summary>
         HttpStream
