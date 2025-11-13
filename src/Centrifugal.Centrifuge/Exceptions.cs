@@ -31,13 +31,13 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Exception thrown when authentication fails.
     /// </summary>
-    public class UnauthorizedException : CentrifugeException
+    public class CentrifugeUnauthorizedException : CentrifugeException
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="UnauthorizedException"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeUnauthorizedException"/> class.
         /// </summary>
-        public UnauthorizedException(string message = "Unauthorized")
-            : base(DisconnectedCodes.Unauthorized, message, false)
+        public CentrifugeUnauthorizedException(string message = "Unauthorized")
+            : base(CentrifugeDisconnectedCodes.Unauthorized, message, false)
         {
         }
     }
@@ -45,13 +45,13 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Exception thrown when operation times out.
     /// </summary>
-    public class TimeoutException : CentrifugeException
+    public class CentrifugeTimeoutException : CentrifugeException
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="TimeoutException"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeTimeoutException"/> class.
         /// </summary>
-        public TimeoutException(string message = "Operation timeout")
-            : base(ErrorCodes.Timeout, message, true)
+        public CentrifugeTimeoutException(string message = "Operation timeout")
+            : base(CentrifugeErrorCodes.Timeout, message, true)
         {
         }
     }
@@ -59,13 +59,13 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Exception thrown when configuration is invalid.
     /// </summary>
-    public class ConfigurationException : CentrifugeException
+    public class CentrifugeConfigurationException : CentrifugeException
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConfigurationException"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeConfigurationException"/> class.
         /// </summary>
-        public ConfigurationException(string message)
-            : base(ErrorCodes.BadConfiguration, message, false)
+        public CentrifugeConfigurationException(string message)
+            : base(CentrifugeErrorCodes.BadConfiguration, message, false)
         {
         }
     }

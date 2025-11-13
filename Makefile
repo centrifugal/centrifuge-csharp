@@ -1,8 +1,9 @@
 .PHONY: proto
 proto:
 	@echo "Regenerating protobuf code from client.proto..."
-	protoc --csharp_out=src/Centrifugal.Centrifuge --proto_path=. client.proto
-	@echo "Protobuf code regenerated successfully at src/Centrifugal.Centrifuge/Client.g.cs"
+	protoc --csharp_out=src/Centrifugal.Centrifuge/Protocol --proto_path=. client.proto
+	@mv src/Centrifugal.Centrifuge/Protocol/Client.cs src/Centrifugal.Centrifuge/Protocol/Client.g.cs
+	@echo "Protobuf code regenerated successfully at src/Centrifugal.Centrifuge/Protocol/Client.g.cs"
 
 .PHONY: build
 build:

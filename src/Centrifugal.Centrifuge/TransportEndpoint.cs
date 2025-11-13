@@ -5,12 +5,12 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Represents a transport endpoint configuration for multi-transport fallback.
     /// </summary>
-    public class TransportEndpoint
+    public class CentrifugeTransportEndpoint
     {
         /// <summary>
         /// Gets or sets the transport type.
         /// </summary>
-        public TransportType Transport { get; set; }
+        public CentrifugeTransportType Transport { get; set; }
 
         /// <summary>
         /// Gets or sets the endpoint URL for this transport.
@@ -18,9 +18,9 @@ namespace Centrifugal.Centrifuge
         public string Endpoint { get; set; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="TransportEndpoint"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeTransportEndpoint"/> class.
         /// </summary>
-        public TransportEndpoint(TransportType transport, string endpoint)
+        public CentrifugeTransportEndpoint(CentrifugeTransportType transport, string endpoint)
         {
             if (string.IsNullOrWhiteSpace(endpoint))
             {

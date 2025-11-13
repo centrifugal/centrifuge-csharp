@@ -269,12 +269,12 @@ namespace Centrifugal.Centrifuge.Tests
         public void SetTagsFilter_WithDeltaEnabled_ThrowsException()
         {
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
-            var subscription = client.NewSubscription("test", new SubscriptionOptions
+            var subscription = client.NewSubscription("test", new CentrifugeSubscriptionOptions
             {
                 Delta = "fossil"
             });
 
-            var filter = FilterNodeBuilder.Eq("ticker", "BTC");
+            var filter = CentrifugeFilterNodeBuilder.Eq("ticker", "BTC");
 
             var exception = Assert.Throws<InvalidOperationException>(() => subscription.SetTagsFilter(filter));
             Assert.Contains("delta", exception.Message.ToLower());
@@ -282,15 +282,15 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Fact]
-        public void SubscriptionOptions_WithBothDeltaAndTagsFilter_ThrowsException()
+        public void CentrifugeSubscriptionOptions_WithBothDeltaAndTagsFilter_ThrowsException()
         {
-            var options = new SubscriptionOptions
+            var options = new CentrifugeSubscriptionOptions
             {
                 Delta = "fossil",
-                TagsFilter = FilterNodeBuilder.Eq("ticker", "BTC")
+                TagsFilter = CentrifugeFilterNodeBuilder.Eq("ticker", "BTC")
             };
 
-            var exception = Assert.Throws<ConfigurationException>(() => options.Validate());
+            var exception = Assert.Throws<CentrifugeConfigurationException>(() => options.Validate());
             Assert.Contains("delta", exception.Message.ToLower());
             Assert.Contains("tagsfilter", exception.Message.ToLower());
         }

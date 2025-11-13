@@ -24,7 +24,7 @@ namespace Centrifugal.Centrifuge.Transports
         private bool _isOpen;
 
         /// <inheritdoc/>
-        public TransportType Type => TransportType.HttpStream;
+        public CentrifugeTransportType Type => CentrifugeTransportType.HttpStream;
 
         /// <inheritdoc/>
         public string Name => "http_stream";
@@ -107,7 +107,7 @@ namespace Centrifugal.Centrifuge.Transports
             catch (Exception ex)
             {
                 _receiveCts?.Cancel();
-                throw new CentrifugeException(ErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
             }
         }
 
@@ -122,7 +122,7 @@ namespace Centrifugal.Centrifuge.Transports
         {
             if (!_isOpen)
             {
-                throw new CentrifugeException(ErrorCodes.TransportClosed, "HTTP stream transport is not open");
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "HTTP stream transport is not open");
             }
 
             try
@@ -146,7 +146,7 @@ namespace Centrifugal.Centrifuge.Transports
             }
             catch (Exception ex)
             {
-                throw new CentrifugeException(ErrorCodes.TransportWriteError, "Failed to send data via HTTP stream", true, ex);
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportWriteError, "Failed to send data via HTTP stream", true, ex);
             }
         }
 

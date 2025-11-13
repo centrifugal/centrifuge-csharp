@@ -5,7 +5,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Client connection state.
     /// </summary>
-    public enum ClientState
+    public enum CentrifugeClientState
     {
         /// <summary>
         /// Client is disconnected from the server.
@@ -26,7 +26,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Subscription state.
     /// </summary>
-    public enum SubscriptionState
+    public enum CentrifugeSubscriptionState
     {
         /// <summary>
         /// Subscription is not subscribed.
@@ -47,7 +47,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Transport type.
     /// </summary>
-    public enum TransportType
+    public enum CentrifugeTransportType
     {
         /// <summary>
         /// WebSocket transport.
@@ -63,7 +63,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Error codes for client-side errors.
     /// </summary>
-    public static class ErrorCodes
+    public static class CentrifugeErrorCodes
     {
         /// <summary>
         /// Operation timeout.
@@ -129,7 +129,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Codes for connecting state transitions.
     /// </summary>
-    public static class ConnectingCodes
+    public static class CentrifugeConnectingCodes
     {
         /// <summary>
         /// Connect method was called.
@@ -160,7 +160,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Codes for disconnected state transitions.
     /// </summary>
-    public static class DisconnectedCodes
+    public static class CentrifugeDisconnectedCodes
     {
         /// <summary>
         /// Disconnect method was called.
@@ -186,7 +186,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Codes for subscribing state transitions.
     /// </summary>
-    public static class SubscribingCodes
+    public static class CentrifugeSubscribingCodes
     {
         /// <summary>
         /// Subscribe method was called.
@@ -202,7 +202,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Codes for unsubscribed state transitions.
     /// </summary>
-    public static class UnsubscribedCodes
+    public static class CentrifugeUnsubscribedCodes
     {
         /// <summary>
         /// Unsubscribe method was called.

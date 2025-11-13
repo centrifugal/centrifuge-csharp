@@ -4,19 +4,19 @@ using System.Collections.Generic;
 namespace Centrifugal.Centrifuge
 {
     /// <summary>
-    /// Helper class for building FilterNode expressions for server-side publication filtering.
+    /// Helper class for building CentrifugeFilterNode expressions for server-side publication filtering.
     /// </summary>
-    public static class FilterNodeBuilder
+    public static class CentrifugeFilterNodeBuilder
     {
         /// <summary>
         /// Creates a filter node that checks if a tag equals a value.
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for equality comparison.</returns>
-        public static FilterNode Eq(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for equality comparison.</returns>
+        public static CentrifugeFilterNode Eq(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "eq",
@@ -29,10 +29,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for inequality comparison.</returns>
-        public static FilterNode Neq(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for inequality comparison.</returns>
+        public static CentrifugeFilterNode Neq(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "neq",
@@ -45,8 +45,8 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="values">The set of values to check against.</param>
-        /// <returns>A FilterNode configured for set inclusion.</returns>
-        public static FilterNode In(string key, params string[] values)
+        /// <returns>A CentrifugeFilterNode configured for set inclusion.</returns>
+        public static CentrifugeFilterNode In(string key, params string[] values)
         {
             var node = new Protocol.FilterNode
             {
@@ -54,7 +54,7 @@ namespace Centrifugal.Centrifuge
                 Cmp = "in"
             };
             node.Vals.AddRange(values);
-            return new FilterNode(node);
+            return new CentrifugeFilterNode(node);
         }
 
         /// <summary>
@@ -62,8 +62,8 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="values">The set of values to check against.</param>
-        /// <returns>A FilterNode configured for set exclusion.</returns>
-        public static FilterNode Nin(string key, params string[] values)
+        /// <returns>A CentrifugeFilterNode configured for set exclusion.</returns>
+        public static CentrifugeFilterNode Nin(string key, params string[] values)
         {
             var node = new Protocol.FilterNode
             {
@@ -71,17 +71,17 @@ namespace Centrifugal.Centrifuge
                 Cmp = "nin"
             };
             node.Vals.AddRange(values);
-            return new FilterNode(node);
+            return new CentrifugeFilterNode(node);
         }
 
         /// <summary>
         /// Creates a filter node that checks if a tag exists.
         /// </summary>
         /// <param name="key">The tag key to check for existence.</param>
-        /// <returns>A FilterNode configured to check tag existence.</returns>
-        public static FilterNode Ex(string key)
+        /// <returns>A CentrifugeFilterNode configured to check tag existence.</returns>
+        public static CentrifugeFilterNode Ex(string key)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ex"
@@ -92,10 +92,10 @@ namespace Centrifugal.Centrifuge
         /// Creates a filter node that checks if a tag does not exist.
         /// </summary>
         /// <param name="key">The tag key to check for non-existence.</param>
-        /// <returns>A FilterNode configured to check tag non-existence.</returns>
-        public static FilterNode Nex(string key)
+        /// <returns>A CentrifugeFilterNode configured to check tag non-existence.</returns>
+        public static CentrifugeFilterNode Nex(string key)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "nex"
@@ -107,10 +107,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="prefix">The prefix to check for.</param>
-        /// <returns>A FilterNode configured for prefix matching.</returns>
-        public static FilterNode StartsWith(string key, string prefix)
+        /// <returns>A CentrifugeFilterNode configured for prefix matching.</returns>
+        public static CentrifugeFilterNode StartsWith(string key, string prefix)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "sw",
@@ -123,10 +123,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="suffix">The suffix to check for.</param>
-        /// <returns>A FilterNode configured for suffix matching.</returns>
-        public static FilterNode EndsWith(string key, string suffix)
+        /// <returns>A CentrifugeFilterNode configured for suffix matching.</returns>
+        public static CentrifugeFilterNode EndsWith(string key, string suffix)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ew",
@@ -139,10 +139,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="substring">The substring to check for.</param>
-        /// <returns>A FilterNode configured for substring matching.</returns>
-        public static FilterNode Contains(string key, string substring)
+        /// <returns>A CentrifugeFilterNode configured for substring matching.</returns>
+        public static CentrifugeFilterNode Contains(string key, string substring)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "ct",
@@ -155,10 +155,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for less-than comparison.</returns>
-        public static FilterNode Lt(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for less-than comparison.</returns>
+        public static CentrifugeFilterNode Lt(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "lt",
@@ -171,10 +171,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for less-than-or-equal comparison.</returns>
-        public static FilterNode Lte(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for less-than-or-equal comparison.</returns>
+        public static CentrifugeFilterNode Lte(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "lte",
@@ -187,10 +187,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for greater-than comparison.</returns>
-        public static FilterNode Gt(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for greater-than comparison.</returns>
+        public static CentrifugeFilterNode Gt(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "gt",
@@ -203,10 +203,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="key">The tag key to compare.</param>
         /// <param name="value">The value to compare against.</param>
-        /// <returns>A FilterNode configured for greater-than-or-equal comparison.</returns>
-        public static FilterNode Gte(string key, string value)
+        /// <returns>A CentrifugeFilterNode configured for greater-than-or-equal comparison.</returns>
+        public static CentrifugeFilterNode Gte(string key, string value)
         {
-            return new FilterNode(new Protocol.FilterNode
+            return new CentrifugeFilterNode(new Protocol.FilterNode
             {
                 Key = key,
                 Cmp = "gte",
@@ -219,8 +219,8 @@ namespace Centrifugal.Centrifuge
         /// All child conditions must be true for the filter to match.
         /// </summary>
         /// <param name="nodes">The filter nodes to combine with AND logic.</param>
-        /// <returns>A FilterNode configured for logical AND.</returns>
-        public static FilterNode And(params FilterNode[] nodes)
+        /// <returns>A CentrifugeFilterNode configured for logical AND.</returns>
+        public static CentrifugeFilterNode And(params CentrifugeFilterNode[] nodes)
         {
             var node = new Protocol.FilterNode
             {
@@ -230,7 +230,7 @@ namespace Centrifugal.Centrifuge
             {
                 node.Nodes.Add(n.InternalNode);
             }
-            return new FilterNode(node);
+            return new CentrifugeFilterNode(node);
         }
 
         /// <summary>
@@ -238,8 +238,8 @@ namespace Centrifugal.Centrifuge
         /// At least one child condition must be true for the filter to match.
         /// </summary>
         /// <param name="nodes">The filter nodes to combine with OR logic.</param>
-        /// <returns>A FilterNode configured for logical OR.</returns>
-        public static FilterNode Or(params FilterNode[] nodes)
+        /// <returns>A CentrifugeFilterNode configured for logical OR.</returns>
+        public static CentrifugeFilterNode Or(params CentrifugeFilterNode[] nodes)
         {
             var node = new Protocol.FilterNode
             {
@@ -249,7 +249,7 @@ namespace Centrifugal.Centrifuge
             {
                 node.Nodes.Add(n.InternalNode);
             }
-            return new FilterNode(node);
+            return new CentrifugeFilterNode(node);
         }
 
         /// <summary>
@@ -257,15 +257,15 @@ namespace Centrifugal.Centrifuge
         /// The filter matches when the child condition is false.
         /// </summary>
         /// <param name="filterNode">The filter node to negate.</param>
-        /// <returns>A FilterNode configured for logical NOT.</returns>
-        public static FilterNode Not(FilterNode filterNode)
+        /// <returns>A CentrifugeFilterNode configured for logical NOT.</returns>
+        public static CentrifugeFilterNode Not(CentrifugeFilterNode filterNode)
         {
             var node = new Protocol.FilterNode
             {
                 Op = "not"
             };
             node.Nodes.Add(filterNode.InternalNode);
-            return new FilterNode(node);
+            return new CentrifugeFilterNode(node);
         }
     }
 }

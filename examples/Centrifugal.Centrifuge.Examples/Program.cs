@@ -150,7 +150,7 @@ namespace Centrifuge.Examples
                 Console.WriteLine("\nFetching history...");
                 try
                 {
-                    var history = await subscription.HistoryAsync(new HistoryOptions
+                    var history = await subscription.HistoryAsync(new CentrifugeHistoryOptions
                     {
                         Limit = 10,
                         Reverse = true

@@ -17,7 +17,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets or sets the callback to get/refresh connection token.
         /// This will only be called when a new token is needed, not on every reconnect.
-        /// Throw <see cref="UnauthorizedException"/> to stop token refresh attempts.
+        /// Throw <see cref="CentrifugeUnauthorizedException"/> to stop token refresh attempts.
         /// </summary>
         public Func<Task<string>>? GetToken { get; set; }
 
@@ -87,22 +87,22 @@ namespace Centrifugal.Centrifuge
         {
             if (MinReconnectDelay < TimeSpan.Zero)
             {
-                throw new ConfigurationException("MinReconnectDelay cannot be negative");
+                throw new CentrifugeConfigurationException("MinReconnectDelay cannot be negative");
             }
 
             if (MaxReconnectDelay < MinReconnectDelay)
             {
-                throw new ConfigurationException("MaxReconnectDelay must be >= MinReconnectDelay");
+                throw new CentrifugeConfigurationException("MaxReconnectDelay must be >= MinReconnectDelay");
             }
 
             if (Timeout <= TimeSpan.Zero)
             {
-                throw new ConfigurationException("Timeout must be positive");
+                throw new CentrifugeConfigurationException("Timeout must be positive");
             }
 
             if (MaxServerPingDelay <= TimeSpan.Zero)
             {
-                throw new ConfigurationException("MaxServerPingDelay must be positive");
+                throw new CentrifugeConfigurationException("MaxServerPingDelay must be positive");
             }
         }
     }

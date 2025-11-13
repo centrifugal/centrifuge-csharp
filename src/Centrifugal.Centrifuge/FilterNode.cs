@@ -4,13 +4,13 @@ namespace Centrifugal.Centrifuge
 {
     /// <summary>
     /// Represents a filter node for server-side publication filtering based on tags.
-    /// Use FilterNodeBuilder to construct filter expressions.
+    /// Use CentrifugeFilterNodeBuilder to construct filter expressions.
     /// </summary>
-    public sealed class FilterNode
+    public sealed class CentrifugeFilterNode
     {
         internal Protocol.FilterNode InternalNode { get; }
 
-        internal FilterNode(Protocol.FilterNode node)
+        internal CentrifugeFilterNode(Protocol.FilterNode node)
         {
             InternalNode = node;
         }

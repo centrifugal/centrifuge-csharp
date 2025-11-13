@@ -6,12 +6,12 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Result of history request.
     /// </summary>
-    public class HistoryResult
+    public class CentrifugeHistoryResult
     {
         /// <summary>
         /// Gets the publications.
         /// </summary>
-        public PublicationEventArgs[] Publications { get; }
+        public CentrifugePublicationEventArgs[] Publications { get; }
 
         /// <summary>
         /// Gets the stream epoch.
@@ -24,11 +24,11 @@ namespace Centrifugal.Centrifuge
         public ulong Offset { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="HistoryResult"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeHistoryResult"/> class.
         /// </summary>
-        public HistoryResult(PublicationEventArgs[] publications, string epoch, ulong offset)
+        public CentrifugeHistoryResult(CentrifugePublicationEventArgs[] publications, string epoch, ulong offset)
         {
-            Publications = publications ?? Array.Empty<PublicationEventArgs>();
+            Publications = publications ?? Array.Empty<CentrifugePublicationEventArgs>();
             Epoch = epoch ?? string.Empty;
             Offset = offset;
         }
@@ -37,26 +37,26 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Result of presence request.
     /// </summary>
-    public class PresenceResult
+    public class CentrifugePresenceResult
     {
         /// <summary>
         /// Gets the map of client IDs to client information.
         /// </summary>
-        public IReadOnlyDictionary<string, ClientInfo> Clients { get; }
+        public IReadOnlyDictionary<string, CentrifugeClientInfo> Clients { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="PresenceResult"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugePresenceResult"/> class.
         /// </summary>
-        public PresenceResult(IReadOnlyDictionary<string, ClientInfo> clients)
+        public CentrifugePresenceResult(IReadOnlyDictionary<string, CentrifugeClientInfo> clients)
         {
-            Clients = clients ?? new Dictionary<string, ClientInfo>();
+            Clients = clients ?? new Dictionary<string, CentrifugeClientInfo>();
         }
     }
 
     /// <summary>
     /// Result of presence stats request.
     /// </summary>
-    public class PresenceStatsResult
+    public class CentrifugePresenceStatsResult
     {
         /// <summary>
         /// Gets the number of clients in the channel.
@@ -69,9 +69,9 @@ namespace Centrifugal.Centrifuge
         public uint NumUsers { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="PresenceStatsResult"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugePresenceStatsResult"/> class.
         /// </summary>
-        public PresenceStatsResult(uint numClients, uint numUsers)
+        public CentrifugePresenceStatsResult(uint numClients, uint numUsers)
         {
             NumClients = numClients;
             NumUsers = numUsers;
@@ -81,7 +81,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Result of RPC request.
     /// </summary>
-    public class RpcResult
+    public class CentrifugeRpcResult
     {
         /// <summary>
         /// Gets the RPC result data.
@@ -89,9 +89,9 @@ namespace Centrifugal.Centrifuge
         public byte[] Data { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="RpcResult"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeRpcResult"/> class.
         /// </summary>
-        public RpcResult(byte[] data)
+        public CentrifugeRpcResult(byte[] data)
         {
             Data = data ?? Array.Empty<byte>();
         }

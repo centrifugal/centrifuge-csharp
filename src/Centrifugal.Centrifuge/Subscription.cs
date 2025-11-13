@@ -14,15 +14,15 @@ namespace Centrifugal.Centrifuge
     public class CentrifugeSubscription
     {
         private readonly CentrifugeClient _client;
-        private readonly SubscriptionOptions _options;
+        private readonly CentrifugeSubscriptionOptions _options;
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
         private readonly object _stateChangeLock = new object();
         private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _readyPromises = new();
 
-        private SubscriptionState _state = SubscriptionState.Unsubscribed;
+        private CentrifugeSubscriptionState _state = CentrifugeSubscriptionState.Unsubscribed;
         private int _resubscribeAttempts;
         private CancellationTokenSource? _resubscribeCts;
-        private StreamPosition? _streamPosition;
+        private CentrifugeStreamPosition? _streamPosition;
         private bool _deltaNegotiated;
         private byte[]? _prevValue;
         private Timer? _refreshTimer;
@@ -39,53 +39,53 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the current subscription state.
         /// </summary>
-        public SubscriptionState State => _state;
+        public CentrifugeSubscriptionState State => _state;
 
         /// <summary>
         /// Event raised when subscription state changes.
         /// </summary>
-        public event EventHandler<SubscriptionStateEventArgs>? StateChanged;
+        public event EventHandler<CentrifugeSubscriptionStateEventArgs>? StateChanged;
 
         /// <summary>
         /// Event raised when subscription is subscribing.
         /// </summary>
-        public event EventHandler<SubscribingEventArgs>? Subscribing;
+        public event EventHandler<CentrifugeSubscribingEventArgs>? Subscribing;
 
         /// <summary>
         /// Event raised when subscription is subscribed.
         /// </summary>
-        public event EventHandler<SubscribedEventArgs>? Subscribed;
+        public event EventHandler<CentrifugeSubscribedEventArgs>? Subscribed;
 
         /// <summary>
         /// Event raised when subscription is unsubscribed.
         /// </summary>
-        public event EventHandler<UnsubscribedEventArgs>? Unsubscribed;
+        public event EventHandler<CentrifugeUnsubscribedEventArgs>? Unsubscribed;
 
         /// <summary>
         /// Event raised when a publication is received.
         /// </summary>
-        public event EventHandler<PublicationEventArgs>? Publication;
+        public event EventHandler<CentrifugePublicationEventArgs>? Publication;
 
         /// <summary>
         /// Event raised when a join event is received.
         /// </summary>
-        public event EventHandler<JoinEventArgs>? Join;
+        public event EventHandler<CentrifugeJoinEventArgs>? Join;
 
         /// <summary>
         /// Event raised when a leave event is received.
         /// </summary>
-        public event EventHandler<LeaveEventArgs>? Leave;
+        public event EventHandler<CentrifugeLeaveEventArgs>? Leave;
 
         /// <summary>
         /// Event raised when an error occurs.
         /// </summary>
-        public event EventHandler<ErrorEventArgs>? Error;
+        public event EventHandler<CentrifugeErrorEventArgs>? Error;
 
-        internal CentrifugeSubscription(CentrifugeClient client, string channel, SubscriptionOptions? options)
+        internal CentrifugeSubscription(CentrifugeClient client, string channel, CentrifugeSubscriptionOptions? options)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             Channel = channel ?? throw new ArgumentNullException(nameof(channel));
-            _options = options ?? new SubscriptionOptions();
+            _options = options ?? new CentrifugeSubscriptionOptions();
             _options.Validate();
 
             if (_options.Since != null)
@@ -100,12 +100,12 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public void Subscribe()
         {
-            if (_state == SubscriptionState.Subscribed)
+            if (_state == CentrifugeSubscriptionState.Subscribed)
             {
                 return;
             }
 
-            if (_state == SubscriptionState.Subscribing)
+            if (_state == CentrifugeSubscriptionState.Subscribing)
             {
                 return;
             }
@@ -119,7 +119,7 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public void Unsubscribe()
         {
-            _ = SetUnsubscribedAsync(UnsubscribedCodes.UnsubscribeCalled, "unsubscribe called");
+            _ = SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.UnsubscribeCalled, "unsubscribe called");
         }
 
         /// <summary>
@@ -133,10 +133,10 @@ namespace Centrifugal.Centrifuge
         {
             switch (_state)
             {
-                case SubscriptionState.Unsubscribed:
-                    return Task.FromException(new CentrifugeException(ErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
+                case CentrifugeSubscriptionState.Unsubscribed:
+                    return Task.FromException(new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
 
-                case SubscriptionState.Subscribed:
+                case CentrifugeSubscriptionState.Subscribed:
                     return Task.CompletedTask;
 
                 default:
@@ -151,7 +151,7 @@ namespace Centrifugal.Centrifuge
                         {
                             if (_readyPromises.TryRemove(promiseId, out var promise))
                             {
-                                promise.TrySetException(new CentrifugeException(ErrorCodes.Timeout, "timeout"));
+                                promise.TrySetException(new CentrifugeException(CentrifugeErrorCodes.Timeout, "timeout"));
                             }
                         });
                     }
@@ -184,20 +184,20 @@ namespace Centrifugal.Centrifuge
         /// <exception cref="InvalidOperationException">Thrown when trying to set tags filter while delta compression is enabled.</exception>
         /// <example>
         /// // Simple equality filter
-        /// sub.SetTagsFilter(FilterNodeBuilder.Eq("ticker", "BTC"));
+        /// sub.SetTagsFilter(CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"));
         ///
         /// // Complex filter with logical operators
         /// sub.SetTagsFilter(
-        ///     FilterNodeBuilder.And(
-        ///         FilterNodeBuilder.Eq("ticker", "BTC"),
-        ///         FilterNodeBuilder.Gt("price", "50000")
+        ///     CentrifugeFilterNodeBuilder.And(
+        ///         CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+        ///         CentrifugeFilterNodeBuilder.Gt("price", "50000")
         ///     )
         /// );
         ///
         /// // Filter with IN operator
-        /// sub.SetTagsFilter(FilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL"));
+        /// sub.SetTagsFilter(CentrifugeFilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL"));
         /// </example>
-        public void SetTagsFilter(FilterNode? tagsFilter)
+        public void SetTagsFilter(CentrifugeFilterNode? tagsFilter)
         {
             lock (_stateChangeLock)
             {
@@ -244,7 +244,7 @@ namespace Centrifugal.Centrifuge
         /// <param name="options">History options.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>History result.</returns>
-        public async Task<HistoryResult> HistoryAsync(HistoryOptions? options = null, CancellationToken cancellationToken = default)
+        public async Task<CentrifugeHistoryResult> HistoryAsync(CentrifugeHistoryOptions? options = null, CancellationToken cancellationToken = default)
         {
             var request = new HistoryRequest
             {
@@ -287,13 +287,13 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            var publications = new List<PublicationEventArgs>();
+            var publications = new List<CentrifugePublicationEventArgs>();
             foreach (var pub in reply.History.Publications)
             {
                 publications.Add(CentrifugeClient.CreatePublicationArgs(Channel, pub));
             }
 
-            return new HistoryResult(
+            return new CentrifugeHistoryResult(
                 publications.ToArray(),
                 reply.History.Epoch,
                 reply.History.Offset
@@ -305,7 +305,7 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence result.</returns>
-        public async Task<PresenceResult> PresenceAsync(CancellationToken cancellationToken = default)
+        public async Task<CentrifugePresenceResult> PresenceAsync(CancellationToken cancellationToken = default)
         {
             var cmd = new Command
             {
@@ -327,11 +327,11 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            var clients = new Dictionary<string, ClientInfo>();
+            var clients = new Dictionary<string, CentrifugeClientInfo>();
             foreach (var kvp in reply.Presence.Presence)
             {
                 var info = kvp.Value;
-                clients[kvp.Key] = new ClientInfo(
+                clients[kvp.Key] = new CentrifugeClientInfo(
                     info.User,
                     info.Client,
                     info.ConnInfo.ToByteArray(),
@@ -339,7 +339,7 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            return new PresenceResult(clients);
+            return new CentrifugePresenceResult(clients);
         }
 
         /// <summary>
@@ -347,7 +347,7 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence stats result.</returns>
-        public async Task<PresenceStatsResult> PresenceStatsAsync(CancellationToken cancellationToken = default)
+        public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(CancellationToken cancellationToken = default)
         {
             var cmd = new Command
             {
@@ -369,7 +369,7 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            return new PresenceStatsResult(
+            return new CentrifugePresenceStatsResult(
                 reply.PresenceStats.NumClients,
                 reply.PresenceStats.NumUsers
             );
@@ -380,12 +380,12 @@ namespace Centrifugal.Centrifuge
             await _stateLock.WaitAsync().ConfigureAwait(false);
             try
             {
-                if (_state == SubscriptionState.Unsubscribed)
+                if (_state == CentrifugeSubscriptionState.Unsubscribed)
                 {
                     return;
                 }
 
-                await StartSubscribingAsync(SubscribingCodes.TransportClosed, "transport closed").ConfigureAwait(false);
+                await StartSubscribingAsync(CentrifugeSubscribingCodes.TransportClosed, "transport closed").ConfigureAwait(false);
             }
             finally
             {
@@ -395,11 +395,11 @@ namespace Centrifugal.Centrifuge
 
         private void StartSubscribing()
         {
-            SetState(SubscriptionState.Subscribing);
-            Subscribing?.Invoke(this, new SubscribingEventArgs(SubscribingCodes.SubscribeCalled, "subscribe called"));
+            SetState(CentrifugeSubscriptionState.Subscribing);
+            Subscribing?.Invoke(this, new CentrifugeSubscribingEventArgs(CentrifugeSubscribingCodes.SubscribeCalled, "subscribe called"));
 
             // If not connected, the subscription will be sent when connection is established
-            if (_client.State != ClientState.Connected)
+            if (_client.State != CentrifugeClientState.Connected)
             {
                 return;
             }
@@ -418,7 +418,7 @@ namespace Centrifugal.Centrifuge
             }
 
             // Check if already inflight or not in subscribing state
-            if (_inflight || _state != SubscriptionState.Subscribing)
+            if (_inflight || _state != CentrifugeSubscriptionState.Subscribing)
             {
                 return;
             }
@@ -429,16 +429,16 @@ namespace Centrifugal.Centrifuge
             {
                 await SendSubscribeCommandAsync().ConfigureAwait(false);
             }
-            catch (TimeoutException)
+            catch (CentrifugeTimeoutException)
             {
                 // Subscribe timeout should trigger client reconnect, just like in centrifuge-js
-                OnError("subscribe", new CentrifugeException(ErrorCodes.Timeout, "subscribe timeout", true));
+                OnError("subscribe", new CentrifugeException(CentrifugeErrorCodes.Timeout, "subscribe timeout", true));
                 // Trigger client disconnect with reconnect
                 await _client.HandleSubscribeTimeoutAsync().ConfigureAwait(false);
             }
-            catch (UnauthorizedException)
+            catch (CentrifugeUnauthorizedException)
             {
-                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -453,10 +453,10 @@ namespace Centrifugal.Centrifuge
 
         private async Task StartSubscribingAsync(int code, string reason)
         {
-            SetState(SubscriptionState.Subscribing);
-            Subscribing?.Invoke(this, new SubscribingEventArgs(code, reason));
+            SetState(CentrifugeSubscriptionState.Subscribing);
+            Subscribing?.Invoke(this, new CentrifugeSubscribingEventArgs(code, reason));
 
-            if (_client.State != ClientState.Connected)
+            if (_client.State != CentrifugeClientState.Connected)
             {
                 // Wait for client to connect
                 return;
@@ -466,16 +466,16 @@ namespace Centrifugal.Centrifuge
             {
                 await SendSubscribeCommandAsync().ConfigureAwait(false);
             }
-            catch (TimeoutException)
+            catch (CentrifugeTimeoutException)
             {
                 // Subscribe timeout should trigger client reconnect, just like in centrifuge-js
-                OnError("subscribe", new CentrifugeException(ErrorCodes.Timeout, "subscribe timeout", true));
+                OnError("subscribe", new CentrifugeException(CentrifugeErrorCodes.Timeout, "subscribe timeout", true));
                 // Trigger client disconnect with reconnect
                 await _client.HandleSubscribeTimeoutAsync().ConfigureAwait(false);
             }
-            catch (UnauthorizedException)
+            catch (CentrifugeUnauthorizedException)
             {
-                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -503,15 +503,15 @@ namespace Centrifugal.Centrifuge
                         _options.Token = token;
                     }
                 }
-                catch (UnauthorizedException)
+                catch (CentrifugeUnauthorizedException)
                 {
-                    await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                    await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                     return;
                 }
             }
 
             byte[]? data;
-            FilterNode? tagsFilter;
+            CentrifugeFilterNode? tagsFilter;
             lock (_stateChangeLock)
             {
                 data = _options.Data;
@@ -582,7 +582,7 @@ namespace Centrifugal.Centrifuge
 
             if (result.Positioned)
             {
-                _streamPosition = new StreamPosition(result.Offset, result.Epoch);
+                _streamPosition = new CentrifugeStreamPosition(result.Offset, result.Epoch);
             }
 
             // Check if delta compression was negotiated with server
@@ -607,12 +607,12 @@ namespace Centrifugal.Centrifuge
                 ScheduleTokenRefresh(result.Ttl);
             }
 
-            SetState(SubscriptionState.Subscribed);
+            SetState(CentrifugeSubscriptionState.Subscribed);
 
             // Resolve ready promises
             ResolvePromises();
 
-            Subscribed?.Invoke(this, new SubscribedEventArgs(
+            Subscribed?.Invoke(this, new CentrifugeSubscribedEventArgs(
                 wasRecovering,
                 recovered,
                 result.Recoverable,
@@ -631,7 +631,7 @@ namespace Centrifugal.Centrifuge
 
                 if (result.Positioned && pub.Offset > 0)
                 {
-                    _streamPosition = new StreamPosition(pub.Offset, result.Epoch);
+                    _streamPosition = new CentrifugeStreamPosition(pub.Offset, result.Epoch);
                 }
             }
         }
@@ -643,11 +643,11 @@ namespace Centrifugal.Centrifuge
 
             if (pub.Offset > 0 && _streamPosition != null)
             {
-                _streamPosition = new StreamPosition(pub.Offset, _streamPosition.Epoch);
+                _streamPosition = new CentrifugeStreamPosition(pub.Offset, _streamPosition.Epoch);
             }
         }
 
-        private PublicationEventArgs ApplyDeltaIfNeeded(Publication pub)
+        private CentrifugePublicationEventArgs ApplyDeltaIfNeeded(Publication pub)
         {
             var data = pub.Data.ToByteArray();
 
@@ -677,33 +677,33 @@ namespace Centrifugal.Centrifuge
         {
             if (join.Info == null) return;
 
-            var info = new ClientInfo(
+            var info = new CentrifugeClientInfo(
                 join.Info.User,
                 join.Info.Client,
                 join.Info.ConnInfo.ToByteArray(),
                 join.Info.ChanInfo.ToByteArray()
             );
 
-            Join?.Invoke(this, new JoinEventArgs(Channel, info));
+            Join?.Invoke(this, new CentrifugeJoinEventArgs(Channel, info));
         }
 
         internal void HandleLeave(Leave leave)
         {
             if (leave.Info == null) return;
 
-            var info = new ClientInfo(
+            var info = new CentrifugeClientInfo(
                 leave.Info.User,
                 leave.Info.Client,
                 leave.Info.ConnInfo.ToByteArray(),
                 leave.Info.ChanInfo.ToByteArray()
             );
 
-            Leave?.Invoke(this, new LeaveEventArgs(Channel, info));
+            Leave?.Invoke(this, new CentrifugeLeaveEventArgs(Channel, info));
         }
 
         private async Task ScheduleResubscribeAsync()
         {
-            if (_state != SubscriptionState.Subscribing)
+            if (_state != CentrifugeSubscriptionState.Subscribing)
             {
                 return;
             }
@@ -733,17 +733,17 @@ namespace Centrifugal.Centrifuge
             // Change state synchronously first
             lock (_stateChangeLock)
             {
-                if (_state == SubscriptionState.Unsubscribed)
+                if (_state == CentrifugeSubscriptionState.Unsubscribed)
                 {
                     return;
                 }
 
-                SetState(SubscriptionState.Unsubscribed);
+                SetState(CentrifugeSubscriptionState.Unsubscribed);
 
                 // Reject ready promises
-                RejectPromises(new CentrifugeException(ErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
+                RejectPromises(new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
 
-                Unsubscribed?.Invoke(this, new UnsubscribedEventArgs(code, reason));
+                Unsubscribed?.Invoke(this, new CentrifugeUnsubscribedEventArgs(code, reason));
             }
 
             // Now do async cleanup without holding locks
@@ -753,7 +753,7 @@ namespace Centrifugal.Centrifuge
                 _resubscribeCts?.Cancel();
                 ClearRefreshTimer();
 
-                if (_client.State == ClientState.Connected)
+                if (_client.State == CentrifugeClientState.Connected)
                 {
                     try
                     {
@@ -780,20 +780,20 @@ namespace Centrifugal.Centrifuge
             }
         }
 
-        private void SetState(SubscriptionState newState)
+        private void SetState(CentrifugeSubscriptionState newState)
         {
             var oldState = _state;
             _state = newState;
 
             if (oldState != newState)
             {
-                StateChanged?.Invoke(this, new SubscriptionStateEventArgs(oldState, newState));
+                StateChanged?.Invoke(this, new CentrifugeSubscriptionStateEventArgs(oldState, newState));
             }
         }
 
         private void OnError(string type, Exception exception)
         {
-            Error?.Invoke(this, new ErrorEventArgs(type, 0, exception.Message, false, exception));
+            Error?.Invoke(this, new CentrifugeErrorEventArgs(type, 0, exception.Message, false, exception));
         }
 
         private void ScheduleTokenRefresh(uint ttl)
@@ -811,7 +811,7 @@ namespace Centrifugal.Centrifuge
 
         private async Task RefreshTokenAsync()
         {
-            if (_state != SubscriptionState.Subscribed || _options.GetToken == null)
+            if (_state != CentrifugeSubscriptionState.Subscribed || _options.GetToken == null)
             {
                 return;
             }
@@ -849,10 +849,10 @@ namespace Centrifugal.Centrifuge
                     HandleRefreshReply(reply.SubRefresh);
                 }
             }
-            catch (UnauthorizedException)
+            catch (CentrifugeUnauthorizedException)
             {
                 // Token refresh unauthorized - unsubscribe
-                await SetUnsubscribedAsync(UnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+                await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
             catch (Exception ex)
             {

@@ -6,22 +6,22 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for state changes.
     /// </summary>
-    public class StateEventArgs : EventArgs
+    public class CentrifugeStateEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the previous state.
         /// </summary>
-        public ClientState OldState { get; }
+        public CentrifugeClientState OldState { get; }
 
         /// <summary>
         /// Gets the new state.
         /// </summary>
-        public ClientState NewState { get; }
+        public CentrifugeClientState NewState { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="StateEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeStateEventArgs"/> class.
         /// </summary>
-        public StateEventArgs(ClientState oldState, ClientState newState)
+        public CentrifugeStateEventArgs(CentrifugeClientState oldState, CentrifugeClientState newState)
         {
             OldState = oldState;
             NewState = newState;
@@ -31,7 +31,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for connecting state.
     /// </summary>
-    public class ConnectingEventArgs : EventArgs
+    public class CentrifugeConnectingEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the connecting code.
@@ -44,9 +44,9 @@ namespace Centrifugal.Centrifuge
         public string Reason { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConnectingEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeConnectingEventArgs"/> class.
         /// </summary>
-        public ConnectingEventArgs(int code, string reason)
+        public CentrifugeConnectingEventArgs(int code, string reason)
         {
             Code = code;
             Reason = reason ?? string.Empty;
@@ -56,7 +56,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for connected state.
     /// </summary>
-    public class ConnectedEventArgs : EventArgs
+    public class CentrifugeConnectedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the client ID assigned by server.
@@ -74,9 +74,9 @@ namespace Centrifugal.Centrifuge
         public byte[]? Data { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ConnectedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeConnectedEventArgs"/> class.
         /// </summary>
-        public ConnectedEventArgs(string clientId, string transport, byte[]? data = null)
+        public CentrifugeConnectedEventArgs(string clientId, string transport, byte[]? data = null)
         {
             ClientId = clientId ?? string.Empty;
             Transport = transport ?? string.Empty;
@@ -87,7 +87,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for disconnected state.
     /// </summary>
-    public class DisconnectedEventArgs : EventArgs
+    public class CentrifugeDisconnectedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the disconnection code.
@@ -100,9 +100,9 @@ namespace Centrifugal.Centrifuge
         public string Reason { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DisconnectedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeDisconnectedEventArgs"/> class.
         /// </summary>
-        public DisconnectedEventArgs(int code, string reason)
+        public CentrifugeDisconnectedEventArgs(int code, string reason)
         {
             Code = code;
             Reason = reason ?? string.Empty;
@@ -112,7 +112,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for error events.
     /// </summary>
-    public class ErrorEventArgs : EventArgs
+    public class CentrifugeErrorEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the error type.
@@ -140,9 +140,9 @@ namespace Centrifugal.Centrifuge
         public bool Temporary { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ErrorEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeErrorEventArgs"/> class.
         /// </summary>
-        public ErrorEventArgs(string type, int code, string message, bool temporary = false, Exception? exception = null)
+        public CentrifugeErrorEventArgs(string type, int code, string message, bool temporary = false, Exception? exception = null)
         {
             Type = type ?? string.Empty;
             Code = code;
@@ -155,7 +155,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for messages from server.
     /// </summary>
-    public class MessageEventArgs : EventArgs
+    public class CentrifugeMessageEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the message data.
@@ -163,9 +163,9 @@ namespace Centrifugal.Centrifuge
         public byte[] Data { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MessageEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeMessageEventArgs"/> class.
         /// </summary>
-        public MessageEventArgs(byte[] data)
+        public CentrifugeMessageEventArgs(byte[] data)
         {
             Data = data ?? Array.Empty<byte>();
         }
@@ -174,7 +174,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Client information.
     /// </summary>
-    public class ClientInfo
+    public class CentrifugeClientInfo
     {
         /// <summary>
         /// Gets the user ID.
@@ -197,9 +197,9 @@ namespace Centrifugal.Centrifuge
         public byte[]? ChanInfo { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ClientInfo"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeClientInfo"/> class.
         /// </summary>
-        public ClientInfo(string user, string client, byte[]? connInfo = null, byte[]? chanInfo = null)
+        public CentrifugeClientInfo(string user, string client, byte[]? connInfo = null, byte[]? chanInfo = null)
         {
             User = user ?? string.Empty;
             Client = client ?? string.Empty;
@@ -211,7 +211,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for publications.
     /// </summary>
-    public class PublicationEventArgs : EventArgs
+    public class CentrifugePublicationEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -226,7 +226,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the optional publisher client info.
         /// </summary>
-        public ClientInfo? Info { get; }
+        public CentrifugeClientInfo? Info { get; }
 
         /// <summary>
         /// Gets the stream offset if available.
@@ -239,9 +239,9 @@ namespace Centrifugal.Centrifuge
         public IReadOnlyDictionary<string, string>? Tags { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="PublicationEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugePublicationEventArgs"/> class.
         /// </summary>
-        public PublicationEventArgs(string channel, byte[] data, ClientInfo? info = null, ulong? offset = null, IReadOnlyDictionary<string, string>? tags = null)
+        public CentrifugePublicationEventArgs(string channel, byte[] data, CentrifugeClientInfo? info = null, ulong? offset = null, IReadOnlyDictionary<string, string>? tags = null)
         {
             Channel = channel ?? string.Empty;
             Data = data ?? Array.Empty<byte>();
@@ -254,7 +254,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for join events.
     /// </summary>
-    public class JoinEventArgs : EventArgs
+    public class CentrifugeJoinEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -264,12 +264,12 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the client info for the joined client.
         /// </summary>
-        public ClientInfo Info { get; }
+        public CentrifugeClientInfo Info { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="JoinEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeJoinEventArgs"/> class.
         /// </summary>
-        public JoinEventArgs(string channel, ClientInfo info)
+        public CentrifugeJoinEventArgs(string channel, CentrifugeClientInfo info)
         {
             Channel = channel ?? string.Empty;
             Info = info ?? throw new ArgumentNullException(nameof(info));
@@ -279,7 +279,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for leave events.
     /// </summary>
-    public class LeaveEventArgs : EventArgs
+    public class CentrifugeLeaveEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -289,12 +289,12 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the client info for the leaving client.
         /// </summary>
-        public ClientInfo Info { get; }
+        public CentrifugeClientInfo Info { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="LeaveEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeLeaveEventArgs"/> class.
         /// </summary>
-        public LeaveEventArgs(string channel, ClientInfo info)
+        public CentrifugeLeaveEventArgs(string channel, CentrifugeClientInfo info)
         {
             Channel = channel ?? string.Empty;
             Info = info ?? throw new ArgumentNullException(nameof(info));
@@ -304,22 +304,22 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for subscription state changes.
     /// </summary>
-    public class SubscriptionStateEventArgs : EventArgs
+    public class CentrifugeSubscriptionStateEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the previous state.
         /// </summary>
-        public SubscriptionState OldState { get; }
+        public CentrifugeSubscriptionState OldState { get; }
 
         /// <summary>
         /// Gets the new state.
         /// </summary>
-        public SubscriptionState NewState { get; }
+        public CentrifugeSubscriptionState NewState { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SubscriptionStateEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeSubscriptionStateEventArgs"/> class.
         /// </summary>
-        public SubscriptionStateEventArgs(SubscriptionState oldState, SubscriptionState newState)
+        public CentrifugeSubscriptionStateEventArgs(CentrifugeSubscriptionState oldState, CentrifugeSubscriptionState newState)
         {
             OldState = oldState;
             NewState = newState;
@@ -329,7 +329,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for subscribing state.
     /// </summary>
-    public class SubscribingEventArgs : EventArgs
+    public class CentrifugeSubscribingEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the subscribing code.
@@ -342,9 +342,9 @@ namespace Centrifugal.Centrifuge
         public string Reason { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SubscribingEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeSubscribingEventArgs"/> class.
         /// </summary>
-        public SubscribingEventArgs(int code, string reason)
+        public CentrifugeSubscribingEventArgs(int code, string reason)
         {
             Code = code;
             Reason = reason ?? string.Empty;
@@ -354,7 +354,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for subscribed state.
     /// </summary>
-    public class SubscribedEventArgs : EventArgs
+    public class CentrifugeSubscribedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets whether recovery was attempted.
@@ -379,7 +379,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the stream position (set when subscription is recoverable or positioned).
         /// </summary>
-        public StreamPosition? StreamPosition { get; }
+        public CentrifugeStreamPosition? StreamPosition { get; }
 
         /// <summary>
         /// Gets the optional subscription data from server.
@@ -387,9 +387,9 @@ namespace Centrifugal.Centrifuge
         public byte[]? Data { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="SubscribedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeSubscribedEventArgs"/> class.
         /// </summary>
-        public SubscribedEventArgs(bool wasRecovering, bool recovered, bool recoverable, bool positioned, StreamPosition? streamPosition = null, byte[]? data = null)
+        public CentrifugeSubscribedEventArgs(bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, byte[]? data = null)
         {
             WasRecovering = wasRecovering;
             Recovered = recovered;
@@ -403,7 +403,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for unsubscribed state.
     /// </summary>
-    public class UnsubscribedEventArgs : EventArgs
+    public class CentrifugeUnsubscribedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the unsubscribe code.
@@ -416,9 +416,9 @@ namespace Centrifugal.Centrifuge
         public string Reason { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="UnsubscribedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeUnsubscribedEventArgs"/> class.
         /// </summary>
-        public UnsubscribedEventArgs(int code, string reason)
+        public CentrifugeUnsubscribedEventArgs(int code, string reason)
         {
             Code = code;
             Reason = reason ?? string.Empty;
@@ -428,7 +428,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Stream position for recovery.
     /// </summary>
-    public class StreamPosition
+    public class CentrifugeStreamPosition
     {
         /// <summary>
         /// Gets the offset in the stream.
@@ -441,9 +441,9 @@ namespace Centrifugal.Centrifuge
         public string Epoch { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="StreamPosition"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeStreamPosition"/> class.
         /// </summary>
-        public StreamPosition(ulong offset, string epoch)
+        public CentrifugeStreamPosition(ulong offset, string epoch)
         {
             Offset = offset;
             Epoch = epoch ?? string.Empty;
@@ -453,7 +453,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for server-side subscription subscribing state.
     /// </summary>
-    public class ServerSubscribingEventArgs : EventArgs
+    public class CentrifugeServerSubscribingEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -461,9 +461,9 @@ namespace Centrifugal.Centrifuge
         public string Channel { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ServerSubscribingEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeServerSubscribingEventArgs"/> class.
         /// </summary>
-        public ServerSubscribingEventArgs(string channel)
+        public CentrifugeServerSubscribingEventArgs(string channel)
         {
             Channel = channel ?? string.Empty;
         }
@@ -472,7 +472,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for server-side subscription subscribed state.
     /// </summary>
-    public class ServerSubscribedEventArgs : EventArgs
+    public class CentrifugeServerSubscribedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -492,7 +492,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the stream position (set when subscription is recoverable or positioned).
         /// </summary>
-        public StreamPosition? StreamPosition { get; }
+        public CentrifugeStreamPosition? StreamPosition { get; }
 
         /// <summary>
         /// Gets whether recovery was attempted.
@@ -510,9 +510,9 @@ namespace Centrifugal.Centrifuge
         public byte[]? Data { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ServerSubscribedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeServerSubscribedEventArgs"/> class.
         /// </summary>
-        public ServerSubscribedEventArgs(string channel, bool wasRecovering, bool recovered, bool recoverable, bool positioned, StreamPosition? streamPosition = null, byte[]? data = null)
+        public CentrifugeServerSubscribedEventArgs(string channel, bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, byte[]? data = null)
         {
             Channel = channel ?? string.Empty;
             WasRecovering = wasRecovering;
@@ -527,7 +527,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Event arguments for server-side subscription unsubscribed state.
     /// </summary>
-    public class ServerUnsubscribedEventArgs : EventArgs
+    public class CentrifugeServerUnsubscribedEventArgs : EventArgs
     {
         /// <summary>
         /// Gets the channel name.
@@ -535,9 +535,9 @@ namespace Centrifugal.Centrifuge
         public string Channel { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ServerUnsubscribedEventArgs"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeServerUnsubscribedEventArgs"/> class.
         /// </summary>
-        public ServerUnsubscribedEventArgs(string channel)
+        public CentrifugeServerUnsubscribedEventArgs(string channel)
         {
             Channel = channel ?? string.Empty;
         }

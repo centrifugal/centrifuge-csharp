@@ -148,7 +148,7 @@ var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", op
 ### Channel-Specific Token
 
 ```csharp
-var subscriptionOptions = new SubscriptionOptions
+var subscriptionOptions = new CentrifugeSubscriptionOptions
 {
     Token = "channel-specific-jwt",
 
@@ -172,7 +172,7 @@ await subscription.SubscribeAsync();
 
 ```csharp
 // Get last 10 messages
-var history = await subscription.HistoryAsync(new HistoryOptions
+var history = await subscription.HistoryAsync(new CentrifugeHistoryOptions
 {
     Limit = 10
 });
@@ -257,7 +257,7 @@ var options = new SubscriptionOptions
     Positioned = true,
 
     // Start from known position
-    Since = new StreamPosition(offset: 100, epoch: "epoch-id")
+    Since = new CentrifugeStreamPosition(offset: 100, epoch: "epoch-id")
 };
 
 var subscription = client.NewSubscription("chat", options);
@@ -280,11 +280,11 @@ try
 {
     await client.RpcAsync("method", data);
 }
-catch (UnauthorizedException)
+catch (CentrifugeUnauthorizedException)
 {
     Console.WriteLine("Authentication failed");
 }
-catch (TimeoutException)
+catch (CentrifugeTimeoutException)
 {
     Console.WriteLine("Operation timed out");
 }

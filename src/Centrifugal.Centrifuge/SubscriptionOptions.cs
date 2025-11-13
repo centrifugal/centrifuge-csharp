@@ -6,7 +6,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Options for configuring a subscription.
     /// </summary>
-    public class SubscriptionOptions
+    public class CentrifugeSubscriptionOptions
     {
         /// <summary>
         /// Gets or sets the initial subscription token (JWT).
@@ -15,7 +15,7 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets or sets the callback to get/refresh subscription token.
-        /// Throw <see cref="UnauthorizedException"/> to stop token refresh attempts.
+        /// Throw <see cref="CentrifugeUnauthorizedException"/> to stop token refresh attempts.
         /// </summary>
         public Func<string, Task<string>>? GetToken { get; set; }
 
@@ -39,7 +39,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets or sets the stream position to start subscription from (attempt recovery on first subscribe).
         /// </summary>
-        public StreamPosition? Since { get; set; }
+        public CentrifugeStreamPosition? Since { get; set; }
 
         /// <summary>
         /// Gets or sets whether to ask server to make subscription positioned (if not forced by server).
@@ -60,7 +60,7 @@ namespace Centrifugal.Centrifuge
         /// Gets or sets the server-side publication filter based on publication tags.
         /// Cannot be used together with delta compression.
         /// </summary>
-        public FilterNode? TagsFilter { get; set; }
+        public CentrifugeFilterNode? TagsFilter { get; set; }
 
         /// <summary>
         /// Gets or sets the delta format to use for bandwidth optimization.
@@ -76,22 +76,22 @@ namespace Centrifugal.Centrifuge
         {
             if (MinResubscribeDelay < TimeSpan.Zero)
             {
-                throw new ConfigurationException("MinResubscribeDelay cannot be negative");
+                throw new CentrifugeConfigurationException("MinResubscribeDelay cannot be negative");
             }
 
             if (MaxResubscribeDelay < MinResubscribeDelay)
             {
-                throw new ConfigurationException("MaxResubscribeDelay must be >= MinResubscribeDelay");
+                throw new CentrifugeConfigurationException("MaxResubscribeDelay must be >= MinResubscribeDelay");
             }
 
             if (!string.IsNullOrEmpty(Delta) && Delta != "fossil")
             {
-                throw new ConfigurationException("Unsupported delta format. Only 'fossil' is supported.");
+                throw new CentrifugeConfigurationException("Unsupported delta format. Only 'fossil' is supported.");
             }
 
             if (!string.IsNullOrEmpty(Delta) && TagsFilter != null)
             {
-                throw new ConfigurationException("Cannot use delta and TagsFilter together");
+                throw new CentrifugeConfigurationException("Cannot use delta and TagsFilter together");
             }
         }
     }

@@ -26,7 +26,7 @@ namespace Centrifugal.Centrifuge.Tests
         public void Client_InitialState_IsDisconnected()
         {
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
-            Assert.Equal(ClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
         }
 
         [Fact]
@@ -37,7 +37,7 @@ namespace Centrifugal.Centrifuge.Tests
 
             client.StateChanged += (sender, args) =>
             {
-                if (args.NewState == ClientState.Connecting)
+                if (args.NewState == CentrifugeClientState.Connecting)
                 {
                     stateChangedTcs.TrySetResult(true);
                 }
@@ -60,7 +60,7 @@ namespace Centrifugal.Centrifuge.Tests
 
             Assert.NotNull(sub);
             Assert.Equal("test", sub.Channel);
-            Assert.Equal(SubscriptionState.Unsubscribed, sub.State);
+            Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, sub.State);
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace Centrifugal.Centrifuge.Tests
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
             client.Disconnect();
 
-            Assert.Equal(ClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
         }
 
         // Integration tests require a running Centrifugo server
@@ -117,11 +117,11 @@ namespace Centrifugal.Centrifuge.Tests
         //
         //     client.Connect(); await client.ReadyAsync();
         //     await connectedEvent.Task.WithTimeout(TimeSpan.FromSeconds(5));
-        //     Assert.Equal(ClientState.Connected, client.State);
+        //     Assert.Equal(CentrifugeClientState.Connected, client.State);
         //
         //     client.Disconnect();
         //     await disconnectedEvent.Task.WithTimeout(TimeSpan.FromSeconds(5));
-        //     Assert.Equal(ClientState.Disconnected, client.State);
+        //     Assert.Equal(CentrifugeClientState.Disconnected, client.State);
         // }
     }
 
@@ -138,7 +138,7 @@ namespace Centrifugal.Centrifuge.Tests
                 MinReconnectDelay = TimeSpan.FromMilliseconds(-1)
             };
 
-            Assert.Throws<ConfigurationException>(() => options.Validate());
+            Assert.Throws<CentrifugeConfigurationException>(() => options.Validate());
         }
 
         [Fact]
@@ -150,7 +150,7 @@ namespace Centrifugal.Centrifuge.Tests
                 MaxReconnectDelay = TimeSpan.FromMilliseconds(500)
             };
 
-            Assert.Throws<ConfigurationException>(() => options.Validate());
+            Assert.Throws<CentrifugeConfigurationException>(() => options.Validate());
         }
 
         [Fact]
@@ -161,18 +161,18 @@ namespace Centrifugal.Centrifuge.Tests
                 Timeout = TimeSpan.FromMilliseconds(-1)
             };
 
-            Assert.Throws<ConfigurationException>(() => options.Validate());
+            Assert.Throws<CentrifugeConfigurationException>(() => options.Validate());
         }
 
         [Fact]
-        public void SubscriptionOptions_Validate_ThrowsOnNegativeMinDelay()
+        public void CentrifugeSubscriptionOptions_Validate_ThrowsOnNegativeMinDelay()
         {
-            var options = new SubscriptionOptions
+            var options = new CentrifugeSubscriptionOptions
             {
                 MinResubscribeDelay = TimeSpan.FromMilliseconds(-1)
             };
 
-            Assert.Throws<ConfigurationException>(() => options.Validate());
+            Assert.Throws<CentrifugeConfigurationException>(() => options.Validate());
         }
     }
 }

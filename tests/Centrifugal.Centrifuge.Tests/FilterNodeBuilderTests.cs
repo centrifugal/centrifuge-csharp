@@ -6,14 +6,14 @@ using Xunit;
 namespace Centrifugal.Centrifuge.Tests
 {
     /// <summary>
-    /// Tests for FilterNodeBuilder.
+    /// Tests for CentrifugeFilterNodeBuilder.
     /// </summary>
-    public class FilterNodeBuilderTests
+    public class CentrifugeFilterNodeBuilderTests
     {
         [Fact]
         public void Eq_CreatesEqualityFilterNode()
         {
-            var filter = FilterNodeBuilder.Eq("ticker", "BTC");
+            var filter = CentrifugeFilterNodeBuilder.Eq("ticker", "BTC");
 
             Assert.NotNull(filter);
             Assert.Equal("ticker", filter.InternalNode.Key);
@@ -24,7 +24,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Neq_CreatesInequalityFilterNode()
         {
-            var filter = FilterNodeBuilder.Neq("status", "inactive");
+            var filter = CentrifugeFilterNodeBuilder.Neq("status", "inactive");
 
             Assert.NotNull(filter);
             Assert.Equal("status", filter.InternalNode.Key);
@@ -35,7 +35,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void In_CreatesSetInclusionFilterNode()
         {
-            var filter = FilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL");
+            var filter = CentrifugeFilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL");
 
             Assert.NotNull(filter);
             Assert.Equal("ticker", filter.InternalNode.Key);
@@ -49,7 +49,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void In_HandlesEmptyValues()
         {
-            var filter = FilterNodeBuilder.In("ticker");
+            var filter = CentrifugeFilterNodeBuilder.In("ticker");
 
             Assert.NotNull(filter);
             Assert.Equal("ticker", filter.InternalNode.Key);
@@ -60,7 +60,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Nin_CreatesSetExclusionFilterNode()
         {
-            var filter = FilterNodeBuilder.Nin("status", "deleted", "archived");
+            var filter = CentrifugeFilterNodeBuilder.Nin("status", "deleted", "archived");
 
             Assert.NotNull(filter);
             Assert.Equal("status", filter.InternalNode.Key);
@@ -73,7 +73,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Ex_CreatesExistenceFilterNode()
         {
-            var filter = FilterNodeBuilder.Ex("premium");
+            var filter = CentrifugeFilterNodeBuilder.Ex("premium");
 
             Assert.NotNull(filter);
             Assert.Equal("premium", filter.InternalNode.Key);
@@ -84,7 +84,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Nex_CreatesNonExistenceFilterNode()
         {
-            var filter = FilterNodeBuilder.Nex("deprecated");
+            var filter = CentrifugeFilterNodeBuilder.Nex("deprecated");
 
             Assert.NotNull(filter);
             Assert.Equal("deprecated", filter.InternalNode.Key);
@@ -95,7 +95,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void StartsWith_CreatesPrefixFilterNode()
         {
-            var filter = FilterNodeBuilder.StartsWith("symbol", "BTC-");
+            var filter = CentrifugeFilterNodeBuilder.StartsWith("symbol", "BTC-");
 
             Assert.NotNull(filter);
             Assert.Equal("symbol", filter.InternalNode.Key);
@@ -106,7 +106,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void EndsWith_CreatesSuffixFilterNode()
         {
-            var filter = FilterNodeBuilder.EndsWith("symbol", "-USD");
+            var filter = CentrifugeFilterNodeBuilder.EndsWith("symbol", "-USD");
 
             Assert.NotNull(filter);
             Assert.Equal("symbol", filter.InternalNode.Key);
@@ -117,7 +117,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Contains_CreatesSubstringFilterNode()
         {
-            var filter = FilterNodeBuilder.Contains("name", "crypto");
+            var filter = CentrifugeFilterNodeBuilder.Contains("name", "crypto");
 
             Assert.NotNull(filter);
             Assert.Equal("name", filter.InternalNode.Key);
@@ -128,7 +128,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Lt_CreatesLessThanFilterNode()
         {
-            var filter = FilterNodeBuilder.Lt("price", "50000");
+            var filter = CentrifugeFilterNodeBuilder.Lt("price", "50000");
 
             Assert.NotNull(filter);
             Assert.Equal("price", filter.InternalNode.Key);
@@ -139,7 +139,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Lte_CreatesLessThanOrEqualFilterNode()
         {
-            var filter = FilterNodeBuilder.Lte("price", "50000");
+            var filter = CentrifugeFilterNodeBuilder.Lte("price", "50000");
 
             Assert.NotNull(filter);
             Assert.Equal("price", filter.InternalNode.Key);
@@ -150,7 +150,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Gt_CreatesGreaterThanFilterNode()
         {
-            var filter = FilterNodeBuilder.Gt("volume", "1000");
+            var filter = CentrifugeFilterNodeBuilder.Gt("volume", "1000");
 
             Assert.NotNull(filter);
             Assert.Equal("volume", filter.InternalNode.Key);
@@ -161,7 +161,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Gte_CreatesGreaterThanOrEqualFilterNode()
         {
-            var filter = FilterNodeBuilder.Gte("volume", "1000");
+            var filter = CentrifugeFilterNodeBuilder.Gte("volume", "1000");
 
             Assert.NotNull(filter);
             Assert.Equal("volume", filter.InternalNode.Key);
@@ -172,9 +172,9 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void And_CombinesMultipleFiltersWithAndLogic()
         {
-            var filter = FilterNodeBuilder.And(
-                FilterNodeBuilder.Eq("ticker", "BTC"),
-                FilterNodeBuilder.Gt("price", "50000")
+            var filter = CentrifugeFilterNodeBuilder.And(
+                CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+                CentrifugeFilterNodeBuilder.Gt("price", "50000")
             );
 
             Assert.NotNull(filter);
@@ -189,7 +189,7 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void And_HandlesEmptyNodes()
         {
-            var filter = FilterNodeBuilder.And();
+            var filter = CentrifugeFilterNodeBuilder.And();
 
             Assert.NotNull(filter);
             Assert.Equal("and", filter.InternalNode.Op);
@@ -199,10 +199,10 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Or_CombinesMultipleFiltersWithOrLogic()
         {
-            var filter = FilterNodeBuilder.Or(
-                FilterNodeBuilder.Eq("ticker", "BTC"),
-                FilterNodeBuilder.Eq("ticker", "ETH"),
-                FilterNodeBuilder.Eq("ticker", "SOL")
+            var filter = CentrifugeFilterNodeBuilder.Or(
+                CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+                CentrifugeFilterNodeBuilder.Eq("ticker", "ETH"),
+                CentrifugeFilterNodeBuilder.Eq("ticker", "SOL")
             );
 
             Assert.NotNull(filter);
@@ -215,8 +215,8 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void Not_NegatesFilterCondition()
         {
-            var innerFilter = FilterNodeBuilder.Eq("status", "deleted");
-            var filter = FilterNodeBuilder.Not(innerFilter);
+            var innerFilter = CentrifugeFilterNodeBuilder.Eq("status", "deleted");
+            var filter = CentrifugeFilterNodeBuilder.Not(innerFilter);
 
             Assert.NotNull(filter);
             Assert.Equal("not", filter.InternalNode.Op);
@@ -229,10 +229,10 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_AndWithMultipleConditions()
         {
-            var filter = FilterNodeBuilder.And(
-                FilterNodeBuilder.Eq("ticker", "BTC"),
-                FilterNodeBuilder.Gt("price", "50000"),
-                FilterNodeBuilder.Lt("price", "100000")
+            var filter = CentrifugeFilterNodeBuilder.And(
+                CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+                CentrifugeFilterNodeBuilder.Gt("price", "50000"),
+                CentrifugeFilterNodeBuilder.Lt("price", "100000")
             );
 
             Assert.NotNull(filter);
@@ -243,12 +243,12 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_NestedAndOr()
         {
-            var filter = FilterNodeBuilder.And(
-                FilterNodeBuilder.Or(
-                    FilterNodeBuilder.Eq("ticker", "BTC"),
-                    FilterNodeBuilder.Eq("ticker", "ETH")
+            var filter = CentrifugeFilterNodeBuilder.And(
+                CentrifugeFilterNodeBuilder.Or(
+                    CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+                    CentrifugeFilterNodeBuilder.Eq("ticker", "ETH")
                 ),
-                FilterNodeBuilder.Gt("volume", "1000")
+                CentrifugeFilterNodeBuilder.Gt("volume", "1000")
             );
 
             Assert.NotNull(filter);
@@ -262,10 +262,10 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_NotWithAnd()
         {
-            var filter = FilterNodeBuilder.Not(
-                FilterNodeBuilder.And(
-                    FilterNodeBuilder.Eq("status", "deleted"),
-                    FilterNodeBuilder.Eq("archived", "true")
+            var filter = CentrifugeFilterNodeBuilder.Not(
+                CentrifugeFilterNodeBuilder.And(
+                    CentrifugeFilterNodeBuilder.Eq("status", "deleted"),
+                    CentrifugeFilterNodeBuilder.Eq("archived", "true")
                 )
             );
 
@@ -279,9 +279,9 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_InWithOr()
         {
-            var filter = FilterNodeBuilder.Or(
-                FilterNodeBuilder.In("ticker", "BTC", "ETH"),
-                FilterNodeBuilder.Gt("price", "100000")
+            var filter = CentrifugeFilterNodeBuilder.Or(
+                CentrifugeFilterNodeBuilder.In("ticker", "BTC", "ETH"),
+                CentrifugeFilterNodeBuilder.Gt("price", "100000")
             );
 
             Assert.NotNull(filter);
@@ -294,10 +294,10 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_StringOperationsWithAnd()
         {
-            var filter = FilterNodeBuilder.And(
-                FilterNodeBuilder.StartsWith("symbol", "BTC"),
-                FilterNodeBuilder.EndsWith("symbol", "USD"),
-                FilterNodeBuilder.Contains("name", "futures")
+            var filter = CentrifugeFilterNodeBuilder.And(
+                CentrifugeFilterNodeBuilder.StartsWith("symbol", "BTC"),
+                CentrifugeFilterNodeBuilder.EndsWith("symbol", "USD"),
+                CentrifugeFilterNodeBuilder.Contains("name", "futures")
             );
 
             Assert.NotNull(filter);
@@ -311,9 +311,9 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void ComplexFilter_ExistenceChecksWithOr()
         {
-            var filter = FilterNodeBuilder.Or(
-                FilterNodeBuilder.Ex("premium"),
-                FilterNodeBuilder.Nex("restricted")
+            var filter = CentrifugeFilterNodeBuilder.Or(
+                CentrifugeFilterNodeBuilder.Ex("premium"),
+                CentrifugeFilterNodeBuilder.Nex("restricted")
             );
 
             Assert.NotNull(filter);

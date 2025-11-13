@@ -12,7 +12,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <summary>
         /// Gets the transport type.
         /// </summary>
-        TransportType Type { get; }
+        CentrifugeTransportType Type { get; }
 
         /// <summary>
         /// Gets the transport name.

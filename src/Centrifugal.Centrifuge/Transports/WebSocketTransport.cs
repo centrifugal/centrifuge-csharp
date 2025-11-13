@@ -21,7 +21,7 @@ namespace Centrifugal.Centrifuge.Transports
         private bool _disposed;
 
         /// <inheritdoc/>
-        public TransportType Type => TransportType.WebSocket;
+        public CentrifugeTransportType Type => CentrifugeTransportType.WebSocket;
 
         /// <inheritdoc/>
         public string Name => "websocket";
@@ -82,7 +82,7 @@ namespace Centrifugal.Centrifuge.Transports
             {
                 _webSocket?.Dispose();
                 _webSocket = null;
-                throw new CentrifugeException(ErrorCodes.TransportClosed, "Failed to connect WebSocket", true, ex);
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "Failed to connect WebSocket", true, ex);
             }
         }
 
@@ -91,7 +91,7 @@ namespace Centrifugal.Centrifuge.Transports
         {
             if (_webSocket == null || _webSocket.State != WebSocketState.Open)
             {
-                throw new CentrifugeException(ErrorCodes.TransportClosed, "WebSocket is not open");
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "WebSocket is not open");
             }
 
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);

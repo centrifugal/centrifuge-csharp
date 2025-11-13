@@ -43,7 +43,7 @@ namespace Centrifugal.Centrifuge.Tests
                 // Verify all are in Subscribing state before connect
                 foreach (var sub in subscriptions)
                 {
-                    Assert.Equal(SubscriptionState.Subscribing, sub.State);
+                    Assert.Equal(CentrifugeSubscriptionState.Subscribing, sub.State);
                 }
 
                 // Connect - this should batch all subscribe requests
@@ -56,7 +56,7 @@ namespace Centrifugal.Centrifuge.Tests
                 // Verify all subscriptions are now subscribed
                 foreach (var sub in subscriptions)
                 {
-                    Assert.Equal(SubscriptionState.Subscribed, sub.State);
+                    Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub.State);
                 }
 
                 // Cleanup
@@ -113,7 +113,7 @@ namespace Centrifugal.Centrifuge.Tests
                 // Verify all subscriptions are subscribed
                 foreach (var sub in subscriptions)
                 {
-                    Assert.Equal(SubscriptionState.Subscribed, sub.State);
+                    Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub.State);
                 }
 
                 // Cleanup
@@ -169,9 +169,9 @@ namespace Centrifugal.Centrifuge.Tests
                 await Task.WhenAll(sub1Subscribed.Task, sub3Subscribed.Task).WaitAsync(TimeSpan.FromSeconds(5));
 
                 // Verify states
-                Assert.Equal(SubscriptionState.Subscribed, sub1.State);
-                Assert.Equal(SubscriptionState.Unsubscribed, sub2.State);  // Should stay unsubscribed
-                Assert.Equal(SubscriptionState.Subscribed, sub3.State);
+                Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub1.State);
+                Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, sub2.State);  // Should stay unsubscribed
+                Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub3.State);
 
                 // Cleanup
                 sub1.Unsubscribe();

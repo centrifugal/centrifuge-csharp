@@ -16,27 +16,27 @@ namespace Centrifugal.Centrifuge.Tests
     {
         public WebSocketIntegrationTests() : base("ws://localhost:8000/connection/websocket") { }
 
-        public static IEnumerable<object[]> GetTransportEndpoints()
+        public static IEnumerable<object[]> GetCentrifugeTransportEndpoints()
         {
             yield return new object[]
             {
-                TransportType.WebSocket,
+                CentrifugeTransportType.WebSocket,
                 "ws://localhost:8000/connection/websocket"
             };
             yield return new object[]
             {
-                TransportType.HttpStream,
+                CentrifugeTransportType.HttpStream,
                 "http://localhost:8000/connection/http_stream"
             };
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task ConnectsAndDisconnects(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task ConnectsAndDisconnects(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
-            var disconnectedEvent = new TaskCompletionSource<DisconnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
+            var disconnectedEvent = new TaskCompletionSource<CentrifugeDisconnectedEventArgs>();
 
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
             client.Disconnected += (s, e) => disconnectedEvent.TrySetResult(e);
@@ -44,30 +44,30 @@ namespace Centrifugal.Centrifuge.Tests
             client.Connect(); await client.ReadyAsync();
             var connected = await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(ClientState.Connected, client.State);
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
             Assert.NotEmpty(connected.ClientId);
 
             client.Disconnect();
             var disconnected = await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(ClientState.Disconnected, client.State);
-            Assert.Equal(DisconnectedCodes.DisconnectCalled, disconnected.Code);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeDisconnectedCodes.DisconnectCalled, disconnected.Code);
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task SubscribeAndUnsubscribe(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task SubscribeAndUnsubscribe(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
-            var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
-            var unsubscribedEvent = new TaskCompletionSource<UnsubscribedEventArgs>();
+            var subscribedEvent = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
+            var unsubscribedEvent = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
 
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
             subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
@@ -75,33 +75,33 @@ namespace Centrifugal.Centrifuge.Tests
             subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(SubscriptionState.Subscribed, subscription.State);
-            Assert.Equal(ClientState.Connected, client.State);
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
 
             subscription.Unsubscribe();
             client.Disconnect();
 
             var ctx = await unsubscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(SubscriptionState.Unsubscribed, subscription.State);
-            Assert.Equal(ClientState.Disconnected, client.State);
-            Assert.Equal(UnsubscribedCodes.UnsubscribeCalled, ctx.Code);
+            Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeUnsubscribedCodes.UnsubscribeCalled, ctx.Code);
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task PublishAndReceiveMessage(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task PublishAndReceiveMessage(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
-            var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
-            var publicationReceived = new TaskCompletionSource<PublicationEventArgs>();
+            var subscribedEvent = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
+            var publicationReceived = new TaskCompletionSource<CentrifugePublicationEventArgs>();
 
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
             subscription.Publication += (s, e) => publicationReceived.TrySetResult(e);
@@ -121,25 +121,25 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task SubscribeAndPresence(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task SubscribeAndPresence(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
-            var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
+            var subscribedEvent = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
 
             subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(SubscriptionState.Subscribed, subscription.State);
-            Assert.Equal(ClientState.Connected, client.State);
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
 
             var presence = await subscription.PresenceAsync();
             Assert.NotEmpty(presence.Clients);
@@ -152,11 +152,11 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task ConnectDisconnectLoop(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task ConnectDisconnectLoop(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var disconnectedEvent = new TaskCompletionSource<DisconnectedEventArgs>();
+            var disconnectedEvent = new TaskCompletionSource<CentrifugeDisconnectedEventArgs>();
 
             client.Disconnected += (s, e) => disconnectedEvent.TrySetResult(e);
 
@@ -166,23 +166,23 @@ namespace Centrifugal.Centrifuge.Tests
                 client.Disconnect();
             }
 
-            Assert.Equal(ClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
             await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task SubscribeAndUnsubscribeLoop(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task SubscribeAndUnsubscribeLoop(CentrifugeTransportType transport, string endpoint)
         {
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             var subscription = client.NewSubscription("test");
-            var unsubscribedEvent = new TaskCompletionSource<UnsubscribedEventArgs>();
+            var unsubscribedEvent = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
 
             subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
 
@@ -192,13 +192,13 @@ namespace Centrifugal.Centrifuge.Tests
                 subscription.Unsubscribe();
             }
 
-            Assert.Equal(SubscriptionState.Unsubscribed, subscription.State);
+            Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
             await unsubscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             // Ensure client is still connected after the loop
-            if (client.State != ClientState.Connected)
+            if (client.State != CentrifugeClientState.Connected)
             {
-                var reconnectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+                var reconnectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
                 client.Connected += (s, e) => reconnectedEvent.TrySetResult(e);
                 client.Connect(); await client.ReadyAsync();
                 await reconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -206,19 +206,19 @@ namespace Centrifugal.Centrifuge.Tests
 
             // Create a fresh subscription to test2 channel to avoid any state issues
             var subscription2 = client.NewSubscription("test2");
-            var subscribedEvent2 = new TaskCompletionSource<SubscribedEventArgs>();
+            var subscribedEvent2 = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
             subscription2.Subscribed += (s, e) => subscribedEvent2.TrySetResult(e);
 
             subscription2.Subscribe(); await subscription2.ReadyAsync();
             await subscribedEvent2.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(SubscriptionState.Subscribed, subscription2.State);
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription2.State);
 
             var presenceStats = await subscription2.PresenceStatsAsync();
             Assert.Equal(1u, presenceStats.NumClients);
             Assert.Equal(1u, presenceStats.NumUsers);
 
-            var unsubscribedEvent2 = new TaskCompletionSource<UnsubscribedEventArgs>();
+            var unsubscribedEvent2 = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
             subscription2.Unsubscribed += (s, e) => unsubscribedEvent2.TrySetResult(e);
 
             subscription2.Unsubscribe();
@@ -232,8 +232,8 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task ConnectsWithToken(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task ConnectsWithToken(CentrifugeTransportType transport, string endpoint)
         {
             // Connection token for anonymous user without ttl (using HMAC secret "secret")
             const string connectToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MzgwNzg4MjR9.MTb3higWfFW04E9-8wmTFOcf4MEm-rMDQaNKJ1VU_n4";
@@ -244,44 +244,44 @@ namespace Centrifugal.Centrifuge.Tests
             };
 
             using var client = CreateClient(transport, endpoint, options);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(ClientState.Connected, client.State);
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
 
             client.Disconnect();
         }
 
         [Theory]
-        [MemberData(nameof(GetTransportEndpoints))]
-        public async Task SubscribesWithToken(TransportType transport, string endpoint)
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task SubscribesWithToken(CentrifugeTransportType transport, string endpoint)
         {
             // Subscription token for anonymous user for channel "test1" (using HMAC secret "secret")
             const string subscriptionToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzNDgsImNoYW5uZWwiOiJ0ZXN0MSJ9.eqPQxbBtyYxL8Hvbkm-P6aH7chUsSG_EMWe-rTwF_HI";
 
             using var client = CreateClient(transport, endpoint);
-            var connectedEvent = new TaskCompletionSource<ConnectedEventArgs>();
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
             client.Connected += (s, e) => connectedEvent.TrySetResult(e);
 
             client.Connect(); await client.ReadyAsync();
             await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            var subscriptionOptions = new SubscriptionOptions
+            var subscriptionOptions = new CentrifugeSubscriptionOptions
             {
                 Token = subscriptionToken
             };
 
             var subscription = client.NewSubscription("test1", subscriptionOptions);
-            var subscribedEvent = new TaskCompletionSource<SubscribedEventArgs>();
+            var subscribedEvent = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
             subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
 
             subscription.Subscribe(); await subscription.ReadyAsync();
             await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(SubscriptionState.Subscribed, subscription.State);
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
 
             subscription.Unsubscribe();
             client.Disconnect();
@@ -305,9 +305,9 @@ namespace Centrifugal.Centrifuge.Tests
             return new CentrifugeClient(Endpoint, options);
         }
 
-        protected CentrifugeClient CreateClient(TransportType transport, string endpoint, CentrifugeClientOptions? options = null)
+        protected CentrifugeClient CreateClient(CentrifugeTransportType transport, string endpoint, CentrifugeClientOptions? options = null)
         {
-            var transportEndpoint = new TransportEndpoint(transport, endpoint);
+            var transportEndpoint = new CentrifugeTransportEndpoint(transport, endpoint);
             return new CentrifugeClient(new[] { transportEndpoint }, options);
         }
     }
