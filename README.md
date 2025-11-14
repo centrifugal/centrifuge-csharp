@@ -79,6 +79,11 @@ using Centrifugal.Centrifuge;
 await using var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
 
 // Setup event handlers
+client.Connecting += (sender, e) =>
+{
+    Console.WriteLine($"[Client] Connecting: {e.Code} - {e.Reason}");
+};
+
 client.Connected += (sender, e) =>
 {
     Console.WriteLine($"Connected with client ID: {e.ClientId}");
@@ -107,7 +112,7 @@ var result = await client.RpcAsync("method", data);
 ### Subscriptions
 
 ```csharp
-// Create subscription
+// Create subscription, may throw Exception subscription already exists in Client's registry.
 var subscription = client.NewSubscription("chat");
 
 // Setup subscription event handlers

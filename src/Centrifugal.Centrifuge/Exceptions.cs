@@ -69,4 +69,25 @@ namespace Centrifugal.Centrifuge
         {
         }
     }
+
+    /// <summary>
+    /// Exception thrown when attempting to create a duplicate subscription.
+    /// </summary>
+    public class CentrifugeDuplicateSubscriptionException : CentrifugeException
+    {
+        /// <summary>
+        /// Gets the channel name that already has a subscription.
+        /// </summary>
+        public string Channel { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CentrifugeDuplicateSubscriptionException"/> class.
+        /// </summary>
+        /// <param name="channel">The channel name.</param>
+        public CentrifugeDuplicateSubscriptionException(string channel)
+            : base(0, $"Subscription to channel '{channel}' already exists", false)
+        {
+            Channel = channel;
+        }
+    }
 }

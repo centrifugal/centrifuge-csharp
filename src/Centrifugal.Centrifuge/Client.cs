@@ -299,7 +299,7 @@ namespace Centrifugal.Centrifuge
 
             if (_subscriptions.ContainsKey(channel))
             {
-                throw new InvalidOperationException($"Subscription to channel '{channel}' already exists");
+                throw new CentrifugeDuplicateSubscriptionException(channel);
             }
 
             var subscription = new CentrifugeSubscription(this, channel, options);
