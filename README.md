@@ -1,5 +1,7 @@
 # Centrifuge C# SDK
 
+❗❗❗ This SDK is a work in progress, we do not recommend using it in the production ❗❗❗
+
 [![NuGet](https://img.shields.io/nuget/v/Centrifugal.Centrifuge.svg)](https://www.nuget.org/packages/Centrifugal.Centrifuge/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
