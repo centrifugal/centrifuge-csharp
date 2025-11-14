@@ -97,10 +97,8 @@ client.Error += (sender, e) =>
 // Connect to server (non-blocking)
 client.Connect();
 
-// Wait for connection
-await client.ReadyAsync();
-
-// ... use the client ...
+// Use client methods - they automatically wait for connection
+var result = await client.RpcAsync("method", data);
 
 // DisposeAsync is called automatically at the end of the 'await using' block
 // It waits for disconnect to complete before releasing resources
@@ -132,8 +130,7 @@ subscription.Unsubscribed += (sender, e) =>
 // Subscribe to channel (non-blocking)
 subscription.Subscribe();
 
-// Publish to channel
-await subscription.ReadyAsync(); // Wait for subscription to complete
+// Publish to channel - automatically waits for subscription to be ready
 var message = Encoding.UTF8.GetBytes("Hello, world!");
 await subscription.PublishAsync(message);
 

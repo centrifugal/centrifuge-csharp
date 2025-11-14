@@ -381,6 +381,7 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Sends an RPC call to the server.
+        /// Automatically waits for the client to be connected before sending.
         /// </summary>
         /// <param name="method">RPC method name.</param>
         /// <param name="data">Request data.</param>
@@ -388,6 +389,9 @@ namespace Centrifugal.Centrifuge
         /// <returns>RPC result.</returns>
         public async Task<CentrifugeRpcResult> RpcAsync(string method, byte[] data, CancellationToken cancellationToken = default)
         {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = NextCommandId(),
@@ -414,11 +418,15 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Sends an asynchronous message to the server (no response expected).
+        /// Automatically waits for the client to be connected before sending.
         /// </summary>
         /// <param name="data">Message data.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
         {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Send = new SendRequest
@@ -437,12 +445,16 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets presence information for a channel.
+        /// Automatically waits for the client to be connected before sending.
         /// </summary>
         /// <param name="channel">Channel name.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence result.</returns>
         public async Task<CentrifugePresenceResult> PresenceAsync(string channel, CancellationToken cancellationToken = default)
         {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = NextCommandId(),
@@ -480,12 +492,16 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets presence stats for a channel.
+        /// Automatically waits for the client to be connected before sending.
         /// </summary>
         /// <param name="channel">Channel name.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence stats result.</returns>
         public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(string channel, CancellationToken cancellationToken = default)
         {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = NextCommandId(),

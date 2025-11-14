@@ -53,10 +53,9 @@ namespace Centrifuge.Examples
 
             try
             {
-                // Connect to server
+                // Connect to server (non-blocking)
                 Console.WriteLine("Connecting to server...");
                 client.Connect();
-                await client.ReadyAsync();
 
                 // Create subscription
                 var subscription = client.NewSubscription("chat");
@@ -117,12 +116,11 @@ namespace Centrifuge.Examples
                     Console.WriteLine($"[Subscription] Error: {e.Type} - {e.Message}");
                 };
 
-                // Subscribe to channel
+                // Subscribe to channel (non-blocking)
                 Console.WriteLine("\nSubscribing to channel 'chat'...");
                 subscription.Subscribe();
-                await subscription.ReadyAsync();
 
-                // Publish a message
+                // Publish a message (waits for subscription automatically)
                 Console.WriteLine("\nPublishing message...");
                 var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from C# SDK!\"}");
                 await subscription.PublishAsync(messageData);

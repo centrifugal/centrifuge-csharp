@@ -211,11 +211,15 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Publishes data to the channel.
+        /// Automatically waits for the subscription to be established before publishing.
         /// </summary>
         /// <param name="data">Data to publish.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         public async Task PublishAsync(byte[] data, CancellationToken cancellationToken = default)
         {
+            // Wait for subscription to be ready
+            await ReadyAsync().ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = _client.NextCommandId(),
@@ -240,12 +244,16 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets the channel history.
+        /// Automatically waits for the subscription to be established before fetching history.
         /// </summary>
         /// <param name="options">History options.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>History result.</returns>
         public async Task<CentrifugeHistoryResult> HistoryAsync(CentrifugeHistoryOptions? options = null, CancellationToken cancellationToken = default)
         {
+            // Wait for subscription to be ready
+            await ReadyAsync().ConfigureAwait(false);
+
             var request = new HistoryRequest
             {
                 Channel = Channel
@@ -302,11 +310,15 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets the channel presence.
+        /// Automatically waits for the subscription to be established before fetching presence.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence result.</returns>
         public async Task<CentrifugePresenceResult> PresenceAsync(CancellationToken cancellationToken = default)
         {
+            // Wait for subscription to be ready
+            await ReadyAsync().ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = _client.NextCommandId(),
@@ -344,11 +356,15 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets the channel presence stats.
+        /// Automatically waits for the subscription to be established before fetching presence stats.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Presence stats result.</returns>
         public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(CancellationToken cancellationToken = default)
         {
+            // Wait for subscription to be ready
+            await ReadyAsync().ConfigureAwait(false);
+
             var cmd = new Command
             {
                 Id = _client.NextCommandId(),

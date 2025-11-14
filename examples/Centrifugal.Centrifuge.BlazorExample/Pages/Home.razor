@@ -240,10 +240,9 @@
 
         try
         {
-            // Connect to server
+            // Connect to server (non-blocking)
             await LogAsync("Connecting to server...");
             Client.Connect();
-            await Client.ReadyAsync();
 
             // Create subscription
             _subscription = Client.NewSubscription("chat");
@@ -258,12 +257,11 @@
             _subscription.Leave += OnLeave;
             _subscription.Error += OnSubscriptionError;
 
-            // Subscribe to channel
+            // Subscribe to channel (non-blocking)
             await LogAsync("Subscribing to channel 'chat'...");
             _subscription.Subscribe();
-            await _subscription.ReadyAsync();
 
-            // Publish a message
+            // Publish a message (waits for subscription automatically)
             await LogAsync("Publishing message...");
             var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from Blazor WASM!\"}");
             await _subscription.PublishAsync(messageData);
