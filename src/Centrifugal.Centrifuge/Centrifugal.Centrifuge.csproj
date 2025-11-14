@@ -18,7 +18,7 @@
     <Version>0.0.1</Version>
     <Authors>Centrifugal Labs</Authors>
     <Company>Centrifugal Labs</Company>
-    <Description>Official C# client SDK for Centrifugo and Centrifuge real-time messaging servers. Supports WebSocket, SSE, and HTTP-streaming transports.</Description>
+    <Description>Official C# client SDK to communicate with Centrifugo and Centrifuge-based server from multiple environments. Supports Protobuf communication over WebSocket (primary) and HTTP-streaming (bidirectional emulation).</Description>
     <PackageProjectUrl>https://github.com/centrifugal/centrifuge-csharp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/centrifugal/centrifuge-csharp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
