@@ -24,7 +24,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Centrifuge client for real-time messaging with Centrifugo server.
     /// </summary>
-    public class CentrifugeClient : IDisposable
+    public class CentrifugeClient : IDisposable, IAsyncDisposable
     {
         private readonly string? _endpoint;
         private readonly List<CentrifugeTransportEndpoint>? _transportEndpoints;
@@ -1856,13 +1856,52 @@ namespace Centrifugal.Centrifuge
             );
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Asynchronously disposes the client, ensuring disconnect completes before releasing resources.
+        /// This is the recommended way to dispose the client.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            try
+            {
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", false).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Suppress exceptions during disposal - we're shutting down anyway
+            }
+
+            _stateLock?.Dispose();
+            _reconnectCts?.Dispose();
+            _pingTimer?.Dispose();
+            _refreshTimer?.Dispose();
+            _subscribeBatchTimer?.Dispose();
+        }
+
+        /// <summary>
+        /// Synchronously disposes the client. This blocks until disconnect completes.
+        /// Consider using DisposeAsync() instead for better async/await support.
+        /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
 
-            Disconnect();
+            try
+            {
+                SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", false)
+                    .ConfigureAwait(false)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch
+            {
+                // Suppress exceptions during disposal - we're shutting down anyway
+            }
+
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();
             _pingTimer?.Dispose();

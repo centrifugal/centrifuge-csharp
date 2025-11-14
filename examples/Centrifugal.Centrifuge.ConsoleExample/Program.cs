@@ -20,8 +20,8 @@ namespace Centrifuge.Examples
                 // Token = "your-jwt-token",
             };
 
-            // Create client
-            var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", options);
+            // Create client with 'await using' for proper async disposal
+            await using var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", options);
 
             // Setup client event handlers
             client.StateChanged += (sender, e) =>
@@ -189,20 +189,17 @@ namespace Centrifuge.Examples
                 // Cleanup
                 Console.WriteLine("\nUnsubscribing...");
                 subscription.Unsubscribe();
-
-                Console.WriteLine("Disconnecting...");
-                client.Disconnect();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error caught: {ex}");
             }
-            finally
-            {
-                client.Dispose();
-            }
 
-            Console.WriteLine("\nDone!");
+            // DisposeAsync is called automatically when exiting the 'await using' block
+            Console.WriteLine("\nDisposing client (disconnecting)...");
+            // Client disposal happens here automatically
+
+            Console.WriteLine("Done!");
         }
     }
 }

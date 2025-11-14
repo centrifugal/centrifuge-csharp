@@ -471,10 +471,8 @@
                 _subscription.Unsubscribe();
             }
 
-            await LogAsync("Disconnecting...");
-            Client.Disconnect();
-            await Task.Delay(100); // Give disconnect time to complete
-            Client.Dispose();
+            await LogAsync("Disposing client (this will disconnect)...");
+            await Client.DisposeAsync();
 
             await LogAsync("Done!");
         }

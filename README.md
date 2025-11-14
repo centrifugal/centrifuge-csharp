@@ -75,8 +75,8 @@ Install-Package Centrifugal.Centrifuge
 ```csharp
 using Centrifugal.Centrifuge;
 
-// Create client instance
-var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
+// Recommended: Use 'await using' for proper async disposal
+await using var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
 
 // Setup event handlers
 client.Connected += (sender, e) =>
@@ -94,14 +94,16 @@ client.Error += (sender, e) =>
     Console.WriteLine($"Error: {e.Message}");
 };
 
-// Connect to server
-await client.ConnectAsync();
+// Connect to server (non-blocking)
+client.Connect();
+
+// Wait for connection
+await client.ReadyAsync();
 
 // ... use the client ...
 
-// Disconnect when done
-await client.DisconnectAsync();
-client.Dispose();
+// DisposeAsync is called automatically at the end of the 'await using' block
+// It waits for disconnect to complete before releasing resources
 ```
 
 ### Subscriptions
@@ -127,15 +129,16 @@ subscription.Unsubscribed += (sender, e) =>
     Console.WriteLine($"Unsubscribed: {e.Code} - {e.Reason}");
 };
 
-// Subscribe to channel
-await subscription.SubscribeAsync();
+// Subscribe to channel (non-blocking)
+subscription.Subscribe();
 
 // Publish to channel
+await subscription.ReadyAsync(); // Wait for subscription to complete
 var message = Encoding.UTF8.GetBytes("Hello, world!");
 await subscription.PublishAsync(message);
 
 // Unsubscribe when done
-await subscription.UnsubscribeAsync();
+subscription.Unsubscribe();
 ```
 
 ### Token Authentication
@@ -179,7 +182,7 @@ var subscriptionOptions = new CentrifugeSubscriptionOptions
 };
 
 var subscription = client.NewSubscription("private-channel", subscriptionOptions);
-await subscription.SubscribeAsync();
+subscription.Subscribe();
 ```
 
 ### History API
@@ -292,7 +295,7 @@ var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", op
 ### Recovery and Positioning
 
 ```csharp
-var options = new SubscriptionOptions
+var options = new CentrifugeSubscriptionOptions
 {
     // Enable recovery (if supported by server)
     Recoverable = true,
@@ -314,7 +317,7 @@ subscription.Subscribed += (sender, e) =>
     }
 };
 
-await subscription.SubscribeAsync();
+subscription.Subscribe();
 ```
 
 ## Error Handling
@@ -370,14 +373,14 @@ public class CentrifugeManager : MonoBehaviour
             Debug.Log($"Connected: {e.ClientId}");
         };
 
-        await client.ConnectAsync();
+        client.Connect();
     }
 
-    async void OnDestroy()
+    void OnDestroy()
     {
         if (client != null)
         {
-            await client.DisconnectAsync();
+            // Dispose() blocks until disconnect completes
             client.Dispose();
         }
     }
@@ -406,7 +409,7 @@ Works out of the box - uses standard .NET WebSocket client:
             await InvokeAsync(StateHasChanged);
         };
 
-        await Client.ConnectAsync();
+        Client.Connect();
     }
 }
 ```
@@ -474,14 +477,12 @@ Then inject and use in your components:
         };
 
         Client.Connect();
-        await Client.ReadyAsync();
     }
 
     public async ValueTask DisposeAsync()
     {
-        Client.Disconnect();
-        await Task.Delay(100); // Give disconnect time to complete
-        Client.Dispose();
+        // DisposeAsync waits for disconnect to complete before releasing resources
+        await Client.DisposeAsync();
     }
 }
 ```

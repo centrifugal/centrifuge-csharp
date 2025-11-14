@@ -601,6 +601,16 @@ namespace Centrifugal.Centrifuge
 
         private void HandleSubscribeReply(SubscribeResult result)
         {
+            // Check if subscription was unsubscribed while subscribe was in-flight
+            lock (_stateChangeLock)
+            {
+                if (_state == CentrifugeSubscriptionState.Unsubscribed)
+                {
+                    // Subscription was unsubscribed during subscribe, ignore the reply
+                    return;
+                }
+            }
+
             bool wasRecovering = _streamPosition != null;
             bool recovered = result.Recovered;
 
