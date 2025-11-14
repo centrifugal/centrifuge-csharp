@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <!-- Multi-target for modern .NET and Unity support -->
-    <TargetFrameworks>netstandard2.1;net6.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <!-- Only include .NET 10.0 if SDK supports it (for local dev with .NET 9 SDK) -->
+    <TargetFrameworks Condition="'$(NETCoreSdkVersion)' &gt;= '10.0'">netstandard2.1;net6.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(NETCoreSdkVersion)' &lt; '10.0'">netstandard2.1;net6.0;net8.0;net9.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -15,7 +17,7 @@
 
     <!-- Package Information -->
     <PackageId>Centrifugal.Centrifuge</PackageId>
-    <Version>0.0.3</Version>
+    <Version>0.0.4</Version>
     <Authors>Centrifugal Labs</Authors>
     <Company>Centrifugal Labs</Company>
     <Description>Official C# client SDK to communicate with Centrifugo and Centrifuge-based server from multiple environments. Supports Protobuf communication over WebSocket (primary) and HTTP-streaming (bidirectional emulation).</Description>
@@ -23,7 +25,7 @@
     <RepositoryUrl>https://github.com/centrifugal/centrifuge-csharp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>centrifugo;centrifuge;websocket;real-time;messaging;protobuf;sse;streaming</PackageTags>
+    <PackageTags>centrifugo;centrifuge;websocket;real-time;messaging;protobuf;streaming</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
