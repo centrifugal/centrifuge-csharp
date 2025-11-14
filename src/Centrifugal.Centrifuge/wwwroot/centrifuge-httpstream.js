@@ -13,12 +13,14 @@ window.CentrifugeHttpStream = {
      * @returns {number} Stream ID
      */
     connect: async function (url, initialData, dotnetRef) {
+        console.log('[CentrifugeHttpStream] connect called with URL:', url);
         const id = this.nextId++;
         const abortController = new AbortController();
 
         try {
             // Convert byte array to Uint8Array
             const bodyData = new Uint8Array(initialData);
+            console.log('[CentrifugeHttpStream] Sending POST request, body size:', bodyData.length);
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -32,8 +34,11 @@ window.CentrifugeHttpStream = {
                 credentials: 'same-origin'
             });
 
+            console.log('[CentrifugeHttpStream] Response received, status:', response.status);
+
             if (!response.ok) {
                 const statusCode = response.status;
+                console.error('[CentrifugeHttpStream] HTTP error:', statusCode);
                 dotnetRef.invokeMethodAsync('OnError', statusCode, `HTTP error ${statusCode}`);
                 return id;
             }
@@ -49,6 +54,7 @@ window.CentrifugeHttpStream = {
             this.streams[id] = streamInfo;
 
             // Notify connection opened
+            console.log('[CentrifugeHttpStream] Connection opened, stream ID:', id);
             dotnetRef.invokeMethodAsync('OnOpen');
 
             // Start reading loop
@@ -56,7 +62,7 @@ window.CentrifugeHttpStream = {
 
             return id;
         } catch (error) {
-            console.error('CentrifugeHttpStream.connect error:', error);
+            console.error('[CentrifugeHttpStream] connect error:', error);
             dotnetRef.invokeMethodAsync('OnError', 0, error.message || 'Connection failed');
             return id;
         }
@@ -87,9 +93,9 @@ window.CentrifugeHttpStream = {
                     break;
                 }
 
-                // Send chunk to .NET as byte array
-                // Convert Uint8Array to regular array for .NET interop
-                dotnetRef.invokeMethodAsync('OnChunk', Array.from(value));
+                // Send chunk to .NET as base64 string (JSInterop limitation)
+                const base64 = btoa(String.fromCharCode.apply(null, value));
+                dotnetRef.invokeMethodAsync('OnChunk', base64);
             }
         } catch (error) {
             if (error.name !== 'AbortError') {

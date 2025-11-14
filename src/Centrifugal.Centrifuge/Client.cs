@@ -1570,7 +1570,22 @@ namespace Centrifugal.Centrifuge
                 {
                     if (_transport != null)
                     {
-                        _transport.SendAsync(cmd.ToByteArray()).Wait();
+                        if (_transport.UsesEmulation)
+                        {
+                            // For emulation transports (non-connect commands), use SendEmulationAsync with session and node
+                            // The command must be varint-delimited
+                            using var ms = new MemoryStream();
+                            VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                            var delimitedCommand = ms.ToArray();
+
+                            var emulationEndpoint = GetEmulationEndpoint();
+                            _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, CancellationToken.None);
+                        }
+                        else
+                        {
+                            // For WebSocket, use regular SendAsync
+                            _transport.SendAsync(cmd.ToByteArray()).Wait();
+                        }
                     }
                 }
                 catch

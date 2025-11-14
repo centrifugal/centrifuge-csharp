@@ -73,7 +73,7 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                // Load the JavaScript module
+                // Load the JavaScript module (this adds CentrifugeHttpStream to window)
                 _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>(
                     "import",
                     "./_content/Centrifugal.Centrifuge/centrifuge-httpstream.js"
@@ -90,8 +90,8 @@ namespace Centrifugal.Centrifuge.Transports
                 VarintCodec.WriteDelimitedMessage(ms, initialData ?? Array.Empty<byte>());
                 byte[] delimitedData = ms.ToArray();
 
-                // Connect via JavaScript
-                _streamId = await _jsModule.InvokeAsync<int>(
+                // Connect via JavaScript (call on global window object, not the module)
+                _streamId = await _jsRuntime.InvokeAsync<int>(
                     "CentrifugeHttpStream.connect",
                     cancellationToken,
                     _endpoint,
@@ -117,7 +117,7 @@ namespace Centrifugal.Centrifuge.Transports
             catch (Exception ex)
             {
                 await CleanupAsync().ConfigureAwait(false);
-                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, $"Failed to open HTTP stream connection: {ex.Message}", true, ex);
             }
         }
 
@@ -130,7 +130,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
         {
-            if (!_isOpen || _jsModule == null)
+            if (!_isOpen)
             {
                 throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "HTTP stream transport is not open");
             }
@@ -148,7 +148,7 @@ namespace Centrifugal.Centrifuge.Transports
                 var requestBytes = emulationRequest.ToByteArray();
 
                 // Send to emulation endpoint
-                await _jsModule.InvokeVoidAsync(
+                await _jsRuntime.InvokeVoidAsync(
                     "CentrifugeHttpStream.sendEmulation",
                     cancellationToken,
                     emulationEndpoint,
@@ -170,9 +170,9 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                if (_jsModule != null && _streamId > 0)
+                if (_streamId > 0)
                 {
-                    await _jsModule.InvokeVoidAsync("CentrifugeHttpStream.close", _streamId)
+                    await _jsRuntime.InvokeVoidAsync("CentrifugeHttpStream.close", _streamId)
                         .ConfigureAwait(false);
                 }
             }
@@ -199,17 +199,20 @@ namespace Centrifugal.Centrifuge.Transports
         /// <summary>
         /// JavaScript callback when HTTP stream receives a chunk.
         /// </summary>
-        /// <param name="chunk">Chunk data as byte array.</param>
+        /// <param name="base64Chunk">Chunk data as base64-encoded string.</param>
         [JSInvokable]
-        public void OnChunk(byte[] chunk)
+        public void OnChunk(string base64Chunk)
         {
-            if (chunk == null || chunk.Length == 0)
+            if (string.IsNullOrEmpty(base64Chunk))
             {
                 return;
             }
 
             try
             {
+                // Decode base64 to byte array
+                byte[] chunk = Convert.FromBase64String(base64Chunk);
+
                 lock (_bufferLock)
                 {
                     // Append chunk to buffer
@@ -339,11 +342,11 @@ namespace Centrifugal.Centrifuge.Transports
                 _chunkBuffer = new MemoryStream();
             }
 
-            if (_jsModule != null && _streamId > 0)
+            if (_streamId > 0)
             {
                 try
                 {
-                    await _jsModule.InvokeVoidAsync("CentrifugeHttpStream.dispose", _streamId).ConfigureAwait(false);
+                    await _jsRuntime.InvokeVoidAsync("CentrifugeHttpStream.dispose", _streamId).ConfigureAwait(false);
                 }
                 catch
                 {
