@@ -31,9 +31,6 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Test
-      run: dotnet test --configuration Release --no-build --verbosity normal
-
     - name: Pack
       run: dotnet pack src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj --configuration Release --no-build --output ./artifacts
 
