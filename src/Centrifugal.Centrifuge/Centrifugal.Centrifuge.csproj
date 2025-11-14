@@ -2,9 +2,7 @@
 
   <PropertyGroup>
     <!-- Multi-target for modern .NET and Unity support -->
-    <!-- Only include .NET 10.0 if SDK supports it (for local dev with .NET 9 SDK) -->
-    <TargetFrameworks Condition="'$(NETCoreSdkVersion)' &gt;= '10.0'">netstandard2.1;net6.0;net8.0;net9.0;net10.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(NETCoreSdkVersion)' &lt; '10.0'">netstandard2.1;net6.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1;net6.0;net8.0;net9.0;net10.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
