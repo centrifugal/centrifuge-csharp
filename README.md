@@ -28,14 +28,15 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 
 The library targets modern .NET frameworks:
 
-- .NET 9.0 (STS)
-- .NET 8.0 (LTS)
-- .NET 6.0 (LTS)
+- .NET 10.0
+- .NET 9.0
+- .NET 8.0
+- .NET 6.0
 - .NET Standard 2.1 (for Unity support)
 
 This means it works on:
 
-- ✅ **Server-side**: .NET 6/8/9
+- ✅ **Server-side**: .NET 6/8/9/10
 - ✅ **Desktop**: Windows, macOS, Linux (via modern .NET)
 - ✅ **Mobile**: .NET MAUI (iOS, Android)
 - ✅ **Web**: Blazor WebAssembly, Blazor Server

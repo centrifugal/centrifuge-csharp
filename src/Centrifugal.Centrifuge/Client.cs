@@ -1454,7 +1454,17 @@ namespace Centrifugal.Centrifuge
             }
 
             // Now do async cleanup without holding locks
-            await _stateLock.WaitAsync().ConfigureAwait(false);
+            // Use try-catch to handle race condition where Dispose is called while this method is running
+            try
+            {
+                await _stateLock.WaitAsync().ConfigureAwait(false);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Semaphore was disposed - client is shutting down, skip cleanup
+                return;
+            }
+
             try
             {
                 _reconnectCts?.Cancel();
@@ -1482,7 +1492,14 @@ namespace Centrifugal.Centrifuge
             }
             finally
             {
-                _stateLock.Release();
+                try
+                {
+                    _stateLock.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Semaphore was disposed during cleanup - ignore
+                }
             }
         }
 
