@@ -69,7 +69,10 @@ namespace Centrifugal.Centrifuge.Tests
             var client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
             client.NewSubscription("test");
 
-            Assert.Throws<InvalidOperationException>(() => client.NewSubscription("test"));
+            var ex = Assert.Throws<CentrifugeDuplicateSubscriptionException>(() => client.NewSubscription("test"));
+            Assert.Equal("test", ex.Channel);
+            Assert.Equal(0, ex.Code);
+            Assert.False(ex.Temporary);
         }
 
         [Fact]
