@@ -781,6 +781,9 @@ namespace Centrifugal.Centrifuge
 
         private async void OnTransportOpened(object? sender, EventArgs e)
         {
+            // Defensive check: don't process events if client is disposed
+            if (_disposed) return;
+
             // Mark that at least one transport successfully opened
             _transportWasOpen = true;
 
@@ -1147,6 +1150,9 @@ namespace Centrifugal.Centrifuge
 
         private void OnTransportMessage(object? sender, byte[] data)
         {
+            // Defensive check: don't process events if client is disposed
+            if (_disposed) return;
+
             try
             {
                 // Reset ping timer on any message received
@@ -1288,6 +1294,9 @@ namespace Centrifugal.Centrifuge
 
         private void OnTransportClosed(object? sender, TransportClosedEventArgs e)
         {
+            // Defensive check: don't process events if client is disposed
+            if (_disposed) return;
+
             _ = HandleTransportClosedAsync(e);
         }
 
@@ -1363,6 +1372,9 @@ namespace Centrifugal.Centrifuge
 
         private void OnTransportError(object? sender, Exception e)
         {
+            // Defensive check: don't process events if client is disposed
+            if (_disposed) return;
+
             OnError("transport", e);
         }
 
@@ -1454,7 +1466,8 @@ namespace Centrifugal.Centrifuge
             }
 
             // Now do async cleanup without holding locks
-            // Use try-catch to handle race condition where Dispose is called while this method is running
+            // Defense-in-depth: catch ObjectDisposedException in case an event handler was already
+            // executing when we unsubscribed, or if there's a race with disposal
             try
             {
                 await _stateLock.WaitAsync().ConfigureAwait(false);
@@ -1479,6 +1492,13 @@ namespace Centrifugal.Centrifuge
 
                 if (_transport != null)
                 {
+                    // Unsubscribe from transport events BEFORE closing to prevent race conditions
+                    // where events fire during/after disposal
+                    _transport.Opened -= OnTransportOpened;
+                    _transport.MessageReceived -= OnTransportMessage;
+                    _transport.Closed -= OnTransportClosed;
+                    _transport.Error -= OnTransportError;
+
                     await _transport.CloseAsync().ConfigureAwait(false);
                     _transport.Dispose();
                     _transport = null;
