@@ -72,8 +72,8 @@ make run-blazor-example
 ```
 
 This will:
-- Start the Blazor dev server on port 5000
-- Automatically open your browser at `http://localhost:5000`
+- Start the Blazor dev server on port 5050
+- Automatically open your browser at `http://localhost:5050`
 - Display connection status with color-coded indicators
 - Show live event log with color-coded categories
 
@@ -83,7 +83,7 @@ From the repository root:
 
 ```bash
 cd examples/Centrifugal.Centrifuge.BlazorExample
-dotnet run --urls "http://localhost:5000" --launch-profile "http"
+dotnet run --urls "http://localhost:5050" --launch-profile "http"
 ```
 
 **What to see:**

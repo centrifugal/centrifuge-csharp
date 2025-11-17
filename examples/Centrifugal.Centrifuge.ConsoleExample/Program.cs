@@ -2,6 +2,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 using Centrifugal.Centrifuge;
+using Microsoft.Extensions.Logging;
 
 namespace Centrifuge.Examples
 {
@@ -12,10 +13,19 @@ namespace Centrifuge.Examples
             Console.WriteLine("Centrifuge C# SDK Example");
             Console.WriteLine("========================\n");
 
+            // Create a logger that writes to console
+            using var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder
+                    .AddConsole()
+                    .SetMinimumLevel(LogLevel.Debug);
+            });
+            var logger = loggerFactory.CreateLogger<CentrifugeClient>();
+
             // Configure client options
             var options = new CentrifugeClientOptions
             {
-                Debug = true,
+                Logger = logger,
                 // Add your connection token here if needed
                 // Token = "your-jwt-token",
             };

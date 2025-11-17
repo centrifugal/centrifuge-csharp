@@ -31,10 +31,10 @@ Or manually:
 
 ```bash
 cd examples/Centrifugal.Centrifuge.BlazorExample
-dotnet run --urls "http://localhost:5000" --launch-profile "http"
+dotnet run --urls "http://localhost:5050" --launch-profile "http"
 ```
 
-The browser will automatically open at `http://localhost:5000`.
+The browser will automatically open at `http://localhost:5050`.
 
 ## What to Expect
 
