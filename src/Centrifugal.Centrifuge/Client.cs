@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Centrifugal.Centrifuge.Transports;
 using Centrifugal.Centrifuge.Protocol;
 using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 
 namespace Centrifugal.Centrifuge
 {
@@ -62,6 +63,7 @@ namespace Centrifugal.Centrifuge
 #if NET6_0_OR_GREATER
         private readonly Microsoft.JSInterop.IJSRuntime? _jsRuntime;
 #endif
+        private readonly ILogger? _logger;
 
         /// <summary>
         /// Gets the current client state.
@@ -153,6 +155,7 @@ namespace Centrifugal.Centrifuge
             _endpoint = endpoint;
             _options = options ?? new CentrifugeClientOptions();
             _options.Validate();
+            _logger = _options.Logger;
         }
 
         /// <summary>
@@ -170,6 +173,7 @@ namespace Centrifugal.Centrifuge
             _transportEndpoints = new List<CentrifugeTransportEndpoint>(transportEndpoints);
             _options = options ?? new CentrifugeClientOptions();
             _options.Validate();
+            _logger = _options.Logger;
         }
 
 #if NET6_0_OR_GREATER
@@ -195,6 +199,7 @@ namespace Centrifugal.Centrifuge
             _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
             _options = options ?? new CentrifugeClientOptions();
             _options.Validate();
+            _logger = _options.Logger;
         }
 
         /// <summary>
@@ -209,11 +214,11 @@ namespace Centrifugal.Centrifuge
             {
                 throw new ArgumentException("Transport endpoints cannot be null or empty", nameof(transportEndpoints));
             }
-
             _transportEndpoints = new List<CentrifugeTransportEndpoint>(transportEndpoints);
             _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
             _options = options ?? new CentrifugeClientOptions();
             _options.Validate();
+            _logger = _options.Logger;
         }
 #endif
 
@@ -557,8 +562,10 @@ namespace Centrifugal.Centrifuge
                     }
                     else
                     {
+                        _logger?.LogDebug($"Calling transport.SendAsync for command ID: {command.Id}");
                         // For WebSocket, use regular SendAsync
                         await _transport.SendAsync(command.ToByteArray(), cancellationToken).ConfigureAwait(false);
+                        _logger?.LogDebug($"transport.SendAsync completed for command ID: {command.Id}");
                     }
                 }
 
@@ -697,19 +704,27 @@ namespace Centrifugal.Centrifuge
                     throw new CentrifugeConfigurationException("No supported transport found in the transport endpoints list");
                 }
             }
-            // Single endpoint mode (legacy)
+            // Single endpoint mode.
             else if (_endpoint != null)
             {
                 // Determine transport type from endpoint
                 if (_endpoint.StartsWith("ws://", StringComparison.OrdinalIgnoreCase) ||
                     _endpoint.StartsWith("wss://", StringComparison.OrdinalIgnoreCase))
                 {
-                    transport = new WebSocketTransport(_endpoint);
+                    // Use the same logic as CreateTransport to properly select browser vs native transport
+                    transport = CreateTransport(CentrifugeTransportType.WebSocket, _endpoint);
+                    _transport = transport;
+                }
+                else if (_endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         _endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Support HTTP streaming endpoint as well
+                    transport = CreateTransport(CentrifugeTransportType.HttpStream, _endpoint);
                     _transport = transport;
                 }
                 else
                 {
-                    throw new CentrifugeConfigurationException("Only WebSocket endpoints are supported in this version");
+                    throw new CentrifugeConfigurationException("Endpoint must start with ws://, wss://, http://, or https://");
                 }
             }
             else
@@ -755,7 +770,7 @@ namespace Centrifugal.Centrifuge
                                 "Running in browser environment but IJSRuntime not provided. " +
                                 "Use the constructor overload that accepts IJSRuntime for Blazor WebAssembly support.");
                         }
-                        return new BrowserWebSocketTransport(endpoint, _jsRuntime);
+                        return new BrowserWebSocketTransport(endpoint, _jsRuntime, _logger);
                     }
 #endif
                     return new WebSocketTransport(endpoint);
@@ -770,7 +785,7 @@ namespace Centrifugal.Centrifuge
                                 "Running in browser environment but IJSRuntime not provided. " +
                                 "Use the constructor overload that accepts IJSRuntime for Blazor WebAssembly support.");
                         }
-                        return new BrowserHttpStreamTransport(endpoint, _jsRuntime);
+                        return new BrowserHttpStreamTransport(endpoint, _jsRuntime, _logger);
                     }
 #endif
                     return new HttpStreamTransport(endpoint);
@@ -781,6 +796,7 @@ namespace Centrifugal.Centrifuge
 
         private async void OnTransportOpened(object? sender, EventArgs e)
         {
+            _logger?.LogDebug("OnTransportOpened called");
             // Defensive check: don't process events if client is disposed
             if (_disposed) return;
 
@@ -789,10 +805,13 @@ namespace Centrifugal.Centrifuge
 
             try
             {
+                _logger?.LogDebug("Sending connect command...");
                 await SendConnectCommandAsync().ConfigureAwait(false);
+                _logger?.LogDebug("Connect command completed successfully");
             }
-            catch (CentrifugeTimeoutException)
+            catch (CentrifugeTimeoutException ex)
             {
+                _logger?.LogDebug($"Connect timeout: {ex.Message}");
                 // Connect timeout should trigger reconnect, not permanent disconnect
                 OnError("connect", new CentrifugeException(CentrifugeErrorCodes.Timeout, "connect timeout", true));
                 _transport?.Dispose();
@@ -801,9 +820,11 @@ namespace Centrifugal.Centrifuge
             }
             catch (CentrifugeException ex)
             {
+                _logger?.LogDebug($"CentrifugeException in connect: Code={ex.Code}, Message={ex.Message}, Temporary={ex.Temporary}");
                 // Error code 109 (token expired) or temporary errors should trigger reconnect
                 if (ex.Code == 109 || ex.Code < 100 || ex.Temporary)
                 {
+                    _logger?.LogDebug("Triggering reconnect due to temporary error");
                     OnError("connect", ex);
                     _transport?.Dispose();
                     _transport = null;
@@ -811,6 +832,7 @@ namespace Centrifugal.Centrifuge
                 }
                 else
                 {
+                    _logger?.LogDebug("Permanent error, disconnecting");
                     // Permanent error - disconnect
                     OnError("connect", ex);
                     await SetDisconnectedAsync(ex.Code, ex.Message, false).ConfigureAwait(false);
@@ -818,6 +840,7 @@ namespace Centrifugal.Centrifuge
             }
             catch (Exception ex)
             {
+                _logger?.LogDebug($"General exception in connect: {ex.GetType().Name}: {ex.Message}");
                 OnError("connect", ex);
                 await SetDisconnectedAsync(CentrifugeDisconnectedCodes.BadProtocol, ex.Message, false).ConfigureAwait(false);
             }
@@ -906,6 +929,7 @@ namespace Centrifugal.Centrifuge
 
         private async Task SendConnectCommandAsync()
         {
+            _logger?.LogDebug($"SendConnectCommandAsync - UsesEmulation: {_transport!.UsesEmulation}");
             // For emulation transports, reuse the command that was already sent during OpenAsync
             if (_transport!.UsesEmulation && _pendingConnectCommand != null)
             {
@@ -1019,7 +1043,9 @@ namespace Centrifugal.Centrifuge
                 Connect = connectRequest
             };
 
+            _logger?.LogDebug($"Sending connect command with ID: {cmd.Id}");
             var reply = await SendCommandAsync(cmd, CancellationToken.None).ConfigureAwait(false);
+            _logger?.LogDebug($"Received reply for connect command ID: {cmd.Id}");
 
             if (reply.Error != null)
             {
@@ -1256,6 +1282,7 @@ namespace Centrifugal.Centrifuge
             }
             else if (push.Disconnect != null)
             {
+                _logger?.LogDebug($"Received Disconnect push - code: {push.Disconnect.Code}, reason: '{push.Disconnect.Reason}'");
                 HandleDisconnectPush(push.Disconnect);
             }
             else if (push.Subscribe != null)
@@ -1272,6 +1299,7 @@ namespace Centrifugal.Centrifuge
         {
             int code = (int)disconnect.Code;
             bool reconnect = true;
+            _logger?.LogDebug($"HandleDisconnectPush - code: {code}, reason: '{disconnect.Reason}'");
 
             // Check if this is a non-reconnectable disconnect code
             // Codes 3500-3999 and 4500-4999 mean permanent disconnect
@@ -1283,11 +1311,13 @@ namespace Centrifugal.Centrifuge
             if (reconnect)
             {
                 // Disconnect with reconnect
+                _logger?.LogDebug($"HandleDisconnectPush - calling HandleTransportClosedAsync for reconnect");
                 _ = HandleTransportClosedAsync(new TransportClosedEventArgs(code: code, reason: disconnect.Reason));
             }
             else
             {
                 // Permanent disconnect
+                _logger?.LogDebug($"HandleDisconnectPush - calling SetDisconnectedAsync for permanent disconnect");
                 _ = SetDisconnectedAsync(code, disconnect.Reason, false);
             }
         }
@@ -1297,13 +1327,19 @@ namespace Centrifugal.Centrifuge
             // Defensive check: don't process events if client is disposed
             if (_disposed) return;
 
+            _logger?.LogDebug($"OnTransportClosed - code: {e.Code}, reason: '{e.Reason}'");
             _ = HandleTransportClosedAsync(e);
         }
 
         private async Task HandleTransportClosedAsync(TransportClosedEventArgs e)
         {
-            if (_state == CentrifugeClientState.Disconnected)
+            _logger?.LogDebug($"HandleTransportClosedAsync - state: {_state}, code: {e.Code}, reason: '{e.Reason}'");
+
+            // Don't process if already disconnected or already reconnecting
+            // This prevents duplicate handling when Disconnect push arrives before transport close
+            if (_state == CentrifugeClientState.Disconnected || _state == CentrifugeClientState.Connecting)
             {
+                _logger?.LogDebug($"HandleTransportClosedAsync - skipping (state is {_state})");
                 return;
             }
 
@@ -1311,6 +1347,7 @@ namespace Centrifugal.Centrifuge
             bool shouldReconnect = true;
             int code = e.Code ?? 0;
             string reason = e.Reason;
+            _logger?.LogDebug($"HandleTransportClosedAsync - processing with code: {code}, reason: '{reason}'");
 
             // Check for non-reconnectable disconnect codes (matching centrifuge-js behavior)
             // Codes 3500-3999 and 4500-4999 mean permanent disconnect
@@ -1355,7 +1392,8 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            // Schedule reconnection with backoff (don't reconnect immediately)
+            // Set state to Connecting FIRST to prevent duplicate processing
+            // This must happen before CleanupTransportAsync to block concurrent HandleTransportClosedAsync calls
             SetState(CentrifugeClientState.Connecting);
 
             // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
@@ -1365,7 +1403,13 @@ namespace Centrifugal.Centrifuge
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
             }
 
-            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.TransportClosed, reason));
+            // Use the actual disconnect code and reason from the server (not hardcoded TransportClosed)
+            _logger?.LogDebug($"Firing Connecting event with code: {code}, reason: '{reason}'");
+            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(code, reason));
+
+            // Clean up the old transport AFTER firing events
+            // By this point, state is Connecting, so any WebSocket close events will be ignored
+            await CleanupTransportAsync().ConfigureAwait(false);
 
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
@@ -1387,9 +1431,51 @@ namespace Centrifugal.Centrifuge
             }
 
             await StartConnectingAsync(CentrifugeConnectingCodes.SubscribeTimeout, "subscribe timeout").ConfigureAwait(false);
-            _transport?.Dispose();
-            _transport = null;
+
+            // Properly clean up transport before reconnecting
+            await CleanupTransportAsync().ConfigureAwait(false);
+
             await ScheduleReconnectAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Cleans up the current transport (unsubscribes events, closes, disposes).
+        /// This should be called before reconnecting to prevent duplicate connections.
+        /// </summary>
+        private async Task CleanupTransportAsync()
+        {
+            if (_transport == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Stop ping timer
+                _pingTimer?.Dispose();
+                _pingTimer = null;
+                _serverPingInterval = 0;
+                _sendPong = false;
+
+                // Clear inflight requests
+                ClearInflightRequests();
+
+                // Unsubscribe from transport events BEFORE closing to prevent race conditions
+                _transport.Opened -= OnTransportOpened;
+                _transport.MessageReceived -= OnTransportMessage;
+                _transport.Closed -= OnTransportClosed;
+                _transport.Error -= OnTransportError;
+
+                // Close and dispose transport
+                await _transport.CloseAsync().ConfigureAwait(false);
+                _transport.Dispose();
+                _transport = null;
+            }
+            catch
+            {
+                // Ignore cleanup errors, but ensure transport is set to null
+                _transport = null;
+            }
         }
 
         private async Task ScheduleReconnectAsync()
@@ -1481,28 +1567,11 @@ namespace Centrifugal.Centrifuge
             try
             {
                 _reconnectCts?.Cancel();
-                _pingTimer?.Dispose();
                 ClearRefreshTimer();
-                _serverPingInterval = 0;
-                _sendPong = false;
                 _transportWasOpen = false;
 
-                // Clear all inflight requests
-                ClearInflightRequests();
-
-                if (_transport != null)
-                {
-                    // Unsubscribe from transport events BEFORE closing to prevent race conditions
-                    // where events fire during/after disposal
-                    _transport.Opened -= OnTransportOpened;
-                    _transport.MessageReceived -= OnTransportMessage;
-                    _transport.Closed -= OnTransportClosed;
-                    _transport.Error -= OnTransportError;
-
-                    await _transport.CloseAsync().ConfigureAwait(false);
-                    _transport.Dispose();
-                    _transport = null;
-                }
+                // Clean up transport (ping timer, events, close, dispose)
+                await CleanupTransportAsync().ConfigureAwait(false);
 
                 // Unsubscribe all subscriptions
                 foreach (var sub in _subscriptions.Values)

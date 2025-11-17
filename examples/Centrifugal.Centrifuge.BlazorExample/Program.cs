@@ -3,9 +3,10 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Centrifugal.Centrifuge.BlazorExample;
 using Centrifugal.Centrifuge;
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Logging;
 
 // Configure transport type - change this to switch between transports
-const bool UseHttpStreaming = true; // Set to true to use HTTP streaming instead of WebSocket
+const bool UseHttpStreaming = false; // Set to true to use HTTP streaming instead of WebSocket
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -13,10 +14,16 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
+// Configure logging for Centrifuge client only (logs will appear in browser console)
+builder.Logging.AddFilter("Centrifugal.Centrifuge", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft", LogLevel.Warning);  // Suppress Microsoft framework logs
+
 // Register CentrifugeClient as scoped service
 builder.Services.AddScoped(sp =>
 {
     var jsRuntime = sp.GetRequiredService<IJSRuntime>();
+    var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+    var logger = loggerFactory.CreateLogger<CentrifugeClient>();
 
     CentrifugeClient client;
 
@@ -34,7 +41,7 @@ builder.Services.AddScoped(sp =>
             jsRuntime,
             new CentrifugeClientOptions
             {
-                Debug = true
+                Logger = logger  // Debug logs will appear in browser console
             }
         );
     }
@@ -46,7 +53,7 @@ builder.Services.AddScoped(sp =>
             jsRuntime,
             new CentrifugeClientOptions
             {
-                Debug = true
+                Logger = logger  // Debug logs will appear in browser console
             }
         );
     }
@@ -69,7 +76,7 @@ builder.Services.AddScoped(sp =>
         jsRuntime,
         new CentrifugeClientOptions
         {
-            Debug = true
+            Logger = logger  // Debug logs will appear in browser console
         }
     );
     */

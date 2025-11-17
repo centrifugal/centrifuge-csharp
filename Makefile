@@ -38,20 +38,20 @@ run-example:
 .PHONY: run-blazor-example
 run-blazor-example:
 	@echo "Running Blazor WebAssembly example..."
-	@echo "Opening browser at http://localhost:5000"
+	@echo "Opening browser at http://localhost:5050"
 	@echo "Events will be displayed on screen with color-coded categories"
 	cd examples/Centrifugal.Centrifuge.BlazorExample && \
-		dotnet run --urls "http://localhost:5000" --launch-profile "http"
+		dotnet run --urls "http://localhost:5050" --launch-profile "http"
 
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build              - Build the solution in Release mode"
-	@echo "  test               - Run all tests (unit + integration)"
-	@echo "  test-unit          - Run unit tests only (excludes integration tests)"
-	@echo "  clean              - Clean build artifacts"
-	@echo "  restore            - Restore NuGet packages"
-	@echo "  proto              - Regenerate C# protobuf code from client.proto"
-	@echo "  run-example        - Run the console example program"
-	@echo "  run-blazor-example - Run the Blazor WebAssembly example (port 5000)"
-	@echo "  help               - Show this help message"
+	@echo "  build                - Build the solution in Release mode"
+	@echo "  test                 - Run all tests (unit + integration)"
+	@echo "  test-unit            - Run unit tests only (excludes integration tests)"
+	@echo "  clean                - Clean build artifacts"
+	@echo "  restore              - Restore NuGet packages"
+	@echo "  proto                - Regenerate C# protobuf code from client.proto"
+	@echo "  run-example          - Run the console example program"
+	@echo "  run-blazor-example   - Run the Blazor WebAssembly example (port 5050)"
+	@echo "  help                 - Show this help message"

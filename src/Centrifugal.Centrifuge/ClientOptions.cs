@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Centrifugal.Centrifuge
 {
@@ -63,9 +64,10 @@ namespace Centrifugal.Centrifuge
         public TimeSpan MaxServerPingDelay { get; set; } = TimeSpan.FromSeconds(10);
 
         /// <summary>
-        /// Gets or sets whether to enable debug logging.
+        /// Gets or sets the logger for diagnostic output.
+        /// When set, debug-level logs will be written for connection lifecycle, transport operations, and protocol messages.
         /// </summary>
-        public bool Debug { get; set; }
+        public ILogger? Logger { get; set; }
 
         /// <summary>
         /// Gets or sets the custom headers to emulate (sent with first protocol message).

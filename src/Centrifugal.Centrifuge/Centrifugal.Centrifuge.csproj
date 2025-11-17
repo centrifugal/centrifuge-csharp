@@ -15,10 +15,13 @@
 
     <!-- Package Information -->
     <PackageId>Centrifugal.Centrifuge</PackageId>
-    <Version>0.0.4</Version>
+    <Version>0.0.5</Version>
     <Authors>Centrifugal Labs</Authors>
     <Company>Centrifugal Labs</Company>
-    <Description>Official C# client SDK to communicate with Centrifugo and Centrifuge-based server from multiple environments. Supports Protobuf communication over WebSocket (primary) and HTTP-streaming (bidirectional emulation).</Description>
+    <Description>
+      Official C# client SDK to communicate with Centrifugo and Centrifuge-based server from multiple environments.
+      Supports Protobuf communication over WebSocket (primary) and HTTP-streaming (bidirectional emulation).
+    </Description>
     <PackageProjectUrl>https://github.com/centrifugal/centrifuge-csharp</PackageProjectUrl>
     <RepositoryUrl>https://github.com/centrifugal/centrifuge-csharp</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -30,6 +33,9 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Required for Blazor static assets -->
+    <StaticWebAssetBasePath>_content/Centrifugal.Centrifuge</StaticWebAssetBasePath>
 
     <!-- Enable SourceLink for debugging -->
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
@@ -43,19 +49,27 @@
     <!-- Protobuf support - allow minor/patch updates -->
     <PackageReference Include="Google.Protobuf" Version="3.25.1" />
 
+    <!-- Logging abstractions for idiomatic .NET logging support -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
+
     <!-- For .NET Standard 2.1, add compatibility packages -->
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0"
+                      Condition="'$(TargetFramework)' == 'netstandard2.1'" />
 
     <!-- JSInterop for Blazor WASM support (not needed for netstandard2.1/Unity) -->
-    <PackageReference Include="Microsoft.JSInterop" Version="6.0.0" Condition="'$(TargetFramework)' != 'netstandard2.1'" />
+    <PackageReference Include="Microsoft.JSInterop" Version="6.0.0"
+                      Condition="'$(TargetFramework)' != 'netstandard2.1'" />
 
     <!-- Source link for better debugging experience -->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <None Include="../../icon.png" Pack="true" PackagePath="/" Condition="Exists('../../icon.png')" />
   </ItemGroup>
+
+  <!-- NO Content Include for wwwroot -->
+  <!-- Razor SDK handles wwwroot/** automatically as static web assets -->
 
 </Project>

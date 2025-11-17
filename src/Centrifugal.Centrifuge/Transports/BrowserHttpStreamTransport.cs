@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Centrifugal.Centrifuge.Protocol;
 using Google.Protobuf;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
 namespace Centrifugal.Centrifuge.Transports
@@ -17,6 +18,7 @@ namespace Centrifugal.Centrifuge.Transports
     {
         private readonly string _endpoint;
         private readonly IJSRuntime _jsRuntime;
+        private readonly ILogger? _logger;
         private IJSObjectReference? _jsModule;
         private DotNetObjectReference<BrowserHttpStreamTransport>? _dotnetRef;
         private int _streamId;
@@ -52,7 +54,8 @@ namespace Centrifugal.Centrifuge.Transports
         /// </summary>
         /// <param name="endpoint">HTTP stream endpoint URL.</param>
         /// <param name="jsRuntime">JavaScript runtime for interop.</param>
-        public BrowserHttpStreamTransport(string endpoint, IJSRuntime jsRuntime)
+        /// <param name="logger">Optional logger for diagnostic output.</param>
+        public BrowserHttpStreamTransport(string endpoint, IJSRuntime jsRuntime, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(endpoint))
             {
@@ -61,11 +64,13 @@ namespace Centrifugal.Centrifuge.Transports
 
             _endpoint = endpoint;
             _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
+            _logger = logger;
         }
 
         /// <inheritdoc/>
         public async Task OpenAsync(CancellationToken cancellationToken = default, byte[]? initialData = null)
         {
+            _logger?.LogDebug($"OpenAsync called, endpoint: {_endpoint}");
             if (_isOpen)
             {
                 throw new InvalidOperationException("Transport is already open");
@@ -73,11 +78,14 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
+                _logger?.LogDebug("Loading JS module...");
                 // Load the JavaScript module (this adds CentrifugeHttpStream to window)
+                // Add version parameter to bust cache
                 _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>(
                     "import",
-                    "./_content/Centrifugal.Centrifuge/centrifuge-httpstream.js"
+                    "./_content/Centrifugal.Centrifuge/centrifuge-httpstream.js?v=2"
                 ).ConfigureAwait(false);
+                _logger?.LogDebug("JS module loaded");
 
                 // Create .NET object reference for callbacks
                 _dotnetRef = DotNetObjectReference.Create(this);
@@ -91,31 +99,38 @@ namespace Centrifugal.Centrifuge.Transports
                 byte[] delimitedData = ms.ToArray();
 
                 // Connect via JavaScript (call on global window object, not the module)
+                _logger?.LogDebug("Calling CentrifugeHttpStream.connect...");
                 _streamId = await _jsRuntime.InvokeAsync<int>(
                     "CentrifugeHttpStream.connect",
                     cancellationToken,
                     _endpoint,
                     delimitedData,
-                    _dotnetRef
+                    _dotnetRef,
+                    _logger?.IsEnabled(LogLevel.Debug) ?? false
                 ).ConfigureAwait(false);
+                _logger?.LogDebug($"Stream created with ID: {_streamId}");
 
                 // Wait for connection to open or error
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
+                _logger?.LogDebug("Waiting for OnOpen callback...");
                 var completedTask = await Task.WhenAny(_openTcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token))
                     .ConfigureAwait(false);
 
                 if (completedTask != _openTcs.Task)
                 {
+                    _logger?.LogDebug("Timeout waiting for OnOpen");
                     throw new TimeoutException("Timeout waiting for HTTP stream connection to open");
                 }
 
                 await _openTcs.Task.ConfigureAwait(false);
-                _isOpen = true;
+                // Note: _isOpen is already set to true in OnOpen() callback before the event fires
+                _logger?.LogDebug($"OpenAsync completed successfully, stream {_streamId} is open");
             }
             catch (Exception ex)
             {
+                _logger?.LogDebug($"OpenAsync failed with exception: {ex.Message}");
                 await CleanupAsync().ConfigureAwait(false);
                 throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, $"Failed to open HTTP stream connection: {ex.Message}", true, ex);
             }
@@ -166,23 +181,37 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task CloseAsync()
         {
-            if (!_isOpen) return;
+            _logger?.LogDebug($"CloseAsync called, _isOpen: {_isOpen}");
+            if (!_isOpen)
+            {
+                // Still cleanup resources even if not marked as open (e.g., if error occurred during handshake)
+                if (_streamId > 0 || _dotnetRef != null || _jsModule != null)
+                {
+                    await CleanupAsync().ConfigureAwait(false);
+                }
+                return;
+            }
+
+            _isOpen = false; // Mark as closed immediately to prevent race conditions
 
             try
             {
                 if (_streamId > 0)
                 {
+                    _logger?.LogDebug($"Closing stream {_streamId}");
                     await _jsRuntime.InvokeVoidAsync("CentrifugeHttpStream.close", _streamId)
                         .ConfigureAwait(false);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogDebug($"Error during close: {ex.Message}");
                 // Ignore errors during close
             }
             finally
             {
-                await CleanupAsync().ConfigureAwait(false);
+                // Pass alreadyClosed=true since we already closed the stream above
+                await CleanupAsync(alreadyClosed: true).ConfigureAwait(false);
             }
         }
 
@@ -192,8 +221,13 @@ namespace Centrifugal.Centrifuge.Transports
         [JSInvokable]
         public void OnOpen()
         {
-            _openTcs?.TrySetResult(true);
+            _logger?.LogDebug($"OnOpen called for stream {_streamId}");
+            // Set _isOpen BEFORE firing events so handlers can use the transport immediately
+            _isOpen = true;
+            var result = _openTcs?.TrySetResult(true);
+            _logger?.LogDebug($"OnOpen - TrySetResult returned: {result}, _isOpen set to true");
             Opened?.Invoke(this, EventArgs.Empty);
+            _logger?.LogDebug($"OnOpen - Opened event fired");
         }
 
         /// <summary>
@@ -331,8 +365,9 @@ namespace Centrifugal.Centrifuge.Transports
             _ = CleanupAsync();
         }
 
-        private async Task CleanupAsync()
+        private async Task CleanupAsync(bool alreadyClosed = false)
         {
+            _logger?.LogDebug($"CleanupAsync called for stream {_streamId}, alreadyClosed: {alreadyClosed}");
             _isOpen = false;
             _openTcs?.TrySetCanceled();
 
@@ -344,14 +379,34 @@ namespace Centrifugal.Centrifuge.Transports
 
             if (_streamId > 0)
             {
+                // Only close if not already closed (e.g., when cleanup is called from error paths)
+                if (!alreadyClosed)
+                {
+                    try
+                    {
+                        // Close/abort the HTTP stream first if it's still active
+                        // This is important to prevent resource leaks when errors occur during connection
+                        _logger?.LogDebug($"Closing stream {_streamId}");
+                        await _jsRuntime.InvokeVoidAsync("CentrifugeHttpStream.close", _streamId).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogDebug($"Error closing stream: {ex.Message}");
+                        // Ignore cleanup errors, but try to dispose anyway
+                    }
+                }
+
                 try
                 {
+                    _logger?.LogDebug($"Disposing stream {_streamId}");
                     await _jsRuntime.InvokeVoidAsync("CentrifugeHttpStream.dispose", _streamId).ConfigureAwait(false);
                 }
                 catch
                 {
                     // Ignore cleanup errors
                 }
+
+                _streamId = 0;
             }
 
             _dotnetRef?.Dispose();
@@ -369,6 +424,8 @@ namespace Centrifugal.Centrifuge.Transports
                 }
                 _jsModule = null;
             }
+
+            _logger?.LogDebug("CleanupAsync completed");
         }
 
         /// <inheritdoc/>
