@@ -1,5 +1,5 @@
 @page "/"
-@inject CentrifugeClient Client
+@inject CentrifugeClientFactory ClientFactory
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 @using System.Text
@@ -9,7 +9,34 @@
 <div class="container">
     <h1>Centrifuge C# SDK - Blazor WebAssembly Example!</h1>
 
-    <p>This example demonstrates the Centrifuge SDK in Blazor WebAssembly using browser-native WebSocket.</p>
+    <p>This example demonstrates the Centrifuge SDK in Blazor WebAssembly.</p>
+
+    @if (_client == null)
+    {
+        <div class="transport-selector">
+            <h3>Select Transport</h3>
+            <div class="transport-buttons">
+                <button class="transport-btn websocket" @onclick="() => ConnectWithTransport(false)">
+                    <span class="transport-icon">🔌</span>
+                    <span class="transport-name">WebSocket</span>
+                    <span class="transport-desc">Browser-native WebSocket (recommended)</span>
+                </button>
+                <button class="transport-btn httpstream" @onclick="() => ConnectWithTransport(true)">
+                    <span class="transport-icon">📡</span>
+                    <span class="transport-name">HTTP Streaming</span>
+                    <span class="transport-desc">HTTP with Server-Sent Events emulation</span>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="transport-info">
+            <span class="transport-label">Transport:</span>
+            <span class="transport-value">@(_useHttpStreaming ? "HTTP Streaming" : "WebSocket")</span>
+            <button class="reconnect-btn" @onclick="Reconnect">Change Transport</button>
+        </div>
+    }
 
     <div class="status-bar">
         <div class="status-item">
@@ -203,6 +230,111 @@
         color: #757575;
     }
 
+    .transport-selector {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        margin: 2rem 0;
+    }
+
+    .transport-selector h3 {
+        margin: 0 0 1.5rem 0;
+        color: #2c3e50;
+        text-align: center;
+    }
+
+    .transport-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+
+    .transport-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 2rem 1.5rem;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-family: inherit;
+    }
+
+    .transport-btn:hover {
+        border-color: #667eea;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    }
+
+    .transport-btn.websocket:hover {
+        background: linear-gradient(135deg, #667eea22 0%, #764ba222 100%);
+    }
+
+    .transport-btn.httpstream:hover {
+        background: linear-gradient(135deg, #f093fb22 0%, #f5576c22 100%);
+    }
+
+    .transport-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    .transport-name {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+
+    .transport-desc {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-align: center;
+    }
+
+    .transport-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        background: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .transport-label {
+        font-weight: 600;
+        color: #6c757d;
+    }
+
+    .transport-value {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .reconnect-btn {
+        margin-left: auto;
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: background 0.2s;
+    }
+
+    .reconnect-btn:hover {
+        background: #5a6268;
+    }
+
     @@media (max-width: 768px) {
         .container {
             padding: 1rem;
@@ -220,32 +352,38 @@
 </style>
 
 @code {
+    private CentrifugeClient? _client;
     private CentrifugeSubscription? _subscription;
-    private string _clientState = "Initializing";
+    private string _clientState = "Not Connected";
     private string _subscriptionState = "Not Created";
     private string _lastMessage = "";
     private List<string> _events = new List<string>();
+    private bool _useHttpStreaming;
 
-    protected override async Task OnInitializedAsync()
+    private async Task ConnectWithTransport(bool useHttpStreaming)
     {
+        _useHttpStreaming = useHttpStreaming;
+        _client = ClientFactory.CreateClient(useHttpStreaming);
+
         await LogAsync("Centrifuge C# SDK - Blazor WASM Example");
         await LogAsync("=========================================");
+        await LogAsync($"Using transport: {(useHttpStreaming ? "HTTP Streaming" : "WebSocket")}");
 
         // Setup client event handlers
-        Client.StateChanged += OnStateChanged;
-        Client.Connecting += OnConnecting;
-        Client.Connected += OnConnected;
-        Client.Disconnected += OnDisconnected;
-        Client.Error += OnError;
+        _client.StateChanged += OnStateChanged;
+        _client.Connecting += OnConnecting;
+        _client.Connected += OnConnected;
+        _client.Disconnected += OnDisconnected;
+        _client.Error += OnError;
 
         try
         {
             // Connect to server (non-blocking)
             await LogAsync("Connecting to server...");
-            Client.Connect();
+            _client.Connect();
 
             // Create subscription
-            _subscription = Client.NewSubscription("chat");
+            _subscription = _client.NewSubscription("chat");
 
             // Setup subscription event handlers
             _subscription.StateChanged += OnSubscriptionStateChanged;
@@ -312,7 +450,7 @@
             try
             {
                 var rpcData = Encoding.UTF8.GetBytes("{\"method\":\"getCurrentTime\"}");
-                var rpcResult = await Client.RpcAsync("time", rpcData);
+                var rpcResult = await _client.RpcAsync("time", rpcData);
                 var response = Encoding.UTF8.GetString(rpcResult.Data);
                 await LogAsync($"RPC response: {response}");
             }
@@ -457,6 +595,31 @@
         return "";
     }
 
+    private async Task Reconnect()
+    {
+        await LogAsync("Reconnecting with different transport...");
+
+        // Cleanup current connection
+        if (_subscription != null)
+        {
+            _subscription.Unsubscribe();
+            _subscription = null;
+        }
+
+        if (_client != null)
+        {
+            await _client.DisposeAsync();
+            _client = null;
+        }
+
+        _events.Clear();
+        _clientState = "Not Connected";
+        _subscriptionState = "Not Created";
+        _lastMessage = "";
+
+        StateHasChanged();
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
@@ -470,7 +633,10 @@
             }
 
             await LogAsync("Disposing client (this will disconnect)...");
-            await Client.DisposeAsync();
+            if (_client != null)
+            {
+                await _client.DisposeAsync();
+            }
 
             await LogAsync("Done!");
         }
