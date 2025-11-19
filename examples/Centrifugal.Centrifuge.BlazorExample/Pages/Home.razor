@@ -15,6 +15,7 @@
     {
         <div class="transport-selector">
             <h3>Select Transport</h3>
+            <p class="transport-hint">Your selection will be saved for next time</p>
             <div class="transport-buttons">
                 <button class="transport-btn websocket" @onclick="() => ConnectWithTransport(false)">
                     <span class="transport-icon">🔌</span>
@@ -34,7 +35,7 @@
         <div class="transport-info">
             <span class="transport-label">Transport:</span>
             <span class="transport-value">@(_useHttpStreaming ? "HTTP Streaming" : "WebSocket")</span>
-            <button class="reconnect-btn" @onclick="Reconnect">Change Transport</button>
+            <button class="reconnect-btn" @onclick="Reconnect">Switch Transport</button>
         </div>
     }
 
@@ -239,9 +240,17 @@
     }
 
     .transport-selector h3 {
-        margin: 0 0 1.5rem 0;
+        margin: 0 0 0.5rem 0;
         color: #2c3e50;
         text-align: center;
+    }
+
+    .transport-hint {
+        margin: 0 0 1.5rem 0;
+        color: #6c757d;
+        text-align: center;
+        font-size: 0.875rem;
+        font-style: italic;
     }
 
     .transport-buttons {
@@ -359,10 +368,42 @@
     private string _lastMessage = "";
     private List<string> _events = new List<string>();
     private bool _useHttpStreaming;
+    private const string TransportStorageKey = "centrifuge-transport-preference";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Try to load saved transport preference
+        try
+        {
+            var savedTransport = await JS.InvokeAsync<string?>("localStorage.getItem", TransportStorageKey);
+            if (!string.IsNullOrEmpty(savedTransport))
+            {
+                var useHttpStreaming = savedTransport == "httpstream";
+                await LogAsync($"Found saved transport preference: {savedTransport}");
+                await ConnectWithTransport(useHttpStreaming);
+            }
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Could not load saved transport preference: {ex.Message}");
+        }
+    }
 
     private async Task ConnectWithTransport(bool useHttpStreaming)
     {
         _useHttpStreaming = useHttpStreaming;
+
+        // Save transport preference to local storage
+        try
+        {
+            var transportName = useHttpStreaming ? "httpstream" : "websocket";
+            await JS.InvokeVoidAsync("localStorage.setItem", TransportStorageKey, transportName);
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Could not save transport preference: {ex.Message}");
+        }
+
         _client = ClientFactory.CreateClient(useHttpStreaming);
 
         await LogAsync("Centrifuge C# SDK - Blazor WASM Example");
