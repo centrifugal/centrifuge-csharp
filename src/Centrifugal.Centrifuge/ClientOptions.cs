@@ -83,13 +83,6 @@ namespace Centrifugal.Centrifuge
         public string? EmulationEndpoint { get; set; }
 
         /// <summary>
-        /// Gets or sets the command batching delay in milliseconds.
-        /// Commands sent within this delay window will be batched together for better network efficiency.
-        /// Set to 0 to disable batching. Default is 1ms.
-        /// </summary>
-        public int CommandBatchDelayMs { get; set; } = 1;
-
-        /// <summary>
         /// Validates the options.
         /// </summary>
         public void Validate()
@@ -112,11 +105,6 @@ namespace Centrifugal.Centrifuge
             if (MaxServerPingDelay <= TimeSpan.Zero)
             {
                 throw new CentrifugeConfigurationException("MaxServerPingDelay must be positive");
-            }
-
-            if (CommandBatchDelayMs < 0)
-            {
-                throw new CentrifugeConfigurationException("CommandBatchDelayMs cannot be negative");
             }
         }
     }

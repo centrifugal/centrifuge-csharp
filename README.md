@@ -350,7 +350,7 @@ catch (CentrifugeException ex)
 
 ## Command Batching
 
-The SDK automatically batches commands issued within a short time window (1ms by default) for improved network efficiency. This is especially beneficial for HTTP-based transports.
+The SDK automatically batches commands issued within a short time window (1ms) for improved network efficiency. This is especially beneficial for HTTP-based transports.
 
 ### How It Works
 
@@ -372,6 +372,8 @@ await Task.WhenAll(task1, task2, task3);
 // Result: 1 network request with all 3 commands!
 ```
 
+Also, SDK automatically batches subscription requests under the hood (where possible) including re-subscriptions upon reconnect.
+
 ### Benefits
 
 | Transport | Benefit |
@@ -381,29 +383,11 @@ await Task.WhenAll(task1, task2, task3);
 | **WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
 | **Browser WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
 
-### Configuration
+### How It Works Internally
 
-You can configure the batching delay (or disable it entirely):
-
-```csharp
-var options = new CentrifugeClientOptions
-{
-    // Default is 1ms - good balance between latency and batching
-    CommandBatchDelayMs = 1,
-
-    // Set to 0 to disable batching
-    // CommandBatchDelayMs = 0,
-
-    // Increase for more aggressive batching (trades latency for efficiency)
-    // CommandBatchDelayMs = 10,
-};
-
-var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", options);
-```
-
-### Batch Size Limit
-
-Batches are automatically flushed when they exceed 15KB to prevent oversized requests. This ensures optimal performance without hitting server limits.
+- Commands are automatically batched with a 1ms delay window
+- Batches are flushed immediately when they exceed 15KB to prevent oversized requests
+- No configuration needed - batching is automatic
 
 ### Example
 
@@ -611,14 +595,6 @@ The SDK follows the [Centrifuge protocol specification](https://centrifugal.dev/
 - **Exponential Backoff**: Smart reconnection with full jitter to avoid thundering herd
 - **Varint Encoding**: Efficient Protobuf message framing
 - **Event-Driven Architecture**: Thread-safe event handling for all state changes
-
-## Thread Safety
-
-All public methods are thread-safe. The library uses:
-
-- `SemaphoreSlim` for state synchronization
-- `ConcurrentDictionary` for subscription and callback registries
-- Task-based asynchronous patterns throughout
 
 ## Contributing
 

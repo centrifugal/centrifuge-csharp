@@ -74,6 +74,12 @@ namespace Centrifugal.Centrifuge
         private const int MaxCommandBatchSize = 15 * 1024;
 
         /// <summary>
+        /// Command batching delay in milliseconds.
+        /// Commands sent within this window will be automatically batched together.
+        /// </summary>
+        private const int CommandBatchDelayMs = 1;
+
+        /// <summary>
         /// Gets the current client state.
         /// </summary>
         public CentrifugeClientState State => _state;
@@ -553,9 +559,10 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                // Check if batching is enabled and this is not a connect command (which must be sent immediately)
+                // Check if this is not a connect command (which must be sent immediately)
+                // All other commands are automatically batched
                 bool isConnectCommand = command.Connect != null;
-                bool shouldBatch = _options.CommandBatchDelayMs > 0 && !isConnectCommand;
+                bool shouldBatch = !isConnectCommand;
 
                 if (shouldBatch)
                 {
@@ -677,7 +684,7 @@ namespace Centrifugal.Centrifuge
                             _commandBatchPending = false;
                         }
                         _ = Task.Run(async () => await FlushCommandBatchAsync().ConfigureAwait(false));
-                    }, null, TimeSpan.FromMilliseconds(_options.CommandBatchDelayMs), Timeout.InfiniteTimeSpan);
+                    }, null, TimeSpan.FromMilliseconds(CommandBatchDelayMs), Timeout.InfiniteTimeSpan);
                 }
             }
         }
