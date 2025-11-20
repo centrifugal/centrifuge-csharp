@@ -350,9 +350,11 @@ catch (CentrifugeException ex)
 
 ## Command Batching
 
-The SDK automatically batches commands issued within a short time window (1ms) for improved network efficiency. This is especially beneficial for HTTP-based transports.
+The SDK automatically batches commands where possible for improved network efficiency. This is especially beneficial for HTTP-based transports.
 
-### How It Works
+- Commands are automatically batched with a 1ms delay window
+- Batches are flushed immediately when they exceed 15KB to prevent oversized requests
+- No configuration needed - batching is automatic
 
 When you issue multiple commands without awaiting them immediately, they are queued and sent together in a single batch:
 
@@ -373,23 +375,6 @@ await Task.WhenAll(task1, task2, task3);
 ```
 
 Also, SDK automatically batches subscription requests under the hood (where possible) including re-subscriptions upon reconnect.
-
-### Benefits
-
-| Transport | Benefit |
-|-----------|---------|
-| **HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
-| **Browser HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
-| **WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
-| **Browser WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
-
-### How It Works Internally
-
-- Commands are automatically batched with a 1ms delay window
-- Batches are flushed immediately when they exceed 15KB to prevent oversized requests
-- No configuration needed - batching is automatic
-
-### Example
 
 See the [Blazor example](examples/Centrifugal.Centrifuge.BlazorExample/Pages/Home.razor) for a complete demonstration of command batching in action.
 

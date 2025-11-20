@@ -286,6 +286,287 @@ namespace Centrifugal.Centrifuge.Tests
             subscription.Unsubscribe();
             client.Disconnect();
         }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task ConnectsAndSubscribesWithGetToken(CentrifugeTransportType transport, string endpoint)
+        {
+            // Run multiple iterations to ensure consistency with async token retrieval
+            for (int iteration = 0; iteration < 5; iteration++)
+            {
+                // Connection token for anonymous user without ttl (using HMAC secret "secret")
+                const string connectToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MzgwNzg4MjR9.MTb3higWfFW04E9-8wmTFOcf4MEm-rMDQaNKJ1VU_n4";
+                int numConnectTokenCalls = 0;
+                int numSubscribeTokenCalls = 0;
+
+                var options = new CentrifugeClientOptions
+                {
+                    GetToken = async () =>
+                    {
+                        // Sleep for a random time between 0 and 100 milliseconds to emulate network
+                        await Task.Delay(Random.Shared.Next(0, 100));
+                        numConnectTokenCalls++;
+                        return connectToken;
+                    }
+                };
+
+                using var client = CreateClient(transport, endpoint, options);
+                var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
+                client.Connected += (s, e) => connectedEvent.TrySetResult(e);
+
+                // Subscription token for anonymous user for channel "test1" (using HMAC secret "secret")
+                const string subscriptionToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzNDgsImNoYW5uZWwiOiJ0ZXN0MSJ9.eqPQxbBtyYxL8Hvbkm-P6aH7chUsSG_EMWe-rTwF_HI";
+
+                var subscriptionOptions = new CentrifugeSubscriptionOptions
+                {
+                    GetToken = async (channel) =>
+                    {
+                        // Sleep for a random time between 0 and 100 milliseconds to emulate network
+                        await Task.Delay(Random.Shared.Next(0, 100));
+                        numSubscribeTokenCalls++;
+                        return subscriptionToken;
+                    }
+                };
+
+                client.Connect();
+
+                var subscription = client.NewSubscription("test1", subscriptionOptions);
+                var unsubscribedEvent = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
+                subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
+
+                subscription.Subscribe(); await subscription.ReadyAsync();
+                await subscription.ReadyAsync(TimeSpan.FromSeconds(5));
+
+                Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
+                Assert.Equal(CentrifugeClientState.Connected, client.State);
+
+                subscription.Unsubscribe();
+                client.Disconnect();
+
+                await unsubscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
+                Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+
+                Assert.Equal(1, numConnectTokenCalls);
+                Assert.Equal(1, numSubscribeTokenCalls);
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task SubscribesAndUnsubscribesFromManySubsWithGetToken(CentrifugeTransportType transport, string endpoint)
+        {
+            // Run multiple iterations to ensure consistency with async token retrieval
+            for (int iteration = 0; iteration < 5; iteration++)
+            {
+                using var client = CreateClient(transport, endpoint);
+
+                var channels = new[] { "test1", "test2", "test3", "test4", "test5" };
+
+                // Subscription tokens for anonymous users without ttl (using HMAC secret "secret")
+                var testTokens = new Dictionary<string, string>
+                {
+                    ["test1"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzNDgsImNoYW5uZWwiOiJ0ZXN0MSJ9.eqPQxbBtyYxL8Hvbkm-P6aH7chUsSG_EMWe-rTwF_HI",
+                    ["test2"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzODcsImNoYW5uZWwiOiJ0ZXN0MiJ9.tTJB3uSa8XpEmCvfkmrSKclijofnJ5RkQk6L2SaGtUE",
+                    ["test3"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzOTgsImNoYW5uZWwiOiJ0ZXN0MyJ9.nyLcMrIot441CszOKska7kQIjo2sEm8pSxV1XWfNCsI",
+                    ["test4"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzI0MDksImNoYW5uZWwiOiJ0ZXN0NCJ9.wWAX2AhJX6Ep4HVexQWSVF3-cWytVhzY9Pm7QsMdCsI",
+                    ["test5"] = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzI0MTgsImNoYW5uZWwiOiJ0ZXN0NSJ9.hCSfpHYws5TXLKkN0bW0DU6C-wgEUNuhGaIy8W1sT9o"
+                };
+
+                client.Connect();
+
+                var subscriptions = new List<CentrifugeSubscription>();
+                var unsubscribedPromises = new List<Task<CentrifugeUnsubscribedEventArgs>>();
+
+                foreach (var channel in channels)
+                {
+                    var subscriptionOptions = new CentrifugeSubscriptionOptions
+                    {
+                        GetToken = async (ch) =>
+                        {
+                            // Sleep for a random time between 0 and 100 milliseconds to emulate network
+                            await Task.Delay(Random.Shared.Next(0, 100));
+                            return testTokens[ch];
+                        }
+                    };
+
+                    var subscription = client.NewSubscription(channel, subscriptionOptions);
+                    var unsubscribedEvent = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
+                    subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
+                    unsubscribedPromises.Add(unsubscribedEvent.Task);
+
+                    subscription.Subscribe();
+                    subscriptions.Add(subscription);
+                }
+
+                // Wait until all subscriptions are in the Subscribed state
+                foreach (var subscription in subscriptions)
+                {
+                    await subscription.ReadyAsync(TimeSpan.FromSeconds(5));
+                    Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
+                }
+
+                // The client itself should be connected now
+                Assert.Equal(CentrifugeClientState.Connected, client.State);
+
+                // Unsubscribe from all and then disconnect
+                foreach (var subscription in subscriptions)
+                {
+                    subscription.Unsubscribe();
+                }
+                client.Disconnect();
+
+                // Wait until all 'unsubscribed' events are received
+                await Task.WhenAll(unsubscribedPromises).WaitAsync(TimeSpan.FromSeconds(5));
+
+                // Confirm each subscription is now Unsubscribed
+                foreach (var subscription in subscriptions)
+                {
+                    Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
+                }
+
+                // The client should be disconnected
+                Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task RetriesConnectionGetTokenError(CentrifugeTransportType transport, string endpoint)
+        {
+            bool shouldThrowConnectError = true;
+            const string connectToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MzgwNzg4MjR9.MTb3higWfFW04E9-8wmTFOcf4MEm-rMDQaNKJ1VU_n4";
+            int numConnectTokenCalls = 0;
+
+            var options = new CentrifugeClientOptions
+            {
+                GetToken = async () =>
+                {
+                    numConnectTokenCalls++;
+                    if (shouldThrowConnectError)
+                    {
+                        shouldThrowConnectError = false;
+                        throw new Exception("Connection token error");
+                    }
+                    return connectToken;
+                },
+                MinReconnectDelay = TimeSpan.FromMilliseconds(1)
+            };
+
+            using var client = CreateClient(transport, endpoint, options);
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
+            client.Connected += (s, e) => connectedEvent.TrySetResult(e);
+
+            client.Connect();
+            await connectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
+            Assert.Equal(2, numConnectTokenCalls); // Ensure GetToken was retried
+
+            client.Disconnect();
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task RetriesSubscriptionGetTokenError(CentrifugeTransportType transport, string endpoint)
+        {
+            const string connectToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3MzgwNzg4MjR9.MTb3higWfFW04E9-8wmTFOcf4MEm-rMDQaNKJ1VU_n4";
+            const string subscriptionToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3Mzc1MzIzNDgsImNoYW5uZWwiOiJ0ZXN0MSJ9.eqPQxbBtyYxL8Hvbkm-P6aH7chUsSG_EMWe-rTwF_HI";
+
+            bool shouldThrowSubscriptionError = true;
+            int numSubscribeTokenCalls = 0;
+
+            var options = new CentrifugeClientOptions
+            {
+                GetToken = async () => connectToken
+            };
+
+            using var client = CreateClient(transport, endpoint, options);
+
+            var subscriptionOptions = new CentrifugeSubscriptionOptions
+            {
+                GetToken = async (channel) =>
+                {
+                    numSubscribeTokenCalls++;
+                    if (shouldThrowSubscriptionError)
+                    {
+                        shouldThrowSubscriptionError = false;
+                        throw new Exception("Subscription token error");
+                    }
+                    return subscriptionToken;
+                },
+                MinResubscribeDelay = TimeSpan.FromMilliseconds(1)
+            };
+
+            var subscription = client.NewSubscription("test1", subscriptionOptions);
+            var subscribedEvent = new TaskCompletionSource<CentrifugeSubscribedEventArgs>();
+            subscription.Subscribed += (s, e) => subscribedEvent.TrySetResult(e);
+
+            client.Connect();
+            subscription.Subscribe(); await subscription.ReadyAsync();
+            await subscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, subscription.State);
+            Assert.Equal(2, numSubscribeTokenCalls); // Ensure GetToken was retried
+
+            client.Disconnect();
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task DisconnectedWithUnauthorized(CentrifugeTransportType transport, string endpoint)
+        {
+            var options = new CentrifugeClientOptions
+            {
+                GetToken = async () =>
+                {
+                    await Task.Yield();
+                    throw new CentrifugeUnauthorizedException("");
+                }
+            };
+
+            using var client = CreateClient(transport, endpoint, options);
+            var disconnectedEvent = new TaskCompletionSource<CentrifugeDisconnectedEventArgs>();
+
+            client.Disconnected += (s, e) => disconnectedEvent.TrySetResult(e);
+
+            client.Connect();
+
+            var ctx = await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+            Assert.Equal(CentrifugeDisconnectedCodes.Unauthorized, ctx.Code);
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task UnsubscribedWithUnauthorized(CentrifugeTransportType transport, string endpoint)
+        {
+            using var client = CreateClient(transport, endpoint);
+            var connectedEvent = new TaskCompletionSource<CentrifugeConnectedEventArgs>();
+            client.Connected += (s, e) => connectedEvent.TrySetResult(e);
+
+            var subscriptionOptions = new CentrifugeSubscriptionOptions
+            {
+                GetToken = async (channel) => throw new CentrifugeUnauthorizedException("")
+            };
+
+            var subscription = client.NewSubscription("test", subscriptionOptions);
+            var unsubscribedEvent = new TaskCompletionSource<CentrifugeUnsubscribedEventArgs>();
+            subscription.Unsubscribed += (s, e) => unsubscribedEvent.TrySetResult(e);
+
+            client.Connect();
+            subscription.Subscribe();
+            await client.ReadyAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(CentrifugeClientState.Connected, client.State);
+
+            var unsubCtx = await unsubscribedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
+            Assert.Equal(CentrifugeUnsubscribedCodes.Unauthorized, unsubCtx.Code);
+
+            client.Disconnect();
+        }
     }
 
     /// <summary>

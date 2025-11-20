@@ -754,6 +754,12 @@ namespace Centrifugal.Centrifuge
                 {
                     await CreateTransportAsync().ConfigureAwait(false);
                 }
+                catch (CentrifugeUnauthorizedException ex)
+                {
+                    // Unauthorized exception should stop connection attempts permanently
+                    _logger?.LogDebug($"Caught CentrifugeUnauthorizedException in StartConnecting: {ex.Message}");
+                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                }
                 catch (Exception ex)
                 {
                     // If using multi-transport fallback and transport failed before opening,
@@ -781,6 +787,12 @@ namespace Centrifugal.Centrifuge
             try
             {
                 await CreateTransportAsync().ConfigureAwait(false);
+            }
+            catch (CentrifugeUnauthorizedException ex)
+            {
+                // Unauthorized exception should stop connection attempts permanently
+                _logger?.LogDebug($"Caught CentrifugeUnauthorizedException in StartConnectingAsync: {ex.Message}");
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -981,8 +993,11 @@ namespace Centrifugal.Centrifuge
             catch (Exception ex)
             {
                 _logger?.LogDebug($"General exception in connect: {ex.GetType().Name}: {ex.Message}");
+                // General exceptions during connect should trigger reconnect (e.g., GetToken errors)
                 OnError("connect", ex);
-                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.BadProtocol, ex.Message, false).ConfigureAwait(false);
+                _transport?.Dispose();
+                _transport = null;
+                await ScheduleReconnectAsync().ConfigureAwait(false);
             }
         }
 
