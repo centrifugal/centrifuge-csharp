@@ -97,13 +97,8 @@ namespace Centrifugal.Centrifuge.Transports
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                // Use a memory stream to build the complete message with varint-delimited frames
-                using var ms = new MemoryStream();
-                VarintCodec.WriteDelimitedMessage(ms, data);
-                byte[] message = ms.ToArray();
-
                 await _webSocket.SendAsync(
-                    new ArraySegment<byte>(message),
+                    new ArraySegment<byte>(data),
                     WebSocketMessageType.Binary,
                     true,
                     cancellationToken

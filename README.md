@@ -12,6 +12,7 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 - ✅ WebSocket and HTTP-streaming transports with automatic fallback
 - ✅ Browser-native transports for Blazor WebAssembly (using JS interop)
 - ✅ Protobuf binary protocol for efficient communication
+- ✅ Automatic command batching for improved network efficiency
 - ✅ Automatic reconnection with exponential backoff and full jitter
 - ✅ Channel subscriptions with recovery and positioning
 - ✅ JWT authentication with automatic token refresh
@@ -346,6 +347,67 @@ catch (CentrifugeException ex)
     Console.WriteLine($"Temporary: {ex.Temporary}");
 }
 ```
+
+## Command Batching
+
+The SDK automatically batches commands issued within a short time window (1ms by default) for improved network efficiency. This is especially beneficial for HTTP-based transports.
+
+### How It Works
+
+When you issue multiple commands without awaiting them immediately, they are queued and sent together in a single batch:
+
+```csharp
+// ❌ Sequential (no batching)
+await subscription.PublishAsync(data1);
+await subscription.PublishAsync(data2);
+await subscription.PresenceAsync();
+// Result: 3 separate network requests
+
+// ✅ Batched (recommended)
+var task1 = subscription.PublishAsync(data1);
+var task2 = subscription.PublishAsync(data2);
+var task3 = subscription.PresenceAsync();
+
+await Task.WhenAll(task1, task2, task3);
+// Result: 1 network request with all 3 commands!
+```
+
+### Benefits
+
+| Transport | Benefit |
+|-----------|---------|
+| **HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
+| **Browser HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
+| **WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
+| **Browser WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
+
+### Configuration
+
+You can configure the batching delay (or disable it entirely):
+
+```csharp
+var options = new CentrifugeClientOptions
+{
+    // Default is 1ms - good balance between latency and batching
+    CommandBatchDelayMs = 1,
+
+    // Set to 0 to disable batching
+    // CommandBatchDelayMs = 0,
+
+    // Increase for more aggressive batching (trades latency for efficiency)
+    // CommandBatchDelayMs = 10,
+};
+
+var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", options);
+```
+
+### Batch Size Limit
+
+Batches are automatically flushed when they exceed 15KB to prevent oversized requests. This ensures optimal performance without hitting server limits.
+
+### Example
+
+See the [Blazor example](examples/Centrifugal.Centrifuge.BlazorExample/Pages/Home.razor) for a complete demonstration of command batching in action.
 
 ## Unity Support
 

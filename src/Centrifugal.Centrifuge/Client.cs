@@ -36,7 +36,8 @@ namespace Centrifugal.Centrifuge
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
         private readonly object _stateChangeLock = new object();
         private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> _readyPromises = new();
-        private readonly object _subscribeBatchLock = new object();
+        private readonly List<Command> _commandBatch = new();
+        private readonly object _commandBatchLock = new object();
 
         private ITransport? _transport;
         private CentrifugeClientState _state = CentrifugeClientState.Disconnected;
@@ -58,12 +59,19 @@ namespace Centrifugal.Centrifuge
         private bool _transportWasOpen;
         private int _promiseId;
         private bool _transportIsOpen;
-        private Timer? _subscribeBatchTimer;
-        private bool _subscribeBatchPending;
+        private Timer? _commandBatchTimer;
+        private bool _commandBatchPending;
+        private int _commandBatchSize;
 #if NET6_0_OR_GREATER
         private readonly Microsoft.JSInterop.IJSRuntime? _jsRuntime;
 #endif
         private readonly ILogger? _logger;
+
+        /// <summary>
+        /// Maximum size of a command batch in bytes (15KB).
+        /// When batch exceeds this size, it will be flushed immediately.
+        /// </summary>
+        private const int MaxCommandBatchSize = 15 * 1024;
 
         /// <summary>
         /// Gets the current client state.
@@ -545,28 +553,19 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                // Don't send connect command for emulation transports - it was already sent during OpenAsync
+                // Check if batching is enabled and this is not a connect command (which must be sent immediately)
                 bool isConnectCommand = command.Connect != null;
-                if (!isConnectCommand || !_transport.UsesEmulation)
-                {
-                    if (_transport.UsesEmulation)
-                    {
-                        // For emulation transports (non-connect commands), use SendEmulationAsync with session and node
-                        // The command must be varint-delimited
-                        using var ms = new MemoryStream();
-                        VarintCodec.WriteDelimitedMessage(ms, command.ToByteArray());
-                        var delimitedCommand = ms.ToArray();
+                bool shouldBatch = _options.CommandBatchDelayMs > 0 && !isConnectCommand;
 
-                        var emulationEndpoint = GetEmulationEndpoint();
-                        await _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        _logger?.LogDebug($"Calling transport.SendAsync for command ID: {command.Id}");
-                        // For WebSocket, use regular SendAsync
-                        await _transport.SendAsync(command.ToByteArray(), cancellationToken).ConfigureAwait(false);
-                        _logger?.LogDebug($"transport.SendAsync completed for command ID: {command.Id}");
-                    }
+                if (shouldBatch)
+                {
+                    // Add command to batch
+                    ScheduleCommandBatch(command);
+                }
+                else
+                {
+                    // Send immediately for connect commands or when batching is disabled
+                    await SendCommandsImmediateAsync(new[] { command }, cancellationToken).ConfigureAwait(false);
                 }
 
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -585,6 +584,140 @@ namespace Centrifugal.Centrifuge
             finally
             {
                 _pendingCalls.TryRemove(command.Id, out _);
+            }
+        }
+
+        private async Task SendCommandsImmediateAsync(IEnumerable<Command> commands, CancellationToken cancellationToken)
+        {
+            if (_transport == null)
+            {
+                throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
+            }
+
+            var firstCommand = commands.FirstOrDefault();
+            if (firstCommand == null)
+            {
+                return;
+            }
+
+            // Don't send connect command for emulation transports - it was already sent during OpenAsync
+            bool isConnectCommand = firstCommand.Connect != null;
+
+            if (!isConnectCommand || !_transport.UsesEmulation)
+            {
+                if (_transport.UsesEmulation)
+                {
+                    // For emulation transports, we need to pre-wrap commands with varint delimiters
+                    // because SendEmulationAsync doesn't add them
+                    using var ms = new MemoryStream();
+                    foreach (var cmd in commands)
+                    {
+                        VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                    }
+                    var delimitedCommands = ms.ToArray();
+
+                    var emulationEndpoint = GetEmulationEndpoint();
+                    await _transport.SendEmulationAsync(delimitedCommands, _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    // For WebSocket: prepare data with varint delimiters, then send
+                    using var ms = new MemoryStream();
+                    var commandsList = commands.ToList();
+                    foreach (var cmd in commandsList)
+                    {
+                        VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                    }
+                    var delimitedData = ms.ToArray();
+
+                    if (commandsList.Count > 1)
+                    {
+                        _logger?.LogDebug($"Sending {commandsList.Count} commands in single frame ({delimitedData.Length} bytes)");
+                    }
+
+                    await _transport.SendAsync(delimitedData, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private void ScheduleCommandBatch(Command command)
+        {
+            lock (_commandBatchLock)
+            {
+                var commandBytes = command.ToByteArray();
+                var estimatedSize = commandBytes.Length + 10; // +10 for varint overhead
+
+                // Add command to batch
+                _commandBatch.Add(command);
+                _commandBatchSize += estimatedSize;
+
+                // If batch size exceeds limit, flush immediately
+                if (_commandBatchSize >= MaxCommandBatchSize)
+                {
+                    // Cancel pending timer
+                    _commandBatchTimer?.Dispose();
+                    _commandBatchTimer = null;
+                    _commandBatchPending = false;
+
+                    // Flush synchronously
+                    _ = Task.Run(async () => await FlushCommandBatchAsync().ConfigureAwait(false));
+                    return;
+                }
+
+                // Schedule flush if not already pending
+                if (!_commandBatchPending)
+                {
+                    _commandBatchPending = true;
+
+                    _commandBatchTimer?.Dispose();
+                    _commandBatchTimer = new Timer(_ =>
+                    {
+                        lock (_commandBatchLock)
+                        {
+                            _commandBatchPending = false;
+                        }
+                        _ = Task.Run(async () => await FlushCommandBatchAsync().ConfigureAwait(false));
+                    }, null, TimeSpan.FromMilliseconds(_options.CommandBatchDelayMs), Timeout.InfiniteTimeSpan);
+                }
+            }
+        }
+
+        private async Task FlushCommandBatchAsync()
+        {
+            List<Command> commandsToSend;
+
+            lock (_commandBatchLock)
+            {
+                // Check client state before taking commands from batch
+                if (_state != CentrifugeClientState.Connected && _state != CentrifugeClientState.Connecting)
+                {
+                    return;
+                }
+
+                if (!_transportIsOpen)
+                {
+                    return;
+                }
+
+                if (_commandBatch.Count == 0)
+                {
+                    return;
+                }
+
+                // Take all commands from batch
+                commandsToSend = new List<Command>(_commandBatch);
+                _commandBatch.Clear();
+                _commandBatchSize = 0;
+            }
+
+            try
+            {
+                await SendCommandsImmediateAsync(commandsToSend, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug($"Error flushing command batch: {ex.Message}");
+                // Errors will be handled by individual command timeouts
             }
         }
 
@@ -1123,54 +1256,39 @@ namespace Centrifugal.Centrifuge
         {
             _ = Task.Run(async () =>
             {
-                await FlushSubscribeBatchAsync().ConfigureAwait(false);
+                await SendSubscribeCommandsAsync().ConfigureAwait(false);
             });
         }
 
         /// <summary>
-        /// Schedules a batch of subscribe commands to be sent after a short delay.
-        /// This allows multiple subscribe requests to be automatically batched together.
+        /// Triggers sending subscribe commands for all subscriptions in Subscribing state.
+        /// Commands will be automatically batched by the general command batching mechanism.
         /// </summary>
         internal void ScheduleSubscribeBatch()
         {
-            lock (_subscribeBatchLock)
+            _ = Task.Run(async () =>
             {
-                if (_subscribeBatchPending)
-                {
-                    // Batch already scheduled
-                    return;
-                }
-
-                _subscribeBatchPending = true;
-
-                // Use a 1ms delay to collect subscribe requests
-                _subscribeBatchTimer?.Dispose();
-                _subscribeBatchTimer = new Timer(_ =>
-                {
-                    lock (_subscribeBatchLock)
-                    {
-                        _subscribeBatchPending = false;
-                    }
-                    _ = Task.Run(async () => await FlushSubscribeBatchAsync().ConfigureAwait(false));
-                }, null, TimeSpan.FromMilliseconds(1), Timeout.InfiniteTimeSpan);
-            }
+                await SendSubscribeCommandsAsync().ConfigureAwait(false);
+            });
         }
 
-        private async Task FlushSubscribeBatchAsync()
+        private async Task SendSubscribeCommandsAsync()
         {
-            // Check client state before processing batch
+            // Check client state before processing
             if (_state != CentrifugeClientState.Connected || !_transportIsOpen)
             {
                 return;
             }
 
-            foreach (var sub in _subscriptions.Values)
+            // Start all subscribe commands concurrently so they can be batched together
+            var subscribeTasks = _subscriptions.Values
+                .Where(sub => sub.State == CentrifugeSubscriptionState.Subscribing)
+                .Select(sub => sub.SendSubscribeIfNeededAsync())
+                .ToList();
+
+            if (subscribeTasks.Any())
             {
-                // Validate subscription state at send time
-                if (sub.State == CentrifugeSubscriptionState.Subscribing)
-                {
-                    await sub.SendSubscribeIfNeededAsync().ConfigureAwait(false);
-                }
+                await Task.WhenAll(subscribeTasks).ConfigureAwait(false);
             }
         }
 
@@ -1652,8 +1770,10 @@ namespace Centrifugal.Centrifuge
                         }
                         else
                         {
-                            // For WebSocket, use regular SendAsync
-                            _transport.SendAsync(cmd.ToByteArray()).Wait();
+                            // For WebSocket, wrap with varint delimiter
+                            using var ms = new MemoryStream();
+                            VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                            _transport.SendAsync(ms.ToArray()).Wait();
                         }
                     }
                 }
@@ -2015,7 +2135,7 @@ namespace Centrifugal.Centrifuge
             _reconnectCts?.Dispose();
             _pingTimer?.Dispose();
             _refreshTimer?.Dispose();
-            _subscribeBatchTimer?.Dispose();
+            _commandBatchTimer?.Dispose();
         }
 
         /// <summary>
@@ -2043,7 +2163,7 @@ namespace Centrifugal.Centrifuge
             _reconnectCts?.Dispose();
             _pingTimer?.Dispose();
             _refreshTimer?.Dispose();
-            _subscribeBatchTimer?.Dispose();
+            _commandBatchTimer?.Dispose();
         }
     }
 }
