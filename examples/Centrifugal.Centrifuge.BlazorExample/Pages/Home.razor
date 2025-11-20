@@ -440,64 +440,83 @@
             await LogAsync("Subscribing to channel 'chat'...");
             _subscription.Subscribe();
 
-            // Publish a message (waits for subscription automatically)
-            await LogAsync("Publishing message...");
-            var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from Blazor WASM!\"}");
-            await _subscription.PublishAsync(messageData);
+            // Wait for subscription to complete
+            await _subscription.ReadyAsync();
+            await LogAsync("Subscription ready!");
 
-            // Get presence
-            await LogAsync("Fetching presence...");
+            // === BATCHING DEMONSTRATION ===
+            // Issue multiple API calls WITHOUT awaiting them immediately.
+            // They will be automatically batched together (1ms window by default).
+            await LogAsync("");
+            await LogAsync("=== DEMONSTRATING COMMAND BATCHING ===");
+            await LogAsync("Issuing multiple commands without awaiting...");
+
+            var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from Blazor WASM!\"}");
+
+            // Start all operations concurrently - they will be batched!
+            var publishTask = _subscription.PublishAsync(messageData);
+            var presenceTask = _subscription.PresenceAsync();
+            var presenceStatsTask = _subscription.PresenceStatsAsync();
+            var historyTask = _subscription.HistoryAsync(new CentrifugeHistoryOptions
+            {
+                Limit = 10,
+                Reverse = true
+            });
+            var rpcTask = _client.RpcAsync("time", Encoding.UTF8.GetBytes("{\"method\":\"getCurrentTime\"}"));
+
+            await LogAsync("All commands queued! They will be sent in a single batch.");
+            await LogAsync($"Transport: {(_useHttpStreaming ? "HTTP Stream (TRUE batching - one POST)" : "WebSocket (pipelined)")}");
+            await LogAsync("Waiting for all responses...");
+
             try
             {
-                var presence = await _subscription.PresenceAsync();
-                await LogAsync($"Clients in channel: {presence.Clients.Count}");
+                // Now await all results - they were already sent as a batch
+                await Task.WhenAll(publishTask, presenceTask, presenceStatsTask, historyTask, rpcTask);
+
+                await LogAsync("");
+                await LogAsync("=== BATCH RESULTS ===");
+
+                // Process publish result
+                await LogAsync("✓ Publish succeeded");
+
+                // Process presence result
+                var presence = await presenceTask;
+                await LogAsync($"✓ Presence: {presence.Clients.Count} clients");
                 foreach (var (clientId, clientInfo) in presence.Clients)
                 {
-                    await LogAsync($"  - {clientId}: user={clientInfo.User}");
+                    await LogAsync($"    - {clientId}: user={clientInfo.User}");
                 }
 
-                var stats = await _subscription.PresenceStatsAsync();
-                await LogAsync($"Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
-            }
-            catch (Exception ex)
-            {
-                await LogAsync($"Presence not available: {ex.Message}");
-            }
+                // Process presence stats result
+                var stats = await presenceStatsTask;
+                await LogAsync($"✓ Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
 
-            // Get history
-            await LogAsync("Fetching history...");
-            try
-            {
-                var history = await _subscription.HistoryAsync(new CentrifugeHistoryOptions
-                {
-                    Limit = 10,
-                    Reverse = true
-                });
-
-                await LogAsync($"History: {history.Publications.Length} messages");
-                foreach (var pub in history.Publications)
+                // Process history result
+                var history = await historyTask;
+                await LogAsync($"✓ History: {history.Publications.Length} messages");
+                foreach (var pub in history.Publications.Take(3))
                 {
                     var data = Encoding.UTF8.GetString(pub.Data);
-                    await LogAsync($"  - {data}");
+                    await LogAsync($"    - {data}");
                 }
-            }
-            catch (Exception ex)
-            {
-                await LogAsync($"History not available: {ex.Message}");
-            }
+                if (history.Publications.Length > 3)
+                {
+                    await LogAsync($"    ... and {history.Publications.Length - 3} more");
+                }
 
-            // RPC example
-            await LogAsync("Sending RPC...");
-            try
-            {
-                var rpcData = Encoding.UTF8.GetBytes("{\"method\":\"getCurrentTime\"}");
-                var rpcResult = await _client.RpcAsync("time", rpcData);
+                // Process RPC result
+                var rpcResult = await rpcTask;
                 var response = Encoding.UTF8.GetString(rpcResult.Data);
-                await LogAsync($"RPC response: {response}");
+                await LogAsync($"✓ RPC response: {response}");
+
+                await LogAsync("");
+                await LogAsync($"All 5 commands were batched and sent together!");
+                await LogAsync($"Benefits: {(_useHttpStreaming ? "Reduced from 5 HTTP requests to 1!" : "Sent in quick succession via pipelining")}");
             }
             catch (Exception ex)
             {
-                await LogAsync($"RPC failed: {ex.Message}");
+                await LogAsync($"Some operations failed: {ex.Message}");
+                await LogAsync("Note: Presence/History may not be available on all channels");
             }
 
             await LogAsync("Example completed! The connection will remain open for incoming messages.");

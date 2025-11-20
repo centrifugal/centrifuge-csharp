@@ -462,6 +462,17 @@ namespace Centrifugal.Centrifuge
                 _inflight = true;
             }
 
+            // Check state again after releasing lock - it could have changed to Unsubscribed
+            // This prevents sending subscribe command if Unsubscribe() was called
+            if (_state != CentrifugeSubscriptionState.Subscribing)
+            {
+                lock (_stateChangeLock)
+                {
+                    _inflight = false;
+                }
+                return;
+            }
+
             try
             {
                 await SendSubscribeCommandAsync().ConfigureAwait(false);

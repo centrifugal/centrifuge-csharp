@@ -55,8 +55,9 @@ namespace Centrifugal.Centrifuge.Transports
 
         /// <summary>
         /// Sends data through the transport.
+        /// Data should already be properly formatted (varint-delimited for protocol messages).
         /// </summary>
-        /// <param name="data">Data to send.</param>
+        /// <param name="data">Data to send (pre-formatted with varint delimiters).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         Task SendAsync(byte[] data, CancellationToken cancellationToken = default);
 

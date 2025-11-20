@@ -133,7 +133,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
         {
-            _logger?.LogDebug($"SendAsync called, socket ID: {_socketId}, _isOpen: {_isOpen}");
+            _logger?.LogDebug($"SendAsync called, socket ID: {_socketId}, _isOpen: {_isOpen}, data length: {data.Length}");
             if (!_isOpen)
             {
                 _logger?.LogDebug($"SendAsync failed - WebSocket is not open");
@@ -142,17 +142,12 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                // Use a memory stream to build the complete message with varint-delimited frames
-                using var ms = new MemoryStream();
-                VarintCodec.WriteDelimitedMessage(ms, data);
-                byte[] message = ms.ToArray();
-
-                _logger?.LogDebug($"Sending {message.Length} bytes to socket {_socketId}");
+                _logger?.LogDebug($"Sending {data.Length} bytes to socket {_socketId}");
                 await _jsRuntime.InvokeVoidAsync(
                     "CentrifugeWebSocket.send",
                     cancellationToken,
                     _socketId,
-                    message
+                    data
                 ).ConfigureAwait(false);
                 _logger?.LogDebug($"Send completed for socket {_socketId}");
             }

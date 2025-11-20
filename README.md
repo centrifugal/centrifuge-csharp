@@ -12,6 +12,7 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 - ✅ WebSocket and HTTP-streaming transports with automatic fallback
 - ✅ Browser-native transports for Blazor WebAssembly (using JS interop)
 - ✅ Protobuf binary protocol for efficient communication
+- ✅ Automatic command batching for improved network efficiency
 - ✅ Automatic reconnection with exponential backoff and full jitter
 - ✅ Channel subscriptions with recovery and positioning
 - ✅ JWT authentication with automatic token refresh
@@ -347,6 +348,51 @@ catch (CentrifugeException ex)
 }
 ```
 
+## Command Batching
+
+The SDK automatically batches commands issued within a short time window (1ms) for improved network efficiency. This is especially beneficial for HTTP-based transports.
+
+### How It Works
+
+When you issue multiple commands without awaiting them immediately, they are queued and sent together in a single batch:
+
+```csharp
+// ❌ Sequential (no batching)
+await subscription.PublishAsync(data1);
+await subscription.PublishAsync(data2);
+await subscription.PresenceAsync();
+// Result: 3 separate network requests
+
+// ✅ Batched (recommended)
+var task1 = subscription.PublishAsync(data1);
+var task2 = subscription.PublishAsync(data2);
+var task3 = subscription.PresenceAsync();
+
+await Task.WhenAll(task1, task2, task3);
+// Result: 1 network request with all 3 commands!
+```
+
+Also, SDK automatically batches subscription requests under the hood (where possible) including re-subscriptions upon reconnect.
+
+### Benefits
+
+| Transport | Benefit |
+|-----------|---------|
+| **HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
+| **Browser HTTP Stream** | 🔥 **Huge** - Multiple commands in one HTTP POST |
+| **WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
+| **Browser WebSocket** | 🔥 **Huge** - Multiple commands in one WebSocket frame |
+
+### How It Works Internally
+
+- Commands are automatically batched with a 1ms delay window
+- Batches are flushed immediately when they exceed 15KB to prevent oversized requests
+- No configuration needed - batching is automatic
+
+### Example
+
+See the [Blazor example](examples/Centrifugal.Centrifuge.BlazorExample/Pages/Home.razor) for a complete demonstration of command batching in action.
+
 ## Unity Support
 
 The library works with Unity 2021.2+ (requires .NET Standard 2.1 support).
@@ -549,14 +595,6 @@ The SDK follows the [Centrifuge protocol specification](https://centrifugal.dev/
 - **Exponential Backoff**: Smart reconnection with full jitter to avoid thundering herd
 - **Varint Encoding**: Efficient Protobuf message framing
 - **Event-Driven Architecture**: Thread-safe event handling for all state changes
-
-## Thread Safety
-
-All public methods are thread-safe. The library uses:
-
-- `SemaphoreSlim` for state synchronization
-- `ConcurrentDictionary` for subscription and callback registries
-- Task-based asynchronous patterns throughout
 
 ## Contributing
 
