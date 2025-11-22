@@ -107,9 +107,8 @@ window.CentrifugeHttpStream = {
                     break;
                 }
 
-                // Send chunk to .NET as base64 string (JSInterop limitation)
-                const base64 = btoa(String.fromCharCode.apply(null, value));
-                dotnetRef.invokeMethodAsync('OnChunk', base64);
+                // Pass Uint8Array directly - Blazor marshals it to byte[]
+                dotnetRef.invokeMethodAsync('OnChunk', value);
             }
         } catch (error) {
             self.debugLog(debug, '[CentrifugeHttpStream] Read loop error for stream', id, ':', error.name, error.message);

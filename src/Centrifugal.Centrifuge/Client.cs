@@ -110,7 +110,7 @@ namespace Centrifugal.Centrifuge
         public event EventHandler<CentrifugeDisconnectedEventArgs>? Disconnected;
 
         /// <summary>
-        /// Event raised when an error occurs.
+        /// Event raised when an error occurs. Mostly for the logging purposes.
         /// </summary>
         public event EventHandler<CentrifugeErrorEventArgs>? Error;
 
@@ -814,7 +814,16 @@ namespace Centrifugal.Centrifuge
 
         private async Task CreateTransportAsync()
         {
-            _transport?.Dispose();
+            // Unsubscribe from old transport events before disposing to prevent race conditions
+            if (_transport != null)
+            {
+                _transport.Opened -= OnTransportOpened;
+                _transport.MessageReceived -= OnTransportMessage;
+                _transport.Closed -= OnTransportClosed;
+                _transport.Error -= OnTransportError;
+                _transport.Dispose();
+                _transport = null;
+            }
 
             ITransport transport;
 
@@ -1489,7 +1498,7 @@ namespace Centrifugal.Centrifuge
             string reason = e.Reason;
             _logger?.LogDebug($"HandleTransportClosedAsync - processing with code: {code}, reason: '{reason}'");
 
-            // Check for non-reconnectable disconnect codes (matching centrifuge-js behavior)
+            // Check for non-reconnectable disconnect codes
             // Codes 3500-3999 and 4500-4999 mean permanent disconnect
             // Also BadProtocol, Unauthorized, and MessageSizeLimit are permanent
             if (e.Code.HasValue)
@@ -1537,7 +1546,6 @@ namespace Centrifugal.Centrifuge
             SetState(CentrifugeClientState.Connecting);
 
             // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
-            // (matching centrifuge-js behavior - see _disconnect method)
             foreach (var sub in _subscriptions.Values)
             {
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
@@ -1564,13 +1572,29 @@ namespace Centrifugal.Centrifuge
 
         internal async Task HandleSubscribeTimeoutAsync()
         {
-            // Subscribe timeout triggers client disconnect with reconnect, matching centrifuge-js behavior
+            // Subscribe timeout triggers client disconnect with reconnect
             if (_state == CentrifugeClientState.Disconnected)
             {
                 return;
             }
 
             await StartConnectingAsync(CentrifugeConnectingCodes.SubscribeTimeout, "subscribe timeout").ConfigureAwait(false);
+
+            // Properly clean up transport before reconnecting
+            await CleanupTransportAsync().ConfigureAwait(false);
+
+            await ScheduleReconnectAsync().ConfigureAwait(false);
+        }
+
+        internal async Task HandleUnsubscribeErrorAsync()
+        {
+            // Unsubscribe error triggers client disconnect with reconnect (matching centrifuge-js behavior)
+            if (_state == CentrifugeClientState.Disconnected)
+            {
+                return;
+            }
+
+            await StartConnectingAsync(CentrifugeConnectingCodes.UnsubscribeError, "unsubscribe error").ConfigureAwait(false);
 
             // Properly clean up transport before reconnecting
             await CleanupTransportAsync().ConfigureAwait(false);

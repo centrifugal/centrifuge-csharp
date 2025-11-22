@@ -42,16 +42,14 @@ window.CentrifugeWebSocket = {
 
             socket.onmessage = (event) => {
                 if (event.data instanceof ArrayBuffer) {
-                    // Convert ArrayBuffer to base64 for .NET interop
+                    // Pass Uint8Array directly - Blazor marshals it to byte[]
                     const bytes = new Uint8Array(event.data);
-                    const base64 = btoa(String.fromCharCode.apply(null, bytes));
-                    dotnetRef.invokeMethodAsync('OnMessage', base64);
+                    dotnetRef.invokeMethodAsync('OnMessage', bytes);
                 } else if (typeof event.data === 'string') {
-                    // Text message - convert to UTF-8 bytes then base64
+                    // Text message - convert to UTF-8 bytes
                     const encoder = new TextEncoder();
                     const bytes = encoder.encode(event.data);
-                    const base64 = btoa(String.fromCharCode.apply(null, bytes));
-                    dotnetRef.invokeMethodAsync('OnMessage', base64);
+                    dotnetRef.invokeMethodAsync('OnMessage', bytes);
                 }
             };
 

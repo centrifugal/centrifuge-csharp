@@ -233,19 +233,17 @@ namespace Centrifugal.Centrifuge.Transports
         /// <summary>
         /// JavaScript callback when HTTP stream receives a chunk.
         /// </summary>
-        /// <param name="base64Chunk">Chunk data as base64-encoded string.</param>
+        /// <param name="chunk">Chunk data as byte array.</param>
         [JSInvokable]
-        public void OnChunk(string base64Chunk)
+        public void OnChunk(byte[] chunk)
         {
-            if (string.IsNullOrEmpty(base64Chunk))
+            if (chunk == null || chunk.Length == 0)
             {
                 return;
             }
 
             try
             {
-                // Decode base64 to byte array
-                byte[] chunk = Convert.FromBase64String(base64Chunk);
 
                 lock (_bufferLock)
                 {
