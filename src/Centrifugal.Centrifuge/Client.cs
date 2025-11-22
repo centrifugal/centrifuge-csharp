@@ -1586,6 +1586,22 @@ namespace Centrifugal.Centrifuge
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 
+        internal async Task HandleUnsubscribeErrorAsync()
+        {
+            // Unsubscribe error triggers client disconnect with reconnect (matching centrifuge-js behavior)
+            if (_state == CentrifugeClientState.Disconnected)
+            {
+                return;
+            }
+
+            await StartConnectingAsync(CentrifugeConnectingCodes.UnsubscribeError, "unsubscribe error").ConfigureAwait(false);
+
+            // Properly clean up transport before reconnecting
+            await CleanupTransportAsync().ConfigureAwait(false);
+
+            await ScheduleReconnectAsync().ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Cleans up the current transport (unsubscribes events, closes, disposes).
         /// This should be called before reconnecting to prevent duplicate connections.

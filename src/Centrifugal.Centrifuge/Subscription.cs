@@ -867,7 +867,8 @@ namespace Centrifugal.Centrifuge
                     }
                     catch
                     {
-                        // Ignore errors during unsubscribe
+                        // Unsubscribe error triggers client disconnect with reconnect (matching centrifuge-js behavior)
+                        await _client.HandleUnsubscribeErrorAsync().ConfigureAwait(false);
                     }
                 }
             }
