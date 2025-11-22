@@ -219,19 +219,17 @@ namespace Centrifugal.Centrifuge.Transports
         /// <summary>
         /// JavaScript callback when WebSocket receives a message.
         /// </summary>
-        /// <param name="base64Data">Message data as base64-encoded string.</param>
+        /// <param name="data">Message data as byte array.</param>
         [JSInvokable]
-        public void OnMessage(string base64Data)
+        public void OnMessage(byte[] data)
         {
-            if (string.IsNullOrEmpty(base64Data))
+            if (data == null || data.Length == 0)
             {
                 return;
             }
 
             try
             {
-                // Decode base64 to byte array
-                byte[] data = Convert.FromBase64String(base64Data);
 
                 // Process varint-delimited messages
                 using var ms = new MemoryStream(data);
