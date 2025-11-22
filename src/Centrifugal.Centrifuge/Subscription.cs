@@ -128,8 +128,9 @@ namespace Centrifugal.Centrifuge
         /// If unsubscribed, the Task is rejected.
         /// </summary>
         /// <param name="timeout">Optional timeout.</param>
+        /// <param name="cancellationToken">Optional cancellation token.</param>
         /// <returns>A task that completes when subscribed.</returns>
-        public Task ReadyAsync(TimeSpan? timeout = null)
+        public Task ReadyAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             switch (_state)
             {
@@ -144,10 +145,14 @@ namespace Centrifugal.Centrifuge
                     var promiseId = NextPromiseId();
                     _readyPromises[promiseId] = tcs;
 
+                    CancellationTokenSource? timeoutCts = null;
+                    CancellationTokenRegistration timeoutRegistration = default;
+                    CancellationTokenRegistration cancellationRegistration = default;
+
                     if (timeout.HasValue)
                     {
-                        var cts = new CancellationTokenSource(timeout.Value);
-                        cts.Token.Register(() =>
+                        timeoutCts = new CancellationTokenSource(timeout.Value);
+                        timeoutRegistration = timeoutCts.Token.Register(() =>
                         {
                             if (_readyPromises.TryRemove(promiseId, out var promise))
                             {
@@ -156,6 +161,25 @@ namespace Centrifugal.Centrifuge
                         });
                     }
 
+                    if (cancellationToken.CanBeCanceled)
+                    {
+                        cancellationRegistration = cancellationToken.Register(() =>
+                        {
+                            if (_readyPromises.TryRemove(promiseId, out var promise))
+                            {
+                                promise.TrySetCanceled(cancellationToken);
+                            }
+                        });
+                    }
+
+                    // Dispose registrations when task completes to prevent memory leaks
+                    tcs.Task.ContinueWith(_ =>
+                    {
+                        timeoutRegistration.Dispose();
+                        cancellationRegistration.Dispose();
+                        timeoutCts?.Dispose();
+                    }, TaskContinuationOptions.ExecuteSynchronously);
+
                     return tcs.Task;
             }
         }
@@ -163,14 +187,13 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Sets the subscription data. This will be used for all subsequent subscription attempts.
-        /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New subscription data.</param>
-        public void SetData(byte[]? data)
+        public void SetData(ReadOnlyMemory<byte> data)
         {
             lock (_stateChangeLock)
             {
-                _options.Data = data != null ? (byte[])data.Clone() : null;
+                _options.Data = data;
             }
         }
 
@@ -215,10 +238,10 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="data">Data to publish.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public async Task PublishAsync(byte[] data, CancellationToken cancellationToken = default)
+        public async Task PublishAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
             // Wait for subscription to be ready
-            await ReadyAsync().ConfigureAwait(false);
+            await ReadyAsync(null, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -226,7 +249,7 @@ namespace Centrifugal.Centrifuge
                 Publish = new PublishRequest
                 {
                     Channel = Channel,
-                    Data = ByteString.CopyFrom(data)
+                    Data = ByteString.CopyFrom(data.Span)
                 }
             };
 
@@ -270,8 +293,8 @@ namespace Centrifugal.Centrifuge
                 {
                     request.Since = new Centrifugal.Centrifuge.Protocol.StreamPosition
                     {
-                        Offset = options.Since.Offset,
-                        Epoch = options.Since.Epoch
+                        Offset = options.Since.Value.Offset,
+                        Epoch = options.Since.Value.Epoch
                     };
                 }
 
@@ -597,7 +620,7 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            byte[]? data;
+            ReadOnlyMemory<byte> data;
             CentrifugeFilterNode? tagsFilter;
             lock (_stateChangeLock)
             {
@@ -617,13 +640,13 @@ namespace Centrifugal.Centrifuge
             if (_streamPosition != null)
             {
                 request.Recover = true;
-                request.Epoch = _streamPosition.Epoch;
-                request.Offset = _streamPosition.Offset;
+                request.Epoch = _streamPosition.Value.Epoch;
+                request.Offset = _streamPosition.Value.Offset;
             }
 
-            if (data != null)
+            if (!data.IsEmpty)
             {
-                request.Data = ByteString.CopyFrom(data);
+                request.Data = ByteString.CopyFrom(data.Span);
             }
 
             if (tagsFilter != null)
@@ -740,7 +763,7 @@ namespace Centrifugal.Centrifuge
 
             if (pub.Offset > 0 && _streamPosition != null)
             {
-                _streamPosition = new CentrifugeStreamPosition(pub.Offset, _streamPosition.Epoch);
+                _streamPosition = new CentrifugeStreamPosition(pub.Offset, _streamPosition.Value.Epoch);
             }
         }
 

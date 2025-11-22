@@ -22,7 +22,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets or sets the subscription data (attached to every subscribe/resubscribe request).
         /// </summary>
-        public byte[]? Data { get; set; }
+        public ReadOnlyMemory<byte> Data { get; set; }
 
         /// <summary>
         /// Gets or sets the minimum delay between resubscribe attempts.

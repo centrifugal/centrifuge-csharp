@@ -496,7 +496,7 @@
                 await LogAsync($"✓ History: {history.Publications.Length} messages");
                 foreach (var pub in history.Publications.Take(3))
                 {
-                    var data = Encoding.UTF8.GetString(pub.Data);
+                    var data = Encoding.UTF8.GetString(pub.Data.Span);
                     await LogAsync($"    - {data}");
                 }
                 if (history.Publications.Length > 3)
@@ -506,7 +506,7 @@
 
                 // Process RPC result
                 var rpcResult = await rpcTask;
-                var response = Encoding.UTF8.GetString(rpcResult.Data);
+                var response = Encoding.UTF8.GetString(rpcResult.Data.Span);
                 await LogAsync($"✓ RPC response: {response}");
 
                 await LogAsync("");
@@ -583,7 +583,7 @@
 
     private void OnPublication(object? sender, CentrifugePublicationEventArgs e)
     {
-        var data = Encoding.UTF8.GetString(e.Data);
+        var data = Encoding.UTF8.GetString(e.Data.Span);
         _lastMessage = data;
         _ = LogAsync($"[Subscription] Publication received:");
         _ = LogAsync($"  Channel: {e.Channel}");
@@ -594,7 +594,7 @@
         }
         if (e.Info != null)
         {
-            _ = LogAsync($"  From: {e.Info.Client} (user: {e.Info.User})");
+            _ = LogAsync($"  From: {e.Info.Value.Client} (user: {e.Info.Value.User})");
         }
     }
 

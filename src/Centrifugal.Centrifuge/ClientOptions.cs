@@ -26,7 +26,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets or sets the connection data to send with connect command.
         /// </summary>
-        public byte[]? Data { get; set; }
+        public ReadOnlyMemory<byte> Data { get; set; }
 
         /// <summary>
         /// Gets or sets the client name (not unique per connection, identifies where client connected from).

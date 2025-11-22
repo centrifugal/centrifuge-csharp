@@ -97,7 +97,7 @@ namespace Centrifuge.Examples
 
                 subscription.Publication += (sender, e) =>
                 {
-                    var data = Encoding.UTF8.GetString(e.Data);
+                    var data = Encoding.UTF8.GetString(e.Data.Span);
                     Console.WriteLine($"[Subscription] Publication received:");
                     Console.WriteLine($"  Channel: {e.Channel}");
                     Console.WriteLine($"  Data: {data}");
@@ -107,7 +107,7 @@ namespace Centrifuge.Examples
                     }
                     if (e.Info != null)
                     {
-                        Console.WriteLine($"  From: {e.Info.Client} (user: {e.Info.User})");
+                        Console.WriteLine($"  From: {e.Info.Value.Client} (user: {e.Info.Value.User})");
                     }
                 };
 
@@ -167,7 +167,7 @@ namespace Centrifuge.Examples
                     Console.WriteLine($"History: {history.Publications.Length} messages");
                     foreach (var pub in history.Publications)
                     {
-                        var data = Encoding.UTF8.GetString(pub.Data);
+                        var data = Encoding.UTF8.GetString(pub.Data.Span);
                         Console.WriteLine($"  - {data}");
                     }
                 }
@@ -182,7 +182,7 @@ namespace Centrifuge.Examples
                 {
                     var rpcData = Encoding.UTF8.GetBytes("{\"method\":\"getCurrentTime\"}");
                     var rpcResult = await client.RpcAsync("time", rpcData);
-                    var response = Encoding.UTF8.GetString(rpcResult.Data);
+                    var response = Encoding.UTF8.GetString(rpcResult.Data.Span);
                     Console.WriteLine($"RPC response: {response}");
                 }
                 catch (Exception ex)

@@ -86,14 +86,14 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the RPC result data.
         /// </summary>
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeRpcResult"/> class.
         /// </summary>
-        public CentrifugeRpcResult(byte[] data)
+        public CentrifugeRpcResult(ReadOnlyMemory<byte> data)
         {
-            Data = data ?? Array.Empty<byte>();
+            Data = data;
         }
     }
 }
