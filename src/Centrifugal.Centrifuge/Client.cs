@@ -110,7 +110,7 @@ namespace Centrifugal.Centrifuge
         public event EventHandler<CentrifugeDisconnectedEventArgs>? Disconnected;
 
         /// <summary>
-        /// Event raised when an error occurs.
+        /// Event raised when an error occurs. Mostly for the logging purposes.
         /// </summary>
         public event EventHandler<CentrifugeErrorEventArgs>? Error;
 

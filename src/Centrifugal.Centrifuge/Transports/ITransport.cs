@@ -21,7 +21,7 @@ namespace Centrifugal.Centrifuge.Transports
 
         /// <summary>
         /// Gets whether this transport uses emulation mode.
-        /// Emulation mode is used for unidirectional transports (SSE, HTTP Stream)
+        /// Emulation mode is used for unidirectional transports (HTTP Stream at this point)
         /// where sends go through a separate emulation endpoint.
         /// </summary>
         bool UsesEmulation { get; }

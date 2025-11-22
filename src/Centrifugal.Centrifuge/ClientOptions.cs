@@ -11,7 +11,8 @@ namespace Centrifugal.Centrifuge
     public class CentrifugeClientOptions
     {
         /// <summary>
-        /// Gets or sets the initial connection token (JWT).
+        /// Gets or sets the initial connection token (JWT). For proper JWT expiration handling
+        /// GetToken must be also set.
         /// </summary>
         public string? Token { get; set; }
 
@@ -35,9 +36,9 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Gets or sets the client version.
-        /// Default is the assembly version.
+        /// By default not set.
         /// </summary>
-        public string Version { get; set; } = typeof(CentrifugeClient).Assembly.GetName().Version?.ToString() ?? "1.0.0";
+        public string Version { get; set; } = "";
 
         /// <summary>
         /// Gets or sets the minimum delay between reconnect attempts.
