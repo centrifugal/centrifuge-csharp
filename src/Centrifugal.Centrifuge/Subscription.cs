@@ -488,6 +488,24 @@ namespace Centrifugal.Centrifuge
             {
                 await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
+            catch (CentrifugeException ex)
+            {
+                OnError("subscribe", ex);
+                // Temporary errors or token expired (109) - schedule resubscribe
+                // Permanent errors - unsubscribe (matching centrifuge-js behavior)
+                if (ex.Code < 100 || ex.Code == 109 || ex.Temporary)
+                {
+                    if (ex.Code == 109)
+                    {
+                        _refreshRequired = true;
+                    }
+                    await ScheduleResubscribeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    await SetUnsubscribedAsync(ex.Code, ex.Message).ConfigureAwait(false);
+                }
+            }
             catch (Exception ex)
             {
                 OnError("subscribe", ex);
@@ -527,6 +545,24 @@ namespace Centrifugal.Centrifuge
             catch (CentrifugeUnauthorizedException)
             {
                 await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
+            }
+            catch (CentrifugeException ex)
+            {
+                OnError("subscribe", ex);
+                // Temporary errors or token expired (109) - schedule resubscribe
+                // Permanent errors - unsubscribe (matching centrifuge-js behavior)
+                if (ex.Code < 100 || ex.Code == 109 || ex.Temporary)
+                {
+                    if (ex.Code == 109)
+                    {
+                        _refreshRequired = true;
+                    }
+                    await ScheduleResubscribeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    await SetUnsubscribedAsync(ex.Code, ex.Message).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
