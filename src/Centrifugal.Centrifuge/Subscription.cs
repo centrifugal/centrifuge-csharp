@@ -786,11 +786,6 @@ namespace Centrifugal.Centrifuge
             return CentrifugeClient.CreatePublicationArgs(Channel, pub, data);
         }
 
-        private Exception NotImplementedException(char v)
-        {
-            throw new NotImplementedException();
-        }
-
         internal void HandleJoin(Join join)
         {
             if (join.Info == null) return;
