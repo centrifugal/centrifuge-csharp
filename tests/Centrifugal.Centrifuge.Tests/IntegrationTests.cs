@@ -116,7 +116,7 @@ namespace Centrifugal.Centrifuge.Tests
             var ctx = await publicationReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
             client.Disconnect();
 
-            var receivedData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(Encoding.UTF8.GetString(ctx.Data));
+            var receivedData = System.Text.Json.JsonSerializer.Deserialize<dynamic>(Encoding.UTF8.GetString(ctx.Data.Span));
             Assert.NotNull(receivedData);
         }
 

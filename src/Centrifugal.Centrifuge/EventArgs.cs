@@ -71,12 +71,12 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the optional connection data from server.
         /// </summary>
-        public byte[]? Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeConnectedEventArgs"/> class.
         /// </summary>
-        public CentrifugeConnectedEventArgs(string clientId, string transport, byte[]? data = null)
+        public CentrifugeConnectedEventArgs(string clientId, string transport, ReadOnlyMemory<byte> data = default)
         {
             ClientId = clientId ?? string.Empty;
             Transport = transport ?? string.Empty;
@@ -160,21 +160,21 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the message data.
         /// </summary>
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeMessageEventArgs"/> class.
         /// </summary>
-        public CentrifugeMessageEventArgs(byte[] data)
+        public CentrifugeMessageEventArgs(ReadOnlyMemory<byte> data)
         {
-            Data = data ?? Array.Empty<byte>();
+            Data = data;
         }
     }
 
     /// <summary>
     /// Client information.
     /// </summary>
-    public class CentrifugeClientInfo
+    public readonly struct CentrifugeClientInfo
     {
         /// <summary>
         /// Gets the user ID.
@@ -189,17 +189,17 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the connection info.
         /// </summary>
-        public byte[]? ConnInfo { get; }
+        public ReadOnlyMemory<byte> ConnInfo { get; }
 
         /// <summary>
         /// Gets the channel info.
         /// </summary>
-        public byte[]? ChanInfo { get; }
+        public ReadOnlyMemory<byte> ChanInfo { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CentrifugeClientInfo"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeClientInfo"/> struct.
         /// </summary>
-        public CentrifugeClientInfo(string user, string client, byte[]? connInfo = null, byte[]? chanInfo = null)
+        public CentrifugeClientInfo(string user, string client, ReadOnlyMemory<byte> connInfo = default, ReadOnlyMemory<byte> chanInfo = default)
         {
             User = user ?? string.Empty;
             Client = client ?? string.Empty;
@@ -221,7 +221,7 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the publication data.
         /// </summary>
-        public byte[] Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Gets the optional publisher client info.
@@ -241,10 +241,10 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugePublicationEventArgs"/> class.
         /// </summary>
-        public CentrifugePublicationEventArgs(string channel, byte[] data, CentrifugeClientInfo? info = null, ulong? offset = null, IReadOnlyDictionary<string, string>? tags = null)
+        public CentrifugePublicationEventArgs(string channel, ReadOnlyMemory<byte> data, CentrifugeClientInfo? info = null, ulong? offset = null, IReadOnlyDictionary<string, string>? tags = null)
         {
             Channel = channel ?? string.Empty;
-            Data = data ?? Array.Empty<byte>();
+            Data = data;
             Info = info;
             Offset = offset;
             Tags = tags;
@@ -272,7 +272,7 @@ namespace Centrifugal.Centrifuge
         public CentrifugeJoinEventArgs(string channel, CentrifugeClientInfo info)
         {
             Channel = channel ?? string.Empty;
-            Info = info ?? throw new ArgumentNullException(nameof(info));
+            Info = info;
         }
     }
 
@@ -297,7 +297,7 @@ namespace Centrifugal.Centrifuge
         public CentrifugeLeaveEventArgs(string channel, CentrifugeClientInfo info)
         {
             Channel = channel ?? string.Empty;
-            Info = info ?? throw new ArgumentNullException(nameof(info));
+            Info = info;
         }
     }
 
@@ -384,12 +384,12 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the optional subscription data from server.
         /// </summary>
-        public byte[]? Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeSubscribedEventArgs"/> class.
         /// </summary>
-        public CentrifugeSubscribedEventArgs(bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, byte[]? data = null)
+        public CentrifugeSubscribedEventArgs(bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, ReadOnlyMemory<byte> data = default)
         {
             WasRecovering = wasRecovering;
             Recovered = recovered;
@@ -428,7 +428,7 @@ namespace Centrifugal.Centrifuge
     /// <summary>
     /// Stream position for recovery.
     /// </summary>
-    public class CentrifugeStreamPosition
+    public readonly struct CentrifugeStreamPosition
     {
         /// <summary>
         /// Gets the offset in the stream.
@@ -441,7 +441,7 @@ namespace Centrifugal.Centrifuge
         public string Epoch { get; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CentrifugeStreamPosition"/> class.
+        /// Initializes a new instance of the <see cref="CentrifugeStreamPosition"/> struct.
         /// </summary>
         public CentrifugeStreamPosition(ulong offset, string epoch)
         {
@@ -507,12 +507,12 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets the optional subscription data from server.
         /// </summary>
-        public byte[]? Data { get; }
+        public ReadOnlyMemory<byte> Data { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeServerSubscribedEventArgs"/> class.
         /// </summary>
-        public CentrifugeServerSubscribedEventArgs(string channel, bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, byte[]? data = null)
+        public CentrifugeServerSubscribedEventArgs(string channel, bool wasRecovering, bool recovered, bool recoverable, bool positioned, CentrifugeStreamPosition? streamPosition = null, ReadOnlyMemory<byte> data = default)
         {
             Channel = channel ?? string.Empty;
             WasRecovering = wasRecovering;

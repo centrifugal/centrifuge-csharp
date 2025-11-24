@@ -270,8 +270,9 @@ namespace Centrifugal.Centrifuge
         /// If the client is disconnected, the Task is rejected.
         /// </summary>
         /// <param name="timeout">Optional timeout.</param>
+        /// <param name="cancellationToken">Optional cancellation token.</param>
         /// <returns>A task that completes when connected.</returns>
-        public Task ReadyAsync(TimeSpan? timeout = null)
+        public Task ReadyAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             switch (_state)
             {
@@ -286,10 +287,14 @@ namespace Centrifugal.Centrifuge
                     var promiseId = NextPromiseId();
                     _readyPromises[promiseId] = tcs;
 
+                    CancellationTokenSource? timeoutCts = null;
+                    CancellationTokenRegistration timeoutRegistration = default;
+                    CancellationTokenRegistration cancellationRegistration = default;
+
                     if (timeout.HasValue)
                     {
-                        var cts = new CancellationTokenSource(timeout.Value);
-                        cts.Token.Register(() =>
+                        timeoutCts = new CancellationTokenSource(timeout.Value);
+                        timeoutRegistration = timeoutCts.Token.Register(() =>
                         {
                             if (_readyPromises.TryRemove(promiseId, out var promise))
                             {
@@ -297,6 +302,25 @@ namespace Centrifugal.Centrifuge
                             }
                         });
                     }
+
+                    if (cancellationToken.CanBeCanceled)
+                    {
+                        cancellationRegistration = cancellationToken.Register(() =>
+                        {
+                            if (_readyPromises.TryRemove(promiseId, out var promise))
+                            {
+                                promise.TrySetCanceled(cancellationToken);
+                            }
+                        });
+                    }
+
+                    // Dispose registrations when task completes to prevent memory leaks
+                    tcs.Task.ContinueWith(_ =>
+                    {
+                        timeoutRegistration.Dispose();
+                        cancellationRegistration.Dispose();
+                        timeoutCts?.Dispose();
+                    }, TaskContinuationOptions.ExecuteSynchronously);
 
                     return tcs.Task;
             }
@@ -376,11 +400,11 @@ namespace Centrifugal.Centrifuge
         /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New connection data.</param>
-        public void SetData(byte[]? data)
+        public void SetData(ReadOnlyMemory<byte> data)
         {
             lock (_stateChangeLock)
             {
-                _options.Data = data != null ? (byte[])data.Clone() : null;
+                _options.Data = data.IsEmpty ? default : data.ToArray();
             }
         }
 
@@ -406,10 +430,10 @@ namespace Centrifugal.Centrifuge
         /// <param name="data">Request data.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>RPC result.</returns>
-        public async Task<CentrifugeRpcResult> RpcAsync(string method, byte[] data, CancellationToken cancellationToken = default)
+        public async Task<CentrifugeRpcResult> RpcAsync(string method, ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -417,7 +441,7 @@ namespace Centrifugal.Centrifuge
                 Rpc = new RPCRequest
                 {
                     Method = method,
-                    Data = ByteString.CopyFrom(data)
+                    Data = ByteString.CopyFrom(data.Span)
                 }
             };
 
@@ -441,16 +465,16 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         /// <param name="data">Message data.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
+        public async Task SendAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
                 Send = new SendRequest
                 {
-                    Data = ByteString.CopyFrom(data)
+                    Data = ByteString.CopyFrom(data.Span)
                 }
             };
 
@@ -1035,7 +1059,7 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            byte[]? data;
+            ReadOnlyMemory<byte> data;
             Dictionary<string, string>? headers;
             lock (_stateChangeLock)
             {
@@ -1050,9 +1074,9 @@ namespace Centrifugal.Centrifuge
                 Version = _options.Version
             };
 
-            if (data != null)
+            if (!data.IsEmpty)
             {
-                connectRequest.Data = ByteString.CopyFrom(data);
+                connectRequest.Data = ByteString.CopyFrom(data.Span);
             }
 
             if (headers != null && headers.Count > 0)
@@ -1154,7 +1178,7 @@ namespace Centrifugal.Centrifuge
                 }
             }
 
-            byte[]? data;
+            ReadOnlyMemory<byte> data;
             Dictionary<string, string>? headers;
             lock (_stateChangeLock)
             {
@@ -1169,9 +1193,9 @@ namespace Centrifugal.Centrifuge
                 Version = _options.Version
             };
 
-            if (data != null)
+            if (!data.IsEmpty)
             {
-                connectRequest.Data = ByteString.CopyFrom(data);
+                connectRequest.Data = ByteString.CopyFrom(data.Span);
             }
 
             if (headers != null && headers.Count > 0)
