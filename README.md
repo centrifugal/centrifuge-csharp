@@ -122,7 +122,7 @@ var subscription = client.NewSubscription("chat");
 // Setup subscription event handlers
 subscription.Publication += (sender, e) =>
 {
-    var data = Encoding.UTF8.GetString(e.Data);
+    var data = Encoding.UTF8.GetString(e.Data.Span);
     Console.WriteLine($"Message from {e.Channel}: {data}");
 };
 
@@ -202,7 +202,7 @@ var history = await subscription.HistoryAsync(new CentrifugeHistoryOptions
 
 foreach (var pub in history.Publications)
 {
-    var data = Encoding.UTF8.GetString(pub.Data);
+    var data = Encoding.UTF8.GetString(pub.Data.Span);
     Console.WriteLine($"Message: {data}");
 }
 ```
@@ -227,7 +227,7 @@ Console.WriteLine($"Clients: {stats.NumClients}, Users: {stats.NumUsers}");
 ```csharp
 var request = Encoding.UTF8.GetBytes("{\"key\":\"value\"}");
 var result = await client.RpcAsync("my_method", request);
-var response = Encoding.UTF8.GetString(result.Data);
+var response = Encoding.UTF8.GetString(result.Data.Span);
 Console.WriteLine($"RPC result: {response}");
 ```
 
@@ -285,8 +285,8 @@ var options = new CentrifugeClientOptions
     Timeout = TimeSpan.FromSeconds(5),
     MaxServerPingDelay = TimeSpan.FromSeconds(10),
 
-    // Debugging
-    Debug = true,
+    // Logging (pass ILogger for debug output)
+    Logger = loggerFactory.CreateLogger<CentrifugeClient>(),
 
     // Custom headers (requires Centrifugo v6+)
     Headers = new Dictionary<string, string>
@@ -346,6 +346,72 @@ catch (CentrifugeException ex)
     Console.WriteLine($"Centrifuge error: {ex.Code} - {ex.Message}");
     Console.WriteLine($"Temporary: {ex.Temporary}");
 }
+```
+
+## Working with JSON Data
+
+The SDK uses binary data (`ReadOnlyMemory<byte>`) for all payloads, but this doesn't mean you can't use JSON. JSON is simply a UTF-8 encoded byte sequence, so it works seamlessly:
+
+```csharp
+// Sending JSON
+var message = new { text = "Hello", timestamp = DateTime.UtcNow };
+var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(message);
+await subscription.PublishAsync(jsonBytes);
+
+// Receiving JSON
+subscription.Publication += (sender, e) =>
+{
+    // Option 1: Deserialize directly from bytes (zero-copy, recommended)
+    var message = JsonSerializer.Deserialize<MyMessage>(e.Data.Span);
+
+    // Option 2: Convert to string first
+    var json = Encoding.UTF8.GetString(e.Data.Span);
+    Console.WriteLine($"Received: {json}");
+};
+```
+
+Using `ReadOnlyMemory<byte>` instead of `string` provides flexibility - you can work with JSON, MessagePack, Protobuf, or any other serialization format. The `.Span` property enables zero-copy parsing with modern serializers like `System.Text.Json`.
+
+## Design Notes
+
+### Non-Async Connect and Subscribe Methods
+
+You may notice that `Connect()` and `Subscribe()` methods are not async and don't return a `Task`. This is an intentional design choice:
+
+```csharp
+client.Connect();           // Returns void, not Task
+subscription.Subscribe();   // Returns void, not Task
+```
+
+**Why?**
+
+1. **Lifecycle Management**: The SDK manages connection and subscription lifecycle internally, including automatic reconnection and resubscription. Calling `Connect()` expresses intent ("I want to be connected"), and the SDK maintains that intent across reconnects.
+
+2. **Automatic Batching**: This design enables automatic batching of subscription requests. When you call `Subscribe()` on multiple subscriptions before or right after `Connect()`, the SDK batches them into a single protocol message:
+
+```csharp
+var sub1 = client.NewSubscription("channel1");
+var sub2 = client.NewSubscription("channel2");
+var sub3 = client.NewSubscription("channel3");
+
+sub1.Subscribe();
+sub2.Subscribe();
+sub3.Subscribe();
+
+client.Connect();
+// All 3 subscriptions are batched together in one request!
+```
+
+3. **Consistency**: This pattern is consistent across all Centrifuge client SDKs (JavaScript, Go, Swift, Dart, etc.).
+
+**If you need to wait for connection/subscription:**
+
+```csharp
+client.Connect();
+await client.ReadyAsync();  // Wait until connected
+
+subscription.Subscribe();
+await subscription.ReadyAsync();  // Wait until subscribed
 ```
 
 ## Command Batching
@@ -507,7 +573,7 @@ Then inject and use in your components:
 
         Client.Publication += (sender, e) =>
         {
-            var data = Encoding.UTF8.GetString(e.Data);
+            var data = Encoding.UTF8.GetString(e.Data.Span);
             messages.Add($"Received: {data}");
             InvokeAsync(StateHasChanged);
         };
@@ -550,7 +616,7 @@ dotnet pack -c Release
 
 This library uses GitHub Actions for automated publishing. To release a new version:
 
-1. Update the version in `src/Centrifuge/Centrifuge.csproj`
+1. Update the version in `src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj`
 2. Create a git tag: `git tag v1.0.0`
 3. Push the tag: `git push origin v1.0.0`
 4. GitHub Actions will automatically build and publish to NuGet
@@ -576,7 +642,7 @@ The SDK follows the [Centrifuge protocol specification](https://centrifugal.dev/
 
 - **Client State Machine**: Manages connection lifecycle (Disconnected → Connecting → Connected)
 - **Subscription State Machine**: Manages subscription lifecycle (Unsubscribed → Subscribing → Subscribed)
-- **Transport Layer**: Abstraction over WebSocket, SSE, and HTTP-streaming
+- **Transport Layer**: Abstraction over WebSocket and HTTP-streaming
 - **Exponential Backoff**: Smart reconnection with full jitter to avoid thundering herd
 - **Varint Encoding**: Efficient Protobuf message framing
 - **Event-Driven Architecture**: Thread-safe event handling for all state changes
