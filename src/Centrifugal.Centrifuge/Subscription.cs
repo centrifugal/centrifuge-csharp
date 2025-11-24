@@ -775,20 +775,12 @@ namespace Centrifugal.Centrifuge
             // Apply delta decompression if negotiated with server
             if (!string.IsNullOrEmpty(_options.Delta) && _deltaNegotiated)
             {
-                try
+                if (_prevValue != null && data.Length > 0)
                 {
-                    if (_prevValue != null && data.Length > 0)
-                    {
-                        // Apply fossil delta to get the actual publication data
-                        data = Fossil.ApplyDelta(_prevValue, data);
-                    }
-                    _prevValue = data;
+                    // Apply fossil delta to get the actual publication data
+                    data = Fossil.ApplyDelta(_prevValue, data);
                 }
-                catch (Exception ex)
-                {
-                    OnError("delta", ex);
-                    // Fall through to use original data on delta error
-                }
+                _prevValue = data;
             }
 
             return CentrifugeClient.CreatePublicationArgs(Channel, pub, data);
