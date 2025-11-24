@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Centrifugal.Centrifuge;
@@ -565,6 +566,211 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal(CentrifugeSubscriptionState.Unsubscribed, subscription.State);
             Assert.Equal(CentrifugeUnsubscribedCodes.Unauthorized, unsubCtx.Code);
 
+            client.Disconnect();
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task DeltaPublications(CentrifugeTransportType transport, string endpoint)
+        {
+            using var client = CreateClient(transport, endpoint);
+            client.Connect();
+            await client.ReadyAsync();
+
+            var channelName = $"delta_test_{Guid.NewGuid():N}";
+            var subscriptionOptions = new CentrifugeSubscriptionOptions
+            {
+                Delta = "fossil"
+            };
+
+            var subscription = client.NewSubscription(channelName, subscriptionOptions);
+            var publications = new List<CentrifugePublicationEventArgs>();
+            var allReceived = new TaskCompletionSource<bool>();
+
+            subscription.Publication += (s, e) =>
+            {
+                publications.Add(e);
+                if (publications.Count >= 3)
+                {
+                    allReceived.TrySetResult(true);
+                }
+            };
+
+            subscription.Subscribe();
+            await subscription.ReadyAsync();
+
+            // Publish 3 messages via Centrifugo server HTTP API
+            // Use larger messages to ensure delta compression is beneficial
+            using var httpClient = new System.Net.Http.HttpClient();
+            var largeText = string.Join(" ", Enumerable.Repeat("Lorem ipsum dolor sit amet, consectetur adipiscing elit.", 20));
+            var messages = new[]
+            {
+                new { text = largeText, counter = 1, data = new { field1 = "value1", field2 = "value2", field3 = "value3" } },
+                new { text = largeText, counter = 2, data = new { field1 = "value1", field2 = "value2", field3 = "value3" } },  // Similar to first - good for delta
+                new { text = largeText + " Additional text.", counter = 3, data = new { field1 = "changed", field2 = "value2", field3 = "value3" } }
+            };
+
+            foreach (var msg in messages)
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(msg);
+                var publishRequest = new
+                {
+                    channel = channelName,
+                    data = msg,
+                    delta = true
+                };
+                var requestJson = System.Text.Json.JsonSerializer.Serialize(publishRequest);
+                var content = new System.Net.Http.StringContent(requestJson, Encoding.UTF8, "application/json");
+
+                var response = await httpClient.PostAsync("http://localhost:8000/api/publish", content);
+                response.EnsureSuccessStatusCode();
+            }
+
+            // Wait for all publications to be received
+            await allReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            // Verify all 3 messages were received correctly
+            Assert.Equal(3, publications.Count);
+
+            for (int i = 0; i < 3; i++)
+            {
+                var receivedJson = Encoding.UTF8.GetString(publications[i].Data.Span);
+                var received = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(receivedJson);
+
+                Assert.Equal(messages[i].text, received.GetProperty("text").GetString());
+                Assert.Equal(messages[i].counter, received.GetProperty("counter").GetInt32());
+                Assert.Equal(messages[i].data.field1, received.GetProperty("data").GetProperty("field1").GetString());
+                Assert.Equal(messages[i].data.field2, received.GetProperty("data").GetProperty("field2").GetString());
+                Assert.Equal(messages[i].data.field3, received.GetProperty("data").GetProperty("field3").GetString());
+            }
+
+            subscription.Unsubscribe();
+            client.Disconnect();
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task HistoryWithDifferentLimits(CentrifugeTransportType transport, string endpoint)
+        {
+            using var client = CreateClient(transport, endpoint);
+            client.Connect();
+            await client.ReadyAsync();
+
+            var channelName = $"history_test_{Guid.NewGuid():N}";
+            var subscription = client.NewSubscription(channelName);
+
+            subscription.Subscribe();
+            await subscription.ReadyAsync();
+
+            // Publish 3 messages via Centrifugo server HTTP API
+            using var httpClient = new System.Net.Http.HttpClient();
+            var messages = new[]
+            {
+                new { text = "Message 1", id = 1 },
+                new { text = "Message 2", id = 2 },
+                new { text = "Message 3", id = 3 }
+            };
+
+            foreach (var msg in messages)
+            {
+                var publishRequest = new
+                {
+                    channel = channelName,
+                    data = msg
+                };
+                var requestJson = System.Text.Json.JsonSerializer.Serialize(publishRequest);
+                var content = new System.Net.Http.StringContent(requestJson, Encoding.UTF8, "application/json");
+
+                var response = await httpClient.PostAsync("http://localhost:8000/api/publish", content);
+                response.EnsureSuccessStatusCode();
+            }
+
+            // Wait a bit to ensure messages are stored in history
+            await Task.Delay(100);
+
+            // Test 1: Limit -1 returns full history without limit
+            var historyFull = await subscription.HistoryAsync(new CentrifugeHistoryOptions { Limit = -1 });
+            Assert.Equal(3, historyFull.Publications.Length);
+            Assert.NotEmpty(historyFull.Epoch);
+            Assert.True(historyFull.Offset > 0);
+
+            // Verify messages are in correct order (oldest first by default)
+            for (int i = 0; i < 3; i++)
+            {
+                var receivedJson = Encoding.UTF8.GetString(historyFull.Publications[i].Data.Span);
+                var received = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(receivedJson);
+                Assert.Equal(messages[i].id, received.GetProperty("id").GetInt32());
+            }
+
+            // Test 2: Limit 0 returns only stream position, no publications
+            var historyEmpty = await subscription.HistoryAsync(new CentrifugeHistoryOptions { Limit = 0 });
+            Assert.Empty(historyEmpty.Publications);
+            Assert.NotEmpty(historyEmpty.Epoch);
+            Assert.True(historyEmpty.Offset > 0);
+
+            // Test 3: Limit 2 returns last 2 publications
+            var historyLimited = await subscription.HistoryAsync(new CentrifugeHistoryOptions { Limit = 2 });
+            Assert.Equal(2, historyLimited.Publications.Length);
+            Assert.NotEmpty(historyLimited.Epoch);
+            Assert.True(historyLimited.Offset > 0);
+
+            // Should return the oldest 2 messages
+            for (int i = 0; i < 2; i++)
+            {
+                var receivedJson = Encoding.UTF8.GetString(historyLimited.Publications[i].Data.Span);
+                var received = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(receivedJson);
+                Assert.Equal(messages[i].id, received.GetProperty("id").GetInt32());
+            }
+
+            // Test 4: Reverse order returns newest first
+            var historyReverse = await subscription.HistoryAsync(new CentrifugeHistoryOptions { Limit = -1, Reverse = true });
+            Assert.Equal(3, historyReverse.Publications.Length);
+
+            // Verify messages are in reverse order (newest first)
+            for (int i = 0; i < 3; i++)
+            {
+                var receivedJson = Encoding.UTF8.GetString(historyReverse.Publications[i].Data.Span);
+                var received = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(receivedJson);
+                Assert.Equal(messages[2 - i].id, received.GetProperty("id").GetInt32());
+            }
+
+            subscription.Unsubscribe();
+            client.Disconnect();
+        }
+
+        [Theory]
+        [MemberData(nameof(GetCentrifugeTransportEndpoints))]
+        public async Task PresenceReturnsCurrentClient(CentrifugeTransportType transport, string endpoint)
+        {
+            using var client = CreateClient(transport, endpoint);
+            client.Connect();
+            await client.ReadyAsync();
+
+            var channelName = $"presence_test_{Guid.NewGuid():N}";
+            var subscription = client.NewSubscription(channelName);
+
+            subscription.Subscribe();
+            await subscription.ReadyAsync();
+
+            // Call presence and verify it returns exactly 1 client (our connection)
+            var presence = await subscription.PresenceAsync();
+
+            Assert.NotNull(presence);
+            Assert.NotNull(presence.Clients);
+            Assert.Single(presence.Clients);
+
+            // Verify the client info
+            var clientInfo = presence.Clients.First().Value;
+            Assert.NotEmpty(clientInfo.Client);
+
+            // Call presence stats and verify counts
+            var presenceStats = await subscription.PresenceStatsAsync();
+
+            Assert.NotNull(presenceStats);
+            Assert.Equal(1u, presenceStats.NumClients);
+            Assert.Equal(1u, presenceStats.NumUsers);
+
+            subscription.Unsubscribe();
             client.Disconnect();
         }
     }
