@@ -397,13 +397,14 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Sets the connection data. This will be used for all subsequent connection attempts.
+        /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New connection data.</param>
         public void SetData(ReadOnlyMemory<byte> data)
         {
             lock (_stateChangeLock)
             {
-                _options.Data = data;
+                _options.Data = data.IsEmpty ? default : data.ToArray();
             }
         }
 

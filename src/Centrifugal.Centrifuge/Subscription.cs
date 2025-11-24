@@ -187,13 +187,14 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Sets the subscription data. This will be used for all subsequent subscription attempts.
+        /// The data is copied internally to prevent external modifications.
         /// </summary>
         /// <param name="data">New subscription data.</param>
         public void SetData(ReadOnlyMemory<byte> data)
         {
             lock (_stateChangeLock)
             {
-                _options.Data = data;
+                _options.Data = data.IsEmpty ? default : data.ToArray();
             }
         }
 
