@@ -685,9 +685,6 @@ namespace Centrifugal.Centrifuge.Tests
                 response.EnsureSuccessStatusCode();
             }
 
-            // Wait a bit to ensure messages are stored in history
-            await Task.Delay(100);
-
             // Test 1: Limit -1 returns full history without limit
             var historyFull = await subscription.HistoryAsync(new CentrifugeHistoryOptions { Limit = -1 });
             Assert.Equal(3, historyFull.Publications.Length);
@@ -742,36 +739,72 @@ namespace Centrifugal.Centrifuge.Tests
         [MemberData(nameof(GetCentrifugeTransportEndpoints))]
         public async Task PresenceReturnsCurrentClient(CentrifugeTransportType transport, string endpoint)
         {
-            using var client = CreateClient(transport, endpoint);
-            client.Connect();
-            await client.ReadyAsync();
+            using var client1 = CreateClient(transport, endpoint);
+            using var client2 = CreateClient(transport, endpoint);
+
+            client1.Connect();
+            await client1.ReadyAsync();
 
             var channelName = $"presence_test_{Guid.NewGuid():N}";
-            var subscription = client.NewSubscription(channelName);
+            var subscription1 = client1.NewSubscription(channelName);
 
-            subscription.Subscribe();
-            await subscription.ReadyAsync();
+            var joinsReceived = new List<CentrifugeJoinEventArgs>();
+            var joinTcs1 = new TaskCompletionSource<bool>();
+            var joinTcs2 = new TaskCompletionSource<bool>();
 
-            // Call presence and verify it returns exactly 1 client (our connection)
-            var presence = await subscription.PresenceAsync();
+            subscription1.Join += (s, e) =>
+            {
+                joinsReceived.Add(e);
+                if (joinsReceived.Count == 1)
+                    joinTcs1.TrySetResult(true);
+                else if (joinsReceived.Count == 2)
+                    joinTcs2.TrySetResult(true);
+            };
+
+            subscription1.Subscribe();
+            await subscription1.ReadyAsync();
+
+            // Wait for first join event (client1's own join)
+            await joinTcs1.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Single(joinsReceived);
+            Assert.Equal(channelName, joinsReceived[0].Channel);
+            Assert.NotEmpty(joinsReceived[0].Info.Client);
+
+            // Connect second client and subscribe to same channel - this should trigger second join event
+            client2.Connect();
+            await client2.ReadyAsync();
+
+            var subscription2 = client2.NewSubscription(channelName);
+            subscription2.Subscribe();
+            await subscription2.ReadyAsync();
+
+            // Wait for second join event (client2's join)
+            await joinTcs2.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, joinsReceived.Count);
+            Assert.Equal(channelName, joinsReceived[1].Channel);
+            Assert.NotEmpty(joinsReceived[1].Info.Client);
+
+            // Verify the two client IDs are different
+            Assert.NotEqual(joinsReceived[0].Info.Client, joinsReceived[1].Info.Client);
+
+            // Call presence and verify it works (returns at least current client's presence)
+            var presence = await subscription1.PresenceAsync();
 
             Assert.NotNull(presence);
             Assert.NotNull(presence.Clients);
-            Assert.Single(presence.Clients);
-
-            // Verify the client info
-            var clientInfo = presence.Clients.First().Value;
-            Assert.NotEmpty(clientInfo.Client);
+            Assert.True(presence.Clients.Count == 2, "2 clients should be present");
 
             // Call presence stats and verify counts
-            var presenceStats = await subscription.PresenceStatsAsync();
+            var presenceStats = await subscription1.PresenceStatsAsync();
 
             Assert.NotNull(presenceStats);
-            Assert.Equal(1u, presenceStats.NumClients);
-            Assert.Equal(1u, presenceStats.NumUsers);
+            Assert.True(presenceStats.NumClients == 2, "2 clients should be counted");
+            Assert.True(presenceStats.NumUsers >= 1, "1 user should be counted");
 
-            subscription.Unsubscribe();
-            client.Disconnect();
+            subscription1.Unsubscribe();
+            subscription2.Unsubscribe();
+            client1.Disconnect();
+            client2.Disconnect();
         }
     }
 
