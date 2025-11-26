@@ -70,6 +70,15 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public ILogger? Logger { get; set; }
 
+#if NET6_0_OR_GREATER
+        /// <summary>
+        /// Gets or sets the IJSRuntime for Blazor WebAssembly support.
+        /// If not set, will use the global instance configured via CentrifugeClient.InitializeBrowserInterop().
+        /// Only needed when running in browser environments (Blazor WASM).
+        /// </summary>
+        public Microsoft.JSInterop.IJSRuntime? JSRuntime { get; set; }
+#endif
+
         /// <summary>
         /// Gets or sets the custom headers to emulate (sent with first protocol message).
         /// Requires Centrifugo v6+.

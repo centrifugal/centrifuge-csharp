@@ -1,8 +1,9 @@
 @page "/"
-@inject CentrifugeClientFactory ClientFactory
 @inject IJSRuntime JS
+@inject ILoggerFactory LoggerFactory
 @implements IAsyncDisposable
 @using System.Text
+@using Centrifugal.Centrifuge
 
 <PageTitle>Centrifuge Blazor Example</PageTitle>
 
@@ -404,7 +405,34 @@
             await LogAsync($"Could not save transport preference: {ex.Message}");
         }
 
-        _client = ClientFactory.CreateClient(useHttpStreaming);
+        var logger = LoggerFactory.CreateLogger<CentrifugeClient>();
+
+        if (useHttpStreaming)
+        {
+            _client = new CentrifugeClient(
+                new[]
+                {
+                    new CentrifugeTransportEndpoint(
+                        CentrifugeTransportType.HttpStream,
+                        "http://localhost:8000/connection/http_stream"
+                    )
+                },
+                options: new CentrifugeClientOptions
+                {
+                    Logger = logger
+                }
+            );
+        }
+        else
+        {
+            _client = new CentrifugeClient(
+                "ws://localhost:8000/connection/websocket",
+                options: new CentrifugeClientOptions
+                {
+                    Logger = logger
+                }
+            );
+        }
 
         await LogAsync("Centrifuge C# SDK - Blazor WASM Example");
         await LogAsync("=========================================");

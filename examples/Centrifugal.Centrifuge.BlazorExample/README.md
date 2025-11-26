@@ -68,12 +68,17 @@ The example uses the Centrifuge SDK's browser-native transports:
 - **WebSocket**: Uses browser's native WebSocket via JavaScript interop (`BrowserWebSocketTransport`)
 - **HTTP Stream**: Uses browser's Fetch API with ReadableStream (`BrowserHttpStreamTransport`)
 
-The `CentrifugeClient` is registered as a scoped service in `Program.cs` with `IJSRuntime` dependency injection, enabling it to use JavaScript interop for browser APIs.
+The SDK uses a simple DI-based configuration approach:
+
+1. Call `builder.Services.AddCentrifugeClient()` in `Program.cs`
+2. Create `CentrifugeClient` instances anywhere in your app without passing `IJSRuntime`
+
+This follows standard .NET conventions, just like SignalR's `AddSignalR()` - configure once, use everywhere!
 
 ## Code Structure
 
-- **Program.cs**: Registers `CentrifugeClient` as a scoped service with IJSRuntime
-- **Pages/Home.razor**: Main example component that connects, subscribes, and logs all events
+- **Program.cs**: Registers Centrifuge with `AddCentrifugeClient()`
+- **Pages/Home.razor**: Creates client directly and logs all events
 - All SDK events are logged both to browser console and displayed in the UI
 
 ## Troubleshooting
