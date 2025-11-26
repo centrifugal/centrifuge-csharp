@@ -15,7 +15,7 @@
 
     <!-- Package Information -->
     <PackageId>Centrifugal.Centrifuge</PackageId>
-    <Version>0.0.9</Version>
+    <Version>0.0.10</Version>
     <Authors>Centrifugal Labs</Authors>
     <Company>Centrifugal Labs</Company>
     <Description>
@@ -51,6 +51,10 @@
 
     <!-- Logging abstractions for idiomatic .NET logging support -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
+
+    <!-- DI abstractions for Blazor WASM support (not needed for netstandard2.1/Unity) -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0"
+                      Condition="'$(TargetFramework)' != 'netstandard2.1'" />
 
     <!-- For .NET Standard 2.1, add compatibility packages -->
     <PackageReference Include="System.Threading.Channels" Version="8.0.0"

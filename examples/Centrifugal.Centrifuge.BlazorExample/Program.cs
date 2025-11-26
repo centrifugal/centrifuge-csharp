@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Centrifugal.Centrifuge.BlazorExample;
+using Centrifugal.Centrifuge;
 using Microsoft.Extensions.Logging;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -13,7 +14,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Logging.AddFilter("Centrifugal.Centrifuge", LogLevel.Debug);
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);  // Suppress Microsoft framework logs
 
-// Register CentrifugeClientFactory for creating clients with different transports
-builder.Services.AddScoped<CentrifugeClientFactory>();
+// Add Centrifuge client services - automatically initializes browser interop
+builder.Services.AddCentrifugeClient();
 
 await builder.Build().RunAsync();

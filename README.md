@@ -116,7 +116,8 @@ var result = await client.RpcAsync("method", data);
 ### Subscriptions
 
 ```csharp
-// Create subscription, may throw Exception subscription already exists in Client's registry.
+// Create subscription, may throw CentrifugeDuplicateSubscriptionException
+// if subscription to the channel already exists in Client's registry.
 var subscription = client.NewSubscription("chat");
 
 // Setup subscription event handlers
@@ -124,6 +125,11 @@ subscription.Publication += (sender, e) =>
 {
     var data = Encoding.UTF8.GetString(e.Data.Span);
     Console.WriteLine($"Message from {e.Channel}: {data}");
+};
+
+subscription.Subscribing += (sender, e) =>
+{
+    Console.WriteLine("Subscribing to channel");
 };
 
 subscription.Subscribed += (sender, e) =>
