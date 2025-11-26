@@ -17,6 +17,9 @@ The easiest way is using Docker (note, we are using client insecure mode here an
 ```bash
 docker pull centrifugo/centrifugo:v6
 docker run -p 8000:8000 \
+-e CENTRIFUGO_ADMIN_ENABLED="true" \
+-e CENTRIFUGO_ADMIN_PASSWORD="change-me-to-secure-password" \
+-e CENTRIFUGO_ADMIN_SECRET="change-me-to-secure-secret" \
 -e CENTRIFUGO_HTTP_STREAM_ENABLED="true" \
 -e CENTRIFUGO_CLIENT_INSECURE="true" \
 -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS="*" \

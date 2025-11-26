@@ -9,21 +9,18 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 
 ## Features
 
+- ✅ Multi-platform support
 - ✅ WebSocket and HTTP-streaming transports with automatic fallback
 - ✅ Browser-native transports for Blazor WebAssembly (using JS interop)
 - ✅ Protobuf binary protocol for efficient communication
 - ✅ Automatic command batching for improved network efficiency
 - ✅ Automatic reconnection with exponential backoff and full jitter
-- ✅ Channel subscriptions with recovery and positioning
+- ✅ Channel subscriptions with recovery and Fossil delta compression support
 - ✅ JWT authentication with automatic token refresh
-- ✅ Publication, join/leave events
-- ✅ RPC calls
-- ✅ Presence and presence stats
+- ✅ Publications and RPC calls
+- ✅ Presence and presence stats, join/leave events
 - ✅ History API
-- ✅ Async/await throughout
 - ✅ Thread-safe
-- ✅ Comprehensive event system
-- ✅ Multi-platform support
 
 ## Platform Support
 
@@ -54,7 +51,7 @@ The SDK supports multiple transport protocols with platform-specific implementat
 | **WebSocket** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ⚠️ Plugin Required |
 | **HTTP Stream** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ❌ Not Supported |
 
-**\*Blazor WebAssembly**: Requires `IJSRuntime` parameter in constructor. The SDK automatically uses browser-native implementations via JavaScript interop for both WebSocket and HTTP Stream transports.
+**\*Blazor WebAssembly**: Requires `builder.Services.AddCentrifugeClient()` in `Program.cs`. The SDK automatically uses browser-native implementations via JavaScript interop for both WebSocket and HTTP Stream transports.
 
 **Unity WebGL**: Requires a third-party WebSocket plugin. HTTP Stream is not supported in WebGL.
 
@@ -257,15 +254,14 @@ var transports = new[]
     )
 };
 
-// For regular .NET apps
+// Create client with transport fallback
 var client = new CentrifugeClient(transports);
-
-// For Blazor WebAssembly (pass IJSRuntime)
-var client = new CentrifugeClient(transports, jsRuntime);
 
 // Client will try WebSocket first, then fall back to HTTP Stream if needed
 client.Connect();
 ```
+
+**Note**: In Blazor WebAssembly, ensure you've called `builder.Services.AddCentrifugeClient()` first (see Blazor Support section). The SDK will automatically use browser-native transports.
 
 ### Advanced Configuration
 
@@ -279,7 +275,7 @@ var options = new CentrifugeClientOptions
     // Connection data
     Data = Encoding.UTF8.GetBytes("{\"custom\":\"data\"}"),
 
-    // Client identification
+    // Client identification (used for observability)
     Name = "my-app",
     Version = "1.0.0",
 
@@ -294,7 +290,7 @@ var options = new CentrifugeClientOptions
     // Logging (pass ILogger for debug output)
     Logger = loggerFactory.CreateLogger<CentrifugeClient>(),
 
-    // Custom headers (requires Centrifugo v6+)
+    // Custom headers (works over header emulation, requires Centrifugo v6+)
     Headers = new Dictionary<string, string>
     {
         ["X-Custom-Header"] = "value"
@@ -503,60 +499,31 @@ The library works in both Blazor Server and Blazor WebAssembly.
 
 ### Blazor Server
 
-Works out of the box - uses standard .NET WebSocket client:
-
-```csharp
-@inject CentrifugeClient Client
-
-@code {
-    protected override async Task OnInitializedAsync()
-    {
-        Client.Publication += async (sender, e) =>
-        {
-            // Update UI on message
-            await InvokeAsync(StateHasChanged);
-        };
-
-        Client.Connect();
-    }
-}
-```
+Works out of the box - uses standard .NET WebSocket client. No special configuration needed.
 
 ### Blazor WebAssembly
 
-Requires IJSRuntime for browser WebSocket access. Register the client in `Program.cs`:
+The SDK provides a simple DI-based configuration approach, similar to SignalR. Register Centrifuge services once in `Program.cs`:
 
 ```csharp
 using Centrifugal.Centrifuge;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
-// Register CentrifugeClient as scoped service
-builder.Services.AddScoped(sp =>
-{
-    var jsRuntime = sp.GetRequiredService<IJSRuntime>();
-    var client = new CentrifugeClient(
-        "ws://localhost:8000/connection/websocket",
-        jsRuntime,
-        new CentrifugeClientOptions
-        {
-            // Your options here
-        }
-    );
-    return client;
-});
+// Add Centrifuge client services - automatically initializes browser interop
+builder.Services.AddCentrifugeClient();
 
 await builder.Build().RunAsync();
 ```
 
-Then inject and use in your components:
+Then create and use clients anywhere in your app:
 
 ```csharp
 @page "/"
-@inject CentrifugeClient Client
+@inject IJSRuntime JS
+@inject ILoggerFactory LoggerFactory
 @implements IAsyncDisposable
+@using System.Text
 
 <h3>Messages</h3>
 <ul>
@@ -567,35 +534,57 @@ Then inject and use in your components:
 </ul>
 
 @code {
+    private CentrifugeClient? _client;
     private List<string> messages = new();
 
     protected override async Task OnInitializedAsync()
     {
-        Client.Connected += (sender, e) =>
+        // Create client directly - no need to pass IJSRuntime
+        _client = new CentrifugeClient(
+            "ws://localhost:8000/connection/websocket",
+            options: new CentrifugeClientOptions
+            {
+                Logger = LoggerFactory.CreateLogger<CentrifugeClient>()
+            }
+        );
+
+        _client.Connected += (sender, e) =>
         {
             messages.Add($"Connected: {e.ClientId}");
             InvokeAsync(StateHasChanged);
         };
 
-        Client.Publication += (sender, e) =>
+        var subscription = _client.NewSubscription("chat");
+
+        subscription.Publication += (sender, e) =>
         {
             var data = Encoding.UTF8.GetString(e.Data.Span);
             messages.Add($"Received: {data}");
             InvokeAsync(StateHasChanged);
         };
 
-        Client.Connect();
+        _client.Connect();
+        subscription.Subscribe();
     }
 
     public async ValueTask DisposeAsync()
     {
-        // DisposeAsync waits for disconnect to complete before releasing resources
-        await Client.DisposeAsync();
+        if (_client != null)
+        {
+            await _client.DisposeAsync();
+        }
     }
 }
 ```
 
-**Important**: The JavaScript interop file is automatically included as a static asset. If you encounter module loading issues, ensure your `index.html` has the standard Blazor script tag:
+**How it works:**
+
+- The SDK automatically uses browser-native transports when `AddCentrifugeClient()` is called
+- WebSocket uses browser's native WebSocket via JS interop
+- HTTP Stream uses browser's Fetch API with ReadableStream
+- No need to pass `IJSRuntime` to constructors - it's configured globally
+
+**Important**: The JavaScript interop modules are automatically included as static assets. Ensure your `index.html` has the standard Blazor script tag:
 
 ```html
 <script src="_framework/blazor.webassembly.js"></script>
