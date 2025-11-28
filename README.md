@@ -658,7 +658,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Links
 
 - [Centrifugo Documentation](https://centrifugal.dev/)
-- [Client SDK Specification](https://centrifugal.dev/docs/transports/client_sdk)
+- [Client SDK Specification](https://centrifugal.dev/docs/transports/client_api)
 - [Centrifuge Protocol](https://centrifugal.dev/docs/transports/protocol)
 - [GitHub Repository](https://github.com/centrifugal/centrifuge-csharp)
 - [NuGet Package](https://www.nuget.org/packages/Centrifugal.Centrifuge/)
@@ -666,5 +666,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - GitHub Issues: [Report bugs or request features](https://github.com/centrifugal/centrifuge-csharp/issues)
-- Community Forum: [Centrifugal Forum](https://centrifugal.dev/docs/getting-started/community)
-- Telegram: [@centrifugal](https://t.me/joinchat/ABFVWBE0AhkyyhREoaboXQ)
+- [Community rooms](https://centrifugal.dev/docs/getting-started/community)
