@@ -241,8 +241,8 @@ namespace Centrifugal.Centrifuge
         /// <param name="cancellationToken">Cancellation token.</param>
         public async Task PublishAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
-            // Wait for subscription to be ready
-            await ReadyAsync(null, cancellationToken).ConfigureAwait(false);
+            // Wait for subscription to be ready with default timeout
+            await ReadyAsync(_client.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -275,8 +275,8 @@ namespace Centrifugal.Centrifuge
         /// <returns>History result.</returns>
         public async Task<CentrifugeHistoryResult> HistoryAsync(CentrifugeHistoryOptions? options = null, CancellationToken cancellationToken = default)
         {
-            // Wait for subscription to be ready
-            await ReadyAsync().ConfigureAwait(false);
+            // Wait for subscription to be ready with default timeout
+            await ReadyAsync(_client.Timeout, cancellationToken).ConfigureAwait(false);
 
             var request = new HistoryRequest
             {
@@ -340,8 +340,8 @@ namespace Centrifugal.Centrifuge
         /// <returns>Presence result.</returns>
         public async Task<CentrifugePresenceResult> PresenceAsync(CancellationToken cancellationToken = default)
         {
-            // Wait for subscription to be ready
-            await ReadyAsync().ConfigureAwait(false);
+            // Wait for subscription to be ready with default timeout
+            await ReadyAsync(_client.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -386,8 +386,8 @@ namespace Centrifugal.Centrifuge
         /// <returns>Presence stats result.</returns>
         public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(CancellationToken cancellationToken = default)
         {
-            // Wait for subscription to be ready
-            await ReadyAsync().ConfigureAwait(false);
+            // Wait for subscription to be ready with default timeout
+            await ReadyAsync(_client.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {

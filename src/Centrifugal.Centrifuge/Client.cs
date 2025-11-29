@@ -44,6 +44,9 @@ namespace Centrifugal.Centrifuge
         private int _commandId;
         private int _reconnectAttempts;
         private CancellationTokenSource? _reconnectCts;
+
+        // Internal property to allow Subscription to access timeout
+        internal TimeSpan Timeout => _options.Timeout;
         private Timer? _pingTimer;
         private Timer? _refreshTimer;
         private uint _serverPingInterval;
@@ -93,61 +96,160 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Event raised when client state changes.
         /// </summary>
+        /// <remarks>
+        /// <para><b>Best Practice:</b> Keep event handlers fast to avoid blocking the real-time message processing pipeline.</para>
+        /// <para><b>Async Operations:</b> Use <c>async void</c> with <c>await</c> for I/O operations.</para>
+        /// <para><b>CRITICAL:</b> Never block on SDK async methods (e.g., <c>PublishAsync().Wait()</c>) - this will cause deadlock!</para>
+        /// <para>Blocking on non-SDK operations (database calls, file I/O, etc.) is safe but not recommended for performance.</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // BEST ✓ - Async I/O operations
+        /// client.StateChanged += async (sender, e) => {
+        ///     await LogToFileAsync(e.NewState);
+        /// };
+        ///
+        /// // OK - Synchronous operations on other libraries (won't deadlock, but may be slow)
+        /// client.StateChanged += (sender, e) => {
+        ///     File.WriteAllText("state.txt", e.NewState.ToString());  // Safe but blocks thread
+        /// };
+        ///
+        /// // DEADLOCK ✗ - Never block on SDK methods!
+        /// client.StateChanged += (sender, e) => {
+        ///     client.RpcAsync("method", data).Wait();  // DEADLOCK!
+        /// };
+        /// </code>
+        /// </example>
         public event EventHandler<CentrifugeStateEventArgs>? StateChanged;
 
         /// <summary>
-        /// Event raised when client is connecting.
+        /// Event raised when client is connecting or reconnecting.
         /// </summary>
+        /// <remarks>
+        /// <para><b>Best Practice:</b> Keep handlers fast. Use <c>async void</c> with <c>await</c> for I/O operations.</para>
+        /// <para><b>CRITICAL:</b> Never block on SDK async methods - this will cause deadlock!</para>
+        /// </remarks>
         public event EventHandler<CentrifugeConnectingEventArgs>? Connecting;
 
         /// <summary>
-        /// Event raised when client is connected.
+        /// Event raised when client successfully connects to the server.
+        /// This is a good place to set up subscriptions or send initial data.
         /// </summary>
+        /// <remarks>
+        /// <para><b>Best Practice:</b> Keep handlers fast to avoid delaying message processing.</para>
+        /// <para><b>Async SDK Methods:</b> You can safely call <c>PublishAsync</c>, <c>RpcAsync</c>, etc. using <c>await</c> in an <c>async void</c> handler.</para>
+        /// <para><b>CRITICAL:</b> Never use <c>.Wait()</c>, <c>.Result</c>, or <c>.GetAwaiter().GetResult()</c> on SDK async methods - this will cause deadlock!</para>
+        /// <para>Handlers are dispatched to the thread pool, so blocking on non-SDK operations (like database calls) won't deadlock but may impact performance.</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // BEST ✓ - Async SDK operations with await
+        /// client.Connected += async (sender, e) => {
+        ///     Console.WriteLine($"Connected! Client ID: {e.ClientId}");
+        ///     var sub = client.NewSubscription("chat");
+        ///     sub.Subscribe();
+        ///     await sub.ReadyAsync();
+        ///     await sub.PublishAsync(Encoding.UTF8.GetBytes("Hello!"));  // Safe!
+        /// };
+        ///
+        /// // OK - Synchronous non-SDK work (safe but blocks thread pool thread)
+        /// client.Connected += (sender, e) => {
+        ///     database.UpdateConnectionStatus(e.ClientId);  // Won't deadlock
+        /// };
+        ///
+        /// // DEADLOCK ✗ - Never block on SDK async methods!
+        /// client.Connected += (sender, e) => {
+        ///     sub.PublishAsync(data).Wait();  // DEADLOCK! Use 'async/await' instead
+        /// };
+        /// </code>
+        /// </example>
         public event EventHandler<CentrifugeConnectedEventArgs>? Connected;
 
         /// <summary>
-        /// Event raised when client is disconnected.
+        /// Event raised when client is disconnected from the server.
         /// </summary>
+        /// <remarks>
+        /// <para><b>Best Practice:</b> Keep handlers fast. Use <c>async void</c> with <c>await</c> for I/O operations.</para>
+        /// <para><b>Note:</b> Don't block on SDK async methods - will cause deadlock. Blocking on non-SDK operations is safe but impacts performance.</para>
+        /// </remarks>
         public event EventHandler<CentrifugeDisconnectedEventArgs>? Disconnected;
 
         /// <summary>
-        /// Event raised when an error occurs. Mostly for the logging purposes.
+        /// Event raised when an error occurs. Mostly for logging purposes.
         /// </summary>
+        /// <remarks>
+        /// <para><b>Best Practice:</b> Keep handlers fast. Use <c>async void</c> with <c>await</c> for I/O operations.</para>
+        /// <para><b>Exception Handling:</b> Exceptions in <c>async void</c> handlers cannot be caught by the SDK.
+        /// Always use try-catch in your handlers to prevent application crashes.</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// client.Error += async (sender, e) => {
+        ///     try {
+        ///         await LogErrorAsync(e.Type, e.Message);
+        ///     }
+        ///     catch (Exception ex) {
+        ///         Console.WriteLine($"Logging failed: {ex.Message}");
+        ///     }
+        /// };
+        /// </code>
+        /// </example>
         public event EventHandler<CentrifugeErrorEventArgs>? Error;
 
         /// <summary>
         /// Event raised when a message is received from server.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeMessageEventArgs>? Message;
 
         /// <summary>
         /// Event raised for server-side subscription publications.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugePublicationEventArgs>? Publication;
 
         /// <summary>
         /// Event raised for server-side subscription join events.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeJoinEventArgs>? Join;
 
         /// <summary>
         /// Event raised for server-side subscription leave events.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeLeaveEventArgs>? Leave;
 
         /// <summary>
         /// Event raised when server-side subscription is subscribing.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeServerSubscribingEventArgs>? ServerSubscribing;
 
         /// <summary>
         /// Event raised when server-side subscription is subscribed.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeServerSubscribedEventArgs>? ServerSubscribed;
 
         /// <summary>
         /// Event raised when server-side subscription is unsubscribed.
         /// </summary>
+        /// <remarks>
+        /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
+        /// </remarks>
         public event EventHandler<CentrifugeServerUnsubscribedEventArgs>? ServerUnsubscribed;
 
 #if NET6_0_OR_GREATER
@@ -469,7 +571,7 @@ namespace Centrifugal.Centrifuge
         public async Task<CentrifugePresenceResult> PresenceAsync(string channel, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -516,7 +618,7 @@ namespace Centrifugal.Centrifuge
         public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(string channel, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -541,6 +643,113 @@ namespace Centrifugal.Centrifuge
             return new CentrifugePresenceStatsResult(
                 reply.PresenceStats.NumClients,
                 reply.PresenceStats.NumUsers
+            );
+        }
+
+        /// <summary>
+        /// Publishes data to a channel.
+        /// This allows publishing to a channel without having a client-side subscription to it.
+        /// Useful for server-side subscriptions or one-off publish operations.
+        /// Automatically waits for the client to be connected before sending.
+        /// </summary>
+        /// <param name="channel">Channel name to publish to.</param>
+        /// <param name="data">Data to publish.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task PublishAsync(string channel, ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
+        {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
+
+            var cmd = new Command
+            {
+                Id = NextCommandId(),
+                Publish = new PublishRequest
+                {
+                    Channel = channel,
+                    Data = ByteString.CopyFrom(data.Span)
+                }
+            };
+
+            var reply = await SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+        }
+
+        /// <summary>
+        /// Gets channel history.
+        /// This allows fetching history for a channel without having a client-side subscription to it.
+        /// Useful for server-side subscriptions or one-off history requests.
+        /// Automatically waits for the client to be connected before sending.
+        /// By default, returns only current stream position data (no publications).
+        /// To retrieve publications, provide an explicit limit > 0 in the options.
+        /// </summary>
+        /// <param name="channel">Channel name to get history for.</param>
+        /// <param name="options">History options (limit, since position, reverse order).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>History result with publications and stream position.</returns>
+        public async Task<CentrifugeHistoryResult> HistoryAsync(string channel, CentrifugeHistoryOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
+
+            var request = new HistoryRequest
+            {
+                Channel = channel
+            };
+
+            if (options != null)
+            {
+                if (options.Limit.HasValue)
+                {
+                    request.Limit = options.Limit.Value;
+                }
+
+                if (options.Since != null)
+                {
+                    request.Since = new Centrifugal.Centrifuge.Protocol.StreamPosition
+                    {
+                        Offset = options.Since.Value.Offset,
+                        Epoch = options.Since.Value.Epoch
+                    };
+                }
+
+                request.Reverse = options.Reverse;
+            }
+
+            var cmd = new Command
+            {
+                Id = NextCommandId(),
+                History = request
+            };
+
+            var reply = await SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            var publications = new List<CentrifugePublicationEventArgs>();
+            foreach (var pub in reply.History.Publications)
+            {
+                publications.Add(CreatePublicationArgs(channel, pub));
+            }
+
+            return new CentrifugeHistoryResult(
+                publications.ToArray(),
+                reply.History.Epoch,
+                reply.History.Offset
             );
         }
 
@@ -575,7 +784,7 @@ namespace Centrifugal.Centrifuge
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(_options.Timeout);
 
-                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token))
+                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(System.Threading.Timeout.Infinite, timeoutCts.Token))
                     .ConfigureAwait(false);
 
                 if (completedTask != tcs.Task)
@@ -681,7 +890,7 @@ namespace Centrifugal.Centrifuge
                             _commandBatchPending = false;
                         }
                         _ = Task.Run(async () => await FlushCommandBatchAsync().ConfigureAwait(false));
-                    }, null, TimeSpan.FromMilliseconds(CommandBatchDelayMs), Timeout.InfiniteTimeSpan);
+                    }, null, TimeSpan.FromMilliseconds(CommandBatchDelayMs), System.Threading.Timeout.InfiniteTimeSpan);
                 }
             }
         }
@@ -1108,7 +1317,7 @@ namespace Centrifugal.Centrifuge
                 using var timeoutCts = new CancellationTokenSource();
                 timeoutCts.CancelAfter(_options.Timeout);
 
-                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token))
+                var completedTask = await Task.WhenAny(tcs.Task, Task.Delay(System.Threading.Timeout.Infinite, timeoutCts.Token))
                     .ConfigureAwait(false);
 
                 if (completedTask != tcs.Task)
@@ -1483,12 +1692,19 @@ namespace Centrifugal.Centrifuge
         {
             _logger?.LogDebug($"HandleTransportClosedAsync - state: {_state}, code: {e.Code}, reason: '{e.Reason}'");
 
-            // Don't process if already disconnected or already reconnecting
-            // This prevents duplicate handling when Disconnect push arrives before transport close
-            if (_state == CentrifugeClientState.Disconnected || _state == CentrifugeClientState.Connecting)
+            // Don't process if already disconnected
+            if (_state == CentrifugeClientState.Disconnected)
             {
                 _logger?.LogDebug($"HandleTransportClosedAsync - skipping (state is {_state})");
                 return;
+            }
+
+            // If already in Connecting state, cancel any pending reconnect and restart
+            // This handles the case where transport closes during connection (e.g., server sends disconnect while connecting)
+            if (_state == CentrifugeClientState.Connecting)
+            {
+                _logger?.LogDebug($"HandleTransportClosedAsync - transport closed while connecting, restarting reconnect logic");
+                _reconnectCts?.Cancel();
             }
 
             // Determine if we should reconnect based on close code
@@ -1774,7 +1990,7 @@ namespace Centrifugal.Centrifuge
             _pingTimer = new Timer(_ =>
             {
                 _ = StartConnectingAsync(CentrifugeConnectingCodes.NoPing, "no ping");
-            }, null, interval, Timeout.Infinite);
+            }, null, interval, System.Threading.Timeout.Infinite);
         }
 
         private void ResetPingTimer()
@@ -1785,7 +2001,7 @@ namespace Centrifugal.Centrifuge
             }
 
             var interval = (int)(_serverPingInterval * 1000) + (int)_options.MaxServerPingDelay.TotalMilliseconds;
-            _pingTimer.Change(interval, Timeout.Infinite);
+            _pingTimer.Change(interval, System.Threading.Timeout.Infinite);
         }
 
         private void HandleServerPing()
@@ -1833,7 +2049,7 @@ namespace Centrifugal.Centrifuge
         {
             _refreshTimer?.Dispose();
             var delay = Utilities.TtlToMilliseconds(ttl);
-            _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, Timeout.Infinite);
+            _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
         }
 
         private void ClearRefreshTimer()
@@ -1898,7 +2114,7 @@ namespace Centrifugal.Centrifuge
                 var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
                 _refreshAttempts++;
                 _refreshTimer?.Dispose();
-                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, Timeout.Infinite);
+                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
             }
         }
 
@@ -1929,7 +2145,7 @@ namespace Centrifugal.Centrifuge
                 var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
                 _refreshAttempts++;
                 _refreshTimer?.Dispose();
-                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, Timeout.Infinite);
+                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
             }
             else
             {
