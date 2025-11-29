@@ -110,7 +110,110 @@ var result = await client.RpcAsync("method", data);
 // It waits for disconnect to complete before releasing resources
 ```
 
-### Subscriptions
+## Event Handlers and Callbacks
+
+### ⚠️ Critical: Avoiding Deadlocks
+
+The SDK uses event handlers extensively for real-time notifications. To maintain high performance and avoid deadlocks, follow these guidelines:
+
+**✅ DO: Use async/await for I/O operations**
+
+```csharp
+client.Connected += async (sender, e) =>
+{
+    Console.WriteLine($"Connected: {e.ClientId}");
+
+    // ✅ Safe: Use await for SDK async methods
+    var sub = client.NewSubscription("chat");
+    sub.Subscribe();
+    await sub.ReadyAsync();
+    await sub.PublishAsync(Encoding.UTF8.GetBytes("Hello!"));
+};
+
+subscription.Publication += async (sender, e) =>
+{
+    var message = Encoding.UTF8.GetString(e.Data.Span);
+
+    // ✅ Safe: Async I/O operations with await
+    await File.WriteAllTextAsync("messages.txt", message);
+    await httpClient.PostAsJsonAsync("/api/messages", new { message });
+};
+```
+
+**❌ DON'T: Block on SDK async methods**
+
+```csharp
+client.Connected += (sender, e) =>
+{
+    // ❌ DEADLOCK! Never use .Wait(), .Result, or .GetAwaiter().GetResult()
+    sub.PublishAsync(data).Wait();           // DEADLOCK!
+    var result = client.RpcAsync("method", data).Result;  // DEADLOCK!
+
+    // ❌ DEADLOCK! Even if you try to be clever
+    Task.Run(() => sub.PublishAsync(data)).Wait();  // Still DEADLOCK!
+};
+```
+
+**Why does this deadlock?**
+
+The SDK dispatches events on the thread pool but uses internal synchronization to maintain message order and state consistency. When you block an event handler waiting for an SDK async method to complete, you create a circular wait:
+
+1. Event handler blocks waiting for `PublishAsync()` to complete
+2. `PublishAsync()` needs to acquire internal locks held by the event dispatcher
+3. Event dispatcher can't release locks until your handler completes
+4. **Deadlock!** ⚠️
+
+**⚠️ Blocking on Non-SDK Operations**
+
+```csharp
+subscription.Publication += (sender, e) =>
+{
+    // ⚠️ Safe from deadlock, but blocks a thread pool thread (impacts performance)
+    File.WriteAllText("messages.txt", message);  // Blocks thread pool
+    database.Insert(message);  // Blocks thread pool
+
+    // ✅ Better: Use async/await
+    // await File.WriteAllTextAsync("messages.txt", message);
+};
+```
+
+Blocking on non-SDK operations (file I/O, database calls, HTTP requests to other services) won't deadlock, but it ties up a thread pool thread, reducing overall application performance. Use `async`/`await` whenever possible.
+
+**Exception Handling in Async Event Handlers**
+
+Exceptions in `async void` event handlers **cannot be caught by the SDK** and will crash your application if unhandled:
+
+```csharp
+// ❌ BAD: Unhandled exceptions will crash your app
+subscription.Publication += async (sender, e) =>
+{
+    await riskyOperation();  // If this throws, app crashes!
+};
+
+// ✅ GOOD: Always wrap async event handlers in try-catch
+subscription.Publication += async (sender, e) =>
+{
+    try
+    {
+        await riskyOperation();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error processing publication: {ex.Message}");
+        // Log, report to error tracking service, etc.
+    }
+};
+```
+
+**Best Practices Summary**
+
+1. ✅ Use `async void` for event handlers that need to perform async I/O
+2. ✅ Always `await` SDK async methods (never block with `.Wait()` or `.Result`)
+3. ✅ Always wrap `async void` handlers in `try-catch` to prevent crashes
+4. ✅ Keep handlers fast - offload heavy CPU work to background tasks if needed
+5. ⚠️ Avoid blocking operations - use async alternatives when available
+
+## Subscriptions
 
 ```csharp
 // Create subscription, may throw CentrifugeDuplicateSubscriptionException
