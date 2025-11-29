@@ -469,8 +469,21 @@
             _subscription.Subscribe();
 
             // Wait for subscription to complete
-            await _subscription.ReadyAsync();
-            await LogAsync("Subscription ready!");
+            try
+            {
+                await _subscription.ReadyAsync();
+                await LogAsync("Subscription ready!");
+            }
+            catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+            {
+                await LogAsync($"Subscription timed out: {ex.Message}");
+                return;
+            }
+            catch (Exception ex)
+            {
+                await LogAsync($"Subscription failed: {ex.Message}");
+                return;
+            }
 
             // === BATCHING DEMONSTRATION ===
             // Issue multiple API calls WITHOUT awaiting them immediately.
@@ -498,44 +511,97 @@
 
             try
             {
-                // Now await all results - they were already sent as a batch
-                await Task.WhenAll(publishTask, presenceTask, presenceStatsTask, historyTask, rpcTask);
-
                 await LogAsync("");
                 await LogAsync("=== BATCH RESULTS ===");
 
                 // Process publish result
-                await LogAsync("✓ Publish succeeded");
+                try
+                {
+                    await publishTask;
+                    await LogAsync("✓ Publish succeeded");
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    await LogAsync($"✗ Publish timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    await LogAsync($"✗ Publish failed: {ex.Message}");
+                }
 
                 // Process presence result
-                var presence = await presenceTask;
-                await LogAsync($"✓ Presence: {presence.Clients.Count} clients");
-                foreach (var (clientId, clientInfo) in presence.Clients)
+                try
                 {
-                    await LogAsync($"    - {clientId}: user={clientInfo.User}");
+                    var presence = await presenceTask;
+                    await LogAsync($"✓ Presence: {presence.Clients.Count} clients");
+                    foreach (var (clientId, clientInfo) in presence.Clients)
+                    {
+                        await LogAsync($"    - {clientId}: user={clientInfo.User}");
+                    }
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    await LogAsync($"✗ Presence timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    await LogAsync($"✗ Presence failed: {ex.Message}");
                 }
 
                 // Process presence stats result
-                var stats = await presenceStatsTask;
-                await LogAsync($"✓ Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
+                try
+                {
+                    var stats = await presenceStatsTask;
+                    await LogAsync($"✓ Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    await LogAsync($"✗ Presence stats timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    await LogAsync($"✗ Presence stats failed: {ex.Message}");
+                }
 
                 // Process history result
-                var history = await historyTask;
-                await LogAsync($"✓ History: {history.Publications.Length} messages");
-                foreach (var pub in history.Publications.Take(3))
+                try
                 {
-                    var data = Encoding.UTF8.GetString(pub.Data.Span);
-                    await LogAsync($"    - {data}");
+                    var history = await historyTask;
+                    await LogAsync($"✓ History: {history.Publications.Length} messages");
+                    foreach (var pub in history.Publications.Take(3))
+                    {
+                        var data = Encoding.UTF8.GetString(pub.Data.Span);
+                        await LogAsync($"    - {data}");
+                    }
+                    if (history.Publications.Length > 3)
+                    {
+                        await LogAsync($"    ... and {history.Publications.Length - 3} more");
+                    }
                 }
-                if (history.Publications.Length > 3)
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
                 {
-                    await LogAsync($"    ... and {history.Publications.Length - 3} more");
+                    await LogAsync($"✗ History timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    await LogAsync($"✗ History failed: {ex.Message}");
                 }
 
                 // Process RPC result
-                var rpcResult = await rpcTask;
-                var response = Encoding.UTF8.GetString(rpcResult.Data.Span);
-                await LogAsync($"✓ RPC response: {response}");
+                try
+                {
+                    var rpcResult = await rpcTask;
+                    var response = Encoding.UTF8.GetString(rpcResult.Data.Span);
+                    await LogAsync($"✓ RPC response: {response}");
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    await LogAsync($"✗ RPC timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    await LogAsync($"✗ RPC failed: {ex.Message}");
+                }
 
                 await LogAsync("");
                 await LogAsync($"All 5 commands were batched and sent together!");
@@ -543,8 +609,7 @@
             }
             catch (Exception ex)
             {
-                await LogAsync($"Some operations failed: {ex.Message}");
-                await LogAsync("Note: Presence/History may not be available on all channels");
+                await LogAsync($"Unexpected error: {ex.Message}");
             }
 
             await LogAsync("Example completed! The connection will remain open for incoming messages.");

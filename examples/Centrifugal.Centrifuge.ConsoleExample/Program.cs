@@ -132,8 +132,20 @@ namespace Centrifuge.Examples
 
                 // Publish a message (waits for subscription automatically)
                 Console.WriteLine("\nPublishing message...");
-                var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from C# SDK!\"}");
-                await subscription.PublishAsync(messageData);
+                try
+                {
+                    var messageData = Encoding.UTF8.GetBytes("{\"text\":\"Hello from C# SDK!\"}");
+                    await subscription.PublishAsync(messageData);
+                    Console.WriteLine("Published message");
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    Console.WriteLine($"Publish timed out: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Publish failed: {ex.Message}");
+                }
 
                 // Get presence
                 Console.WriteLine("\nFetching presence...");
@@ -149,9 +161,13 @@ namespace Centrifuge.Examples
                     var stats = await subscription.PresenceStatsAsync();
                     Console.WriteLine($"Presence stats: {stats.NumClients} clients, {stats.NumUsers} users");
                 }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    Console.WriteLine($"Presence timed out: {ex.Message}");
+                }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Presence not available: {ex.Message}");
+                    Console.WriteLine($"Presence failed: {ex.Message}");
                 }
 
                 // Get history
@@ -171,9 +187,13 @@ namespace Centrifuge.Examples
                         Console.WriteLine($"  - {data}");
                     }
                 }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    Console.WriteLine($"History timed out: {ex.Message}");
+                }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"History not available: {ex.Message}");
+                    Console.WriteLine($"History failed: {ex.Message}");
                 }
 
                 // RPC example
@@ -184,6 +204,10 @@ namespace Centrifuge.Examples
                     var rpcResult = await client.RpcAsync("time", rpcData);
                     var response = Encoding.UTF8.GetString(rpcResult.Data.Span);
                     Console.WriteLine($"RPC response: {response}");
+                }
+                catch (CentrifugeException ex) when (ex.Code == CentrifugeErrorCodes.Timeout)
+                {
+                    Console.WriteLine($"RPC timed out: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
