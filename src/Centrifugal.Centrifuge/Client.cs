@@ -571,7 +571,7 @@ namespace Centrifugal.Centrifuge
         public async Task<CentrifugePresenceResult> PresenceAsync(string channel, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -618,7 +618,7 @@ namespace Centrifugal.Centrifuge
         public async Task<CentrifugePresenceStatsResult> PresenceStatsAsync(string channel, CancellationToken cancellationToken = default)
         {
             // Wait for client to be ready
-            await ReadyAsync(_options.Timeout).ConfigureAwait(false);
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
             var cmd = new Command
             {
@@ -643,6 +643,113 @@ namespace Centrifugal.Centrifuge
             return new CentrifugePresenceStatsResult(
                 reply.PresenceStats.NumClients,
                 reply.PresenceStats.NumUsers
+            );
+        }
+
+        /// <summary>
+        /// Publishes data to a channel.
+        /// This allows publishing to a channel without having a client-side subscription to it.
+        /// Useful for server-side subscriptions or one-off publish operations.
+        /// Automatically waits for the client to be connected before sending.
+        /// </summary>
+        /// <param name="channel">Channel name to publish to.</param>
+        /// <param name="data">Data to publish.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task PublishAsync(string channel, ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
+        {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
+
+            var cmd = new Command
+            {
+                Id = NextCommandId(),
+                Publish = new PublishRequest
+                {
+                    Channel = channel,
+                    Data = ByteString.CopyFrom(data.Span)
+                }
+            };
+
+            var reply = await SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+        }
+
+        /// <summary>
+        /// Gets channel history.
+        /// This allows fetching history for a channel without having a client-side subscription to it.
+        /// Useful for server-side subscriptions or one-off history requests.
+        /// Automatically waits for the client to be connected before sending.
+        /// By default, returns only current stream position data (no publications).
+        /// To retrieve publications, provide an explicit limit > 0 in the options.
+        /// </summary>
+        /// <param name="channel">Channel name to get history for.</param>
+        /// <param name="options">History options (limit, since position, reverse order).</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>History result with publications and stream position.</returns>
+        public async Task<CentrifugeHistoryResult> HistoryAsync(string channel, CentrifugeHistoryOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            // Wait for client to be ready
+            await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
+
+            var request = new HistoryRequest
+            {
+                Channel = channel
+            };
+
+            if (options != null)
+            {
+                if (options.Limit.HasValue)
+                {
+                    request.Limit = options.Limit.Value;
+                }
+
+                if (options.Since != null)
+                {
+                    request.Since = new Centrifugal.Centrifuge.Protocol.StreamPosition
+                    {
+                        Offset = options.Since.Value.Offset,
+                        Epoch = options.Since.Value.Epoch
+                    };
+                }
+
+                request.Reverse = options.Reverse;
+            }
+
+            var cmd = new Command
+            {
+                Id = NextCommandId(),
+                History = request
+            };
+
+            var reply = await SendCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+
+            if (reply.Error != null)
+            {
+                throw new CentrifugeException(
+                    (int)reply.Error.Code,
+                    reply.Error.Message,
+                    reply.Error.Temporary
+                );
+            }
+
+            var publications = new List<CentrifugePublicationEventArgs>();
+            foreach (var pub in reply.History.Publications)
+            {
+                publications.Add(CreatePublicationArgs(channel, pub));
+            }
+
+            return new CentrifugeHistoryResult(
+                publications.ToArray(),
+                reply.History.Epoch,
+                reply.History.Offset
             );
         }
 
