@@ -114,14 +114,13 @@ var result = await client.RpcAsync("method", data);
 
 ### ⚠️ Important: Use Async Event Handlers
 
-The SDK invokes event handlers **synchronously** on the transport's receive thread to preserve message ordering. For best performance and responsiveness, use `async void` event handlers:
+The SDK invokes event handlers **synchronously** on the transport's receive thread to preserve message ordering. For best performance and responsiveness, keep callbacks fast or use `async void` event handlers:
 
 ```csharp
 client.Connected += async (sender, e) =>
 {
     Console.WriteLine($"Connected: {e.ClientId}");
-    // ✅ Recommended: Use await for SDK async methods
-    await client.PublishAsync("channel", Encoding.UTF8.GetBytes("Hello!"));
+    await some_call();
 };
 ```
 
@@ -133,7 +132,7 @@ client.Connected += async (sender, e) =>
 client.Connected += (sender, e) =>
 {
     // ❌ DEADLOCK! Never use .Wait(), .Result, or .GetAwaiter().GetResult()
-    sub.PublishAsync(data).Wait();           // DEADLOCK!
+    client.PublishAsync("channel", data).Wait();          // DEADLOCK!
     var result = client.RpcAsync("method", data).Result;  // DEADLOCK!
 };
 ```
@@ -147,8 +146,6 @@ Event handlers run on the receive thread. When you block waiting for `PublishAsy
 3. The server sends the reply
 4. **The receive thread can't process the reply because it's blocked in your callback**
 5. **Deadlock!** ⚠️
-
-Always use `async void` event handlers with `await` instead.
 
 **Exception Handling in Async Event Handlers**
 
