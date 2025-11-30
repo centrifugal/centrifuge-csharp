@@ -244,6 +244,7 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
+                var processedMessages = new System.Collections.Generic.List<byte[]>();
 
                 lock (_bufferLock)
                 {
@@ -253,7 +254,6 @@ namespace Centrifugal.Centrifuge.Transports
                     // Try to extract varint-delimited messages
                     _chunkBuffer.Position = 0;
                     byte[] tempBuffer = new byte[8192];
-                    var processedMessages = new System.Collections.Generic.List<byte[]>();
 
                     while (_chunkBuffer.Position < _chunkBuffer.Length)
                     {
@@ -282,22 +282,18 @@ namespace Centrifugal.Centrifuge.Transports
                     {
                         _chunkBuffer = new MemoryStream();
                     }
+                }
 
-                    // Dispatch messages outside the lock
-                    foreach (var message in processedMessages)
+                // Dispatch messages synchronously outside the lock to preserve order
+                foreach (var message in processedMessages)
+                {
+                    try
                     {
-                        var messageCopy = message;
-                        _ = Task.Run(() =>
-                        {
-                            try
-                            {
-                                MessageReceived?.Invoke(this, messageCopy);
-                            }
-                            catch (Exception ex)
-                            {
-                                Error?.Invoke(this, ex);
-                            }
-                        }, CancellationToken.None);
+                        MessageReceived?.Invoke(this, message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Error?.Invoke(this, ex);
                     }
                 }
             }

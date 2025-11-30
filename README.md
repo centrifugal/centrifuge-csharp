@@ -112,35 +112,22 @@ var result = await client.RpcAsync("method", data);
 
 ## Event Handlers and Callbacks
 
-### ⚠️ Critical: Avoiding Deadlocks
+### ⚠️ Important: Use Async Event Handlers
 
-The SDK uses event handlers extensively for real-time notifications. To maintain high performance and avoid deadlocks, follow these guidelines:
-
-**✅ DO: Use async/await for I/O operations**
+The SDK invokes event handlers **synchronously** on the transport's receive thread to preserve message ordering. For best performance and responsiveness, use `async void` event handlers:
 
 ```csharp
 client.Connected += async (sender, e) =>
 {
     Console.WriteLine($"Connected: {e.ClientId}");
-
-    // ✅ Safe: Use await for SDK async methods
-    var sub = client.NewSubscription("chat");
-    sub.Subscribe();
-    await sub.ReadyAsync();
-    await sub.PublishAsync(Encoding.UTF8.GetBytes("Hello!"));
-};
-
-subscription.Publication += async (sender, e) =>
-{
-    var message = Encoding.UTF8.GetString(e.Data.Span);
-
-    // ✅ Safe: Async I/O operations with await
-    await File.WriteAllTextAsync("messages.txt", message);
-    await httpClient.PostAsJsonAsync("/api/messages", new { message });
+    // ✅ Recommended: Use await for SDK async methods
+    await client.PublishAsync("channel", Encoding.UTF8.GetBytes("Hello!"));
 };
 ```
 
-**❌ DON'T: Block on SDK async methods**
+**Can you use blocking calls like `.Wait()` or `.Result`?**
+
+**NO - This will cause a deadlock!** Never block on SDK async methods in event handlers:
 
 ```csharp
 client.Connected += (sender, e) =>
@@ -148,36 +135,20 @@ client.Connected += (sender, e) =>
     // ❌ DEADLOCK! Never use .Wait(), .Result, or .GetAwaiter().GetResult()
     sub.PublishAsync(data).Wait();           // DEADLOCK!
     var result = client.RpcAsync("method", data).Result;  // DEADLOCK!
-
-    // ❌ DEADLOCK! Even if you try to be clever
-    Task.Run(() => sub.PublishAsync(data)).Wait();  // Still DEADLOCK!
 };
 ```
 
 **Why does this deadlock?**
 
-The SDK dispatches events on the thread pool but uses internal synchronization to maintain message order and state consistency. When you block an event handler waiting for an SDK async method to complete, you create a circular wait:
+Event handlers run on the receive thread. When you block waiting for `PublishAsync()` to complete:
 
-1. Event handler blocks waiting for `PublishAsync()` to complete
-2. `PublishAsync()` needs to acquire internal locks held by the event dispatcher
-3. Event dispatcher can't release locks until your handler completes
-4. **Deadlock!** ⚠️
+1. The callback blocks the receive thread
+2. `PublishAsync()` sends a command and waits for the server's reply
+3. The server sends the reply
+4. **The receive thread can't process the reply because it's blocked in your callback**
+5. **Deadlock!** ⚠️
 
-**⚠️ Blocking on Non-SDK Operations**
-
-```csharp
-subscription.Publication += (sender, e) =>
-{
-    // ⚠️ Safe from deadlock, but blocks a thread pool thread (impacts performance)
-    File.WriteAllText("messages.txt", message);  // Blocks thread pool
-    database.Insert(message);  // Blocks thread pool
-
-    // ✅ Better: Use async/await
-    // await File.WriteAllTextAsync("messages.txt", message);
-};
-```
-
-Blocking on non-SDK operations (file I/O, database calls, HTTP requests to other services) won't deadlock, but it ties up a thread pool thread, reducing overall application performance. Use `async`/`await` whenever possible.
+Always use `async void` event handlers with `await` instead.
 
 **Exception Handling in Async Event Handlers**
 
@@ -207,11 +178,11 @@ subscription.Publication += async (sender, e) =>
 
 **Best Practices Summary**
 
-1. ✅ Use `async void` for event handlers that need to perform async I/O
-2. ✅ Always `await` SDK async methods (never block with `.Wait()` or `.Result`)
-3. ✅ Always wrap `async void` handlers in `try-catch` to prevent crashes
-4. ✅ Keep handlers fast - offload heavy CPU work to background tasks if needed
-5. ⚠️ Avoid blocking operations - use async alternatives when available
+1. ✅ Use `async void` for event handlers that need to perform async operations
+2. ✅ Always `await` async methods - never block with `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()`
+3. ✅ Always wrap `async void` handlers in `try-catch` to prevent application crashes
+4. ✅ Keep handlers fast - heavy CPU work should be offloaded to background tasks
+5. ✅ Message order is preserved - handlers are invoked synchronously on the receive thread
 
 ## Subscriptions
 

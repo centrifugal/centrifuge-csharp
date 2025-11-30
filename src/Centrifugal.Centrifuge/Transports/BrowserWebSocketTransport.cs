@@ -240,19 +240,15 @@ namespace Centrifugal.Centrifuge.Transports
                     byte[]? message = VarintCodec.ReadDelimitedMessage(ms, tempBuffer, CancellationToken.None);
                     if (message == null) break;
 
-                    // Dispatch message on thread pool to avoid blocking
-                    var messageCopy = message;
-                    _ = Task.Run(() =>
+                    // Invoke synchronously to preserve message order
+                    try
                     {
-                        try
-                        {
-                            MessageReceived?.Invoke(this, messageCopy);
-                        }
-                        catch (Exception ex)
-                        {
-                            Error?.Invoke(this, ex);
-                        }
-                    }, CancellationToken.None);
+                        MessageReceived?.Invoke(this, message);
+                    }
+                    catch (Exception ex)
+                    {
+                        Error?.Invoke(this, ex);
+                    }
                 }
             }
             catch (Exception ex)
