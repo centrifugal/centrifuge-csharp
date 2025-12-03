@@ -147,18 +147,18 @@ Event handlers run on the receive thread. When you block waiting for `PublishAsy
 4. **The receive thread can't process the reply because it's blocked in your callback**
 5. **Deadlock!** ⚠️
 
-**Exception Handling in Async Event Handlers**
+**Exception Handling in Event Handlers**
 
-Exceptions in `async void` event handlers **cannot be caught by the SDK** and will crash your application if unhandled:
+**The SDK is not responsible for exceptions raised inside event handlers and does not provide specified behaviour if the one occurs.** You must handle all exceptions in your own code:
 
 ```csharp
-// ❌ BAD: Unhandled exceptions will crash your app
+// ❌ BAD: Unhandled exceptions - behavior is undefined
 subscription.Publication += async (sender, e) =>
 {
-    await riskyOperation();  // If this throws, app crashes!
+    await riskyOperation();  // If this throws - undefined behavior!
 };
 
-// ✅ GOOD: Always wrap async event handlers in try-catch
+// ✅ GOOD: Always wrap your logic in try-catch
 subscription.Publication += async (sender, e) =>
 {
     try
@@ -172,6 +172,8 @@ subscription.Publication += async (sender, e) =>
     }
 };
 ```
+
+Unhandled exceptions may crash your application, close the transport, or cause other unpredictable behavior. Always handle exceptions in your event handlers.
 
 **Best Practices Summary**
 

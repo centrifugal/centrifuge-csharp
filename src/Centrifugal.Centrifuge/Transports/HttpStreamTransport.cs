@@ -235,14 +235,8 @@ namespace Centrifugal.Centrifuge.Transports
                     }
 
                     // Invoke MessageReceived event synchronously
-                    try
-                    {
-                        MessageReceived?.Invoke(this, message);
-                    }
-                    catch (Exception ex)
-                    {
-                        Error?.Invoke(this, ex);
-                    }
+                    // Exceptions will propagate to outer catch, firing Error and Closed events
+                    MessageReceived?.Invoke(this, message);
                 }
             }
             catch (OperationCanceledException)
