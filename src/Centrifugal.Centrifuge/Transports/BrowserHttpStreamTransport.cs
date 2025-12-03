@@ -285,16 +285,10 @@ namespace Centrifugal.Centrifuge.Transports
                 }
 
                 // Dispatch messages synchronously outside the lock to preserve order
+                // Exceptions will propagate to outer catch, firing Error event
                 foreach (var message in processedMessages)
                 {
-                    try
-                    {
-                        MessageReceived?.Invoke(this, message);
-                    }
-                    catch (Exception ex)
-                    {
-                        Error?.Invoke(this, ex);
-                    }
+                    MessageReceived?.Invoke(this, message);
                 }
             }
             catch (Exception ex)

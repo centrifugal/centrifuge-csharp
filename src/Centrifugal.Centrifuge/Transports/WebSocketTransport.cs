@@ -197,14 +197,8 @@ namespace Centrifugal.Centrifuge.Transports
                         if (message == null) break;
 
                         // Invoke synchronously to preserve message order
-                        try
-                        {
-                            MessageReceived?.Invoke(this, message);
-                        }
-                        catch (Exception ex)
-                        {
-                            Error?.Invoke(this, ex);
-                        }
+                        // Exceptions will propagate to outer catch, firing Error and Closed events
+                        MessageReceived?.Invoke(this, message);
                     }
                 }
             }
