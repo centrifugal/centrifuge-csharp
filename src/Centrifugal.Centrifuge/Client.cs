@@ -760,12 +760,7 @@ namespace Centrifugal.Centrifuge
                 throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
             }
 
-            // RunContinuationsAsynchronously: replies are dispatched on the receive thread
-            // (HandleReply -> tcs.TrySetResult). Without this flag, every awaiter of
-            // SendCommandAsync — including subscription state machines and user event
-            // handlers — would resume synchronously on the receive thread, blocking
-            // further message processing.
-            var tcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = new TaskCompletionSource<Reply>();
             _pendingCalls[command.Id] = tcs;
 
             try
@@ -1120,7 +1115,7 @@ namespace Centrifugal.Centrifuge
 
                 // Register the pending call BEFORE opening the transport to avoid race condition
                 // where reply arrives before registration
-                connectTcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
+                connectTcs = new TaskCompletionSource<Reply>();
                 _pendingCalls[_pendingConnectCommand.Id] = connectTcs;
             }
 
