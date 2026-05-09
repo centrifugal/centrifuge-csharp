@@ -821,8 +821,10 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
-            _resubscribeCts?.Cancel();
+            var oldResubscribeCts = _resubscribeCts;
             _resubscribeCts = new CancellationTokenSource();
+            oldResubscribeCts?.Cancel();
+            oldResubscribeCts?.Dispose();
 
             int delay = Utilities.CalculateBackoff(
                 _resubscribeAttempts++,

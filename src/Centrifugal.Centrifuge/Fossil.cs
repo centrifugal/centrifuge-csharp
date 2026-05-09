@@ -215,7 +215,7 @@ namespace Centrifugal.Centrifuge
                             total += cnt;
                             if (total > limit)
                                 throw new InvalidOperationException("copy exceeds output file size");
-                            if (ofst + cnt > lenSrc)
+                            if ((long)ofst + cnt > lenSrc)
                                 throw new InvalidOperationException("copy extends past end of input");
 
                             zOut.PutArray(source, (int)ofst, (int)(ofst + cnt));
@@ -228,7 +228,7 @@ namespace Centrifugal.Centrifuge
                             total += cnt;
                             if (total > limit)
                                 throw new InvalidOperationException("insert command gives an output larger than predicted");
-                            if (cnt > lenDelta)
+                            if (zDelta._pos + cnt > lenDelta)
                                 throw new InvalidOperationException("insert count exceeds size of delta");
 
                             zOut.PutArray(delta, (int)zDelta._pos, (int)(zDelta._pos + cnt));

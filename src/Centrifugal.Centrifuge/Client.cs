@@ -1119,7 +1119,20 @@ namespace Centrifugal.Centrifuge
                 _pendingCalls[_pendingConnectCommand.Id] = connectTcs;
             }
 
-            await _transport.OpenAsync(initialData: initialData).ConfigureAwait(false);
+            try
+            {
+                await _transport.OpenAsync(initialData: initialData).ConfigureAwait(false);
+            }
+            catch
+            {
+                // OpenAsync failed before SendConnectCommandAsync's finally could clean up the
+                // pre-registered emulation entry — remove it here to avoid leaking _pendingCalls slots.
+                if (_pendingConnectCommand != null)
+                {
+                    _pendingCalls.TryRemove(_pendingConnectCommand.Id, out _);
+                }
+                throw;
+            }
         }
 
         private ITransport CreateTransport(CentrifugeTransportType transportType, string endpoint)
@@ -1864,8 +1877,10 @@ namespace Centrifugal.Centrifuge
                 return;
             }
 
-            _reconnectCts?.Cancel();
+            var oldReconnectCts = _reconnectCts;
             _reconnectCts = new CancellationTokenSource();
+            oldReconnectCts?.Cancel();
+            oldReconnectCts?.Dispose();
 
             int delay = Utilities.CalculateBackoff(
                 _reconnectAttempts++,
@@ -2027,7 +2042,11 @@ namespace Centrifugal.Centrifuge
                             var delimitedCommand = ms.ToArray();
 
                             var emulationEndpoint = GetEmulationEndpoint();
-                            _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, CancellationToken.None);
+                            // Fire-and-forget: this runs on the receive thread; observe the
+                            // task so a faulted send doesn't surface as an unobserved exception.
+                            _ = _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, CancellationToken.None).ContinueWith(
+                                t => { _ = t.Exception; },
+                                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                         }
                         else
                         {
