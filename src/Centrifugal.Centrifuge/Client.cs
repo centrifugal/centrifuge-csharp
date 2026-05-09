@@ -760,7 +760,12 @@ namespace Centrifugal.Centrifuge
                 throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
             }
 
-            var tcs = new TaskCompletionSource<Reply>();
+            // RunContinuationsAsynchronously: replies are dispatched on the receive thread
+            // (HandleReply -> tcs.TrySetResult). Without this flag, every awaiter of
+            // SendCommandAsync — including subscription state machines and user event
+            // handlers — would resume synchronously on the receive thread, blocking
+            // further message processing.
+            var tcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pendingCalls[command.Id] = tcs;
 
             try
@@ -1115,7 +1120,7 @@ namespace Centrifugal.Centrifuge
 
                 // Register the pending call BEFORE opening the transport to avoid race condition
                 // where reply arrives before registration
-                connectTcs = new TaskCompletionSource<Reply>();
+                connectTcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingCalls[_pendingConnectCommand.Id] = connectTcs;
             }
 
@@ -2031,10 +2036,15 @@ namespace Centrifugal.Centrifuge
                         }
                         else
                         {
-                            // For WebSocket, wrap with varint delimiter
+                            // For WebSocket, wrap with varint delimiter.
+                            // Fire-and-forget: this runs on the receive thread; blocking on
+                            // SendAsync here would stall message processing.
                             using var ms = new MemoryStream();
                             VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
-                            _transport.SendAsync(ms.ToArray()).Wait();
+                            var pongBytes = ms.ToArray();
+                            _ = _transport.SendAsync(pongBytes).ContinueWith(
+                                t => { _ = t.Exception; },
+                                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                         }
                     }
                 }
