@@ -2031,10 +2031,15 @@ namespace Centrifugal.Centrifuge
                         }
                         else
                         {
-                            // For WebSocket, wrap with varint delimiter
+                            // For WebSocket, wrap with varint delimiter.
+                            // Fire-and-forget: this runs on the receive thread; blocking on
+                            // SendAsync here would stall message processing.
                             using var ms = new MemoryStream();
                             VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
-                            _transport.SendAsync(ms.ToArray()).Wait();
+                            var pongBytes = ms.ToArray();
+                            _ = _transport.SendAsync(pongBytes).ContinueWith(
+                                t => { _ = t.Exception; },
+                                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                         }
                     }
                 }

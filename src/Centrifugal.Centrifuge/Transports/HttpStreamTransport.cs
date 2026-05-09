@@ -79,7 +79,7 @@ namespace Centrifugal.Centrifuge.Transports
 
             try
             {
-                var openedTcs = new TaskCompletionSource<bool>();
+                var openedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 EventHandler? openedHandler = null;
                 openedHandler = (s, e) =>

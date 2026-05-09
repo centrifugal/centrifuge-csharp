@@ -121,34 +121,40 @@ namespace Centrifugal.Centrifuge.Transports
         {
             if (_webSocket == null) return;
 
+            // Cancel the receive loop and wait for it to fully exit BEFORE issuing
+            // any further socket operations. ClientWebSocket allows at most one
+            // outstanding ReceiveAsync; calling CloseAsync (which reads to wait
+            // for the close ack) while ReceiveLoopAsync is still in ReceiveAsync
+            // produces undefined behaviour and has been observed to hang on Linux.
+            _receiveCts?.Cancel();
+
+            if (_receiveTask != null)
+            {
+                try
+                {
+                    await _receiveTask.ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Receive task exit errors are not actionable here.
+                }
+            }
+
             try
             {
-                _receiveCts?.Cancel();
-
                 if (_webSocket.State == WebSocketState.Open || _webSocket.State == WebSocketState.CloseReceived)
                 {
+                    // CloseOutputAsync only sends the close frame; it does not block
+                    // waiting for a server ack. The connection is being torn down
+                    // anyway, so we don't need a clean handshake.
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", cts.Token)
+                    await _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", cts.Token)
                         .ConfigureAwait(false);
                 }
             }
             catch
             {
                 // Ignore errors during close
-            }
-            finally
-            {
-                if (_receiveTask != null)
-                {
-                    try
-                    {
-                        await _receiveTask.ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        // Ignore errors during receive task completion
-                    }
-                }
             }
         }
 
