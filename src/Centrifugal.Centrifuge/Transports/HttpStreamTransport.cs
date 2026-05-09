@@ -18,6 +18,7 @@ namespace Centrifugal.Centrifuge.Transports
     {
         private readonly string _endpoint;
         private readonly HttpClient _httpClient;
+        private readonly bool _ownsHttpClient;
         private CancellationTokenSource? _receiveCts;
         private Task? _receiveTask;
         private bool _disposed;
@@ -62,10 +63,12 @@ namespace Centrifugal.Centrifuge.Transports
                 _httpClient = new HttpClient();
                 // Configure for streaming - no timeout on the connection itself
                 _httpClient.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+                _ownsHttpClient = true;
             }
             else
             {
                 _httpClient = httpClient;
+                _ownsHttpClient = false;
             }
         }
 
@@ -81,16 +84,8 @@ namespace Centrifugal.Centrifuge.Transports
             {
                 var openedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                EventHandler? openedHandler = null;
-                openedHandler = (s, e) =>
-                {
-                    openedTcs.TrySetResult(true);
-                    Opened -= openedHandler;
-                };
-                Opened += openedHandler;
-
                 _receiveCts = new CancellationTokenSource();
-                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), _receiveCts.Token);
+                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), openedTcs, _receiveCts.Token);
 
                 // Wait for the connection to open or timeout
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -101,6 +96,9 @@ namespace Centrifugal.Centrifuge.Transports
                 {
                     throw new TimeoutException("Timeout waiting for HTTP stream connection to open");
                 }
+
+                // Propagate any exception the receive loop set on openedTcs (early HTTP failure, etc.)
+                await openedTcs.Task.ConfigureAwait(false);
 
                 _isOpen = true;
             }
@@ -174,7 +172,7 @@ namespace Centrifugal.Centrifuge.Transports
             }
         }
 
-        private async Task ReceiveLoopAsync(byte[] initialData, CancellationToken cancellationToken)
+        private async Task ReceiveLoopAsync(byte[] initialData, TaskCompletionSource<bool> openedTcs, CancellationToken cancellationToken)
         {
             try
             {
@@ -214,12 +212,15 @@ namespace Centrifugal.Centrifuge.Transports
                         closeCode = CentrifugeConnectingCodes.TransportClosed;
                     }
 
+                    // Signal the early failure to OpenAsync so it doesn't wait for the 10s timeout
+                    openedTcs.TrySetException(new CentrifugeException(CentrifugeErrorCodes.TransportClosed, errorReason, true));
                     Closed?.Invoke(this, new TransportClosedEventArgs(code: closeCode, reason: errorReason));
                     return;
                 }
 
 
                 // Connection established successfully
+                openedTcs.TrySetResult(true);
                 Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
@@ -241,10 +242,13 @@ namespace Centrifugal.Centrifuge.Transports
             }
             catch (OperationCanceledException)
             {
-                // Normal cancellation
+                // Normal cancellation — unblock OpenAsync if it's still waiting
+                openedTcs.TrySetCanceled();
             }
             catch (Exception ex)
             {
+                // Unblock OpenAsync if the failure happened before the connection opened
+                openedTcs.TrySetException(ex);
                 Error?.Invoke(this, ex);
                 // Close code should have been set by earlier status check if it was an HTTP error
                 Closed?.Invoke(this, new TransportClosedEventArgs(exception: ex));
@@ -259,6 +263,11 @@ namespace Centrifugal.Centrifuge.Transports
 
             _receiveCts?.Cancel();
             _receiveCts?.Dispose();
+
+            if (_ownsHttpClient)
+            {
+                _httpClient.Dispose();
+            }
         }
     }
 }
