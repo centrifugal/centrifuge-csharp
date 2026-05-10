@@ -105,3 +105,6 @@ BenchmarkDotNet.Artifacts/
 
 # Local History for Visual Studio Code
 .history/
+
+# Claude Code local config
+.claude/

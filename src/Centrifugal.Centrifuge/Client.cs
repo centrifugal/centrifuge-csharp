@@ -349,56 +349,64 @@ namespace Centrifugal.Centrifuge
         /// <returns>A task that completes when connected.</returns>
         public Task ReadyAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            switch (_state)
+            TaskCompletionSource<bool> tcs;
+            int promiseId;
+
+            // Hold _stateChangeLock across both the state check and the registration so we
+            // don't race with HandleConnectReply / SetDisconnectedAsync resolving promises
+            // between us reading _state and inserting the tcs into _readyPromises.
+            lock (_stateChangeLock)
             {
-                case CentrifugeClientState.Disconnected:
-                    return Task.FromException(new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "client disconnected"));
+                switch (_state)
+                {
+                    case CentrifugeClientState.Disconnected:
+                        return Task.FromException(new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "client disconnected"));
 
-                case CentrifugeClientState.Connected:
-                    return Task.CompletedTask;
+                    case CentrifugeClientState.Connected:
+                        return Task.CompletedTask;
+                }
 
-                default:
-                    var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    var promiseId = NextPromiseId();
-                    _readyPromises[promiseId] = tcs;
-
-                    CancellationTokenSource? timeoutCts = null;
-                    CancellationTokenRegistration timeoutRegistration = default;
-                    CancellationTokenRegistration cancellationRegistration = default;
-
-                    if (timeout.HasValue)
-                    {
-                        timeoutCts = new CancellationTokenSource(timeout.Value);
-                        timeoutRegistration = timeoutCts.Token.Register(() =>
-                        {
-                            if (_readyPromises.TryRemove(promiseId, out var promise))
-                            {
-                                promise.TrySetException(new CentrifugeException(CentrifugeErrorCodes.Timeout, "timeout"));
-                            }
-                        });
-                    }
-
-                    if (cancellationToken.CanBeCanceled)
-                    {
-                        cancellationRegistration = cancellationToken.Register(() =>
-                        {
-                            if (_readyPromises.TryRemove(promiseId, out var promise))
-                            {
-                                promise.TrySetCanceled(cancellationToken);
-                            }
-                        });
-                    }
-
-                    // Dispose registrations when task completes to prevent memory leaks
-                    tcs.Task.ContinueWith(_ =>
-                    {
-                        timeoutRegistration.Dispose();
-                        cancellationRegistration.Dispose();
-                        timeoutCts?.Dispose();
-                    }, TaskContinuationOptions.ExecuteSynchronously);
-
-                    return tcs.Task;
+                tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                promiseId = NextPromiseId();
+                _readyPromises[promiseId] = tcs;
             }
+
+            CancellationTokenSource? timeoutCts = null;
+            CancellationTokenRegistration timeoutRegistration = default;
+            CancellationTokenRegistration cancellationRegistration = default;
+
+            if (timeout.HasValue)
+            {
+                timeoutCts = new CancellationTokenSource(timeout.Value);
+                timeoutRegistration = timeoutCts.Token.Register(() =>
+                {
+                    if (_readyPromises.TryRemove(promiseId, out var promise))
+                    {
+                        promise.TrySetException(new CentrifugeException(CentrifugeErrorCodes.Timeout, "timeout"));
+                    }
+                });
+            }
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                cancellationRegistration = cancellationToken.Register(() =>
+                {
+                    if (_readyPromises.TryRemove(promiseId, out var promise))
+                    {
+                        promise.TrySetCanceled(cancellationToken);
+                    }
+                });
+            }
+
+            // Dispose registrations when task completes to prevent memory leaks
+            tcs.Task.ContinueWith(_ =>
+            {
+                timeoutRegistration.Dispose();
+                cancellationRegistration.Dispose();
+                timeoutCts?.Dispose();
+            }, TaskContinuationOptions.ExecuteSynchronously);
+
+            return tcs.Task;
         }
 
 
@@ -1457,9 +1465,15 @@ namespace Centrifugal.Centrifuge
             _session = connectResult.Session;
             _node = connectResult.Node;
 
-            SetState(CentrifugeClientState.Connected);
-
-            _transportIsOpen = true;
+            // Hold _stateChangeLock across the state transition and ResolvePromises so a
+            // ReadyAsync caller can't observe Connecting, miss our resolve, and then register
+            // a tcs that nobody will complete.
+            lock (_stateChangeLock)
+            {
+                SetState(CentrifugeClientState.Connected);
+                _transportIsOpen = true;
+                ResolvePromises();
+            }
 
             Connected?.Invoke(this, new CentrifugeConnectedEventArgs(
                 connectResult.Client,
@@ -1473,9 +1487,6 @@ namespace Centrifugal.Centrifuge
             ClearRefreshTimer();
             _refreshAttempts = 0;
             _refreshRequired = false;
-
-            // Resolve ready promises
-            ResolvePromises();
 
             // Schedule token refresh if token expires
             if (connectResult.Expires)
