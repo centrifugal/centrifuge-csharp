@@ -132,56 +132,64 @@ namespace Centrifugal.Centrifuge
         /// <returns>A task that completes when subscribed.</returns>
         public Task ReadyAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
-            switch (_state)
+            TaskCompletionSource<bool> tcs;
+            int promiseId;
+
+            // Hold _stateChangeLock across both the state check and the registration so we
+            // don't race with HandleSubscribeReply / SetUnsubscribedAsync resolving promises
+            // between us reading _state and inserting the tcs into _readyPromises.
+            lock (_stateChangeLock)
             {
-                case CentrifugeSubscriptionState.Unsubscribed:
-                    return Task.FromException(new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
+                switch (_state)
+                {
+                    case CentrifugeSubscriptionState.Unsubscribed:
+                        return Task.FromException(new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
 
-                case CentrifugeSubscriptionState.Subscribed:
-                    return Task.CompletedTask;
+                    case CentrifugeSubscriptionState.Subscribed:
+                        return Task.CompletedTask;
+                }
 
-                default:
-                    var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                    var promiseId = NextPromiseId();
-                    _readyPromises[promiseId] = tcs;
-
-                    CancellationTokenSource? timeoutCts = null;
-                    CancellationTokenRegistration timeoutRegistration = default;
-                    CancellationTokenRegistration cancellationRegistration = default;
-
-                    if (timeout.HasValue)
-                    {
-                        timeoutCts = new CancellationTokenSource(timeout.Value);
-                        timeoutRegistration = timeoutCts.Token.Register(() =>
-                        {
-                            if (_readyPromises.TryRemove(promiseId, out var promise))
-                            {
-                                promise.TrySetException(new CentrifugeException(CentrifugeErrorCodes.Timeout, "timeout"));
-                            }
-                        });
-                    }
-
-                    if (cancellationToken.CanBeCanceled)
-                    {
-                        cancellationRegistration = cancellationToken.Register(() =>
-                        {
-                            if (_readyPromises.TryRemove(promiseId, out var promise))
-                            {
-                                promise.TrySetCanceled(cancellationToken);
-                            }
-                        });
-                    }
-
-                    // Dispose registrations when task completes to prevent memory leaks
-                    tcs.Task.ContinueWith(_ =>
-                    {
-                        timeoutRegistration.Dispose();
-                        cancellationRegistration.Dispose();
-                        timeoutCts?.Dispose();
-                    }, TaskContinuationOptions.ExecuteSynchronously);
-
-                    return tcs.Task;
+                tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                promiseId = NextPromiseId();
+                _readyPromises[promiseId] = tcs;
             }
+
+            CancellationTokenSource? timeoutCts = null;
+            CancellationTokenRegistration timeoutRegistration = default;
+            CancellationTokenRegistration cancellationRegistration = default;
+
+            if (timeout.HasValue)
+            {
+                timeoutCts = new CancellationTokenSource(timeout.Value);
+                timeoutRegistration = timeoutCts.Token.Register(() =>
+                {
+                    if (_readyPromises.TryRemove(promiseId, out var promise))
+                    {
+                        promise.TrySetException(new CentrifugeException(CentrifugeErrorCodes.Timeout, "timeout"));
+                    }
+                });
+            }
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                cancellationRegistration = cancellationToken.Register(() =>
+                {
+                    if (_readyPromises.TryRemove(promiseId, out var promise))
+                    {
+                        promise.TrySetCanceled(cancellationToken);
+                    }
+                });
+            }
+
+            // Dispose registrations when task completes to prevent memory leaks
+            tcs.Task.ContinueWith(_ =>
+            {
+                timeoutRegistration.Dispose();
+                cancellationRegistration.Dispose();
+                timeoutCts?.Dispose();
+            }, TaskContinuationOptions.ExecuteSynchronously);
+
+            return tcs.Task;
         }
 
 
@@ -688,7 +696,12 @@ namespace Centrifugal.Centrifuge
 
         private void HandleSubscribeReply(SubscribeResult result)
         {
-            // Check if subscription was unsubscribed while subscribe was in-flight
+            bool wasRecovering = _streamPosition != null;
+            bool recovered = result.Recovered;
+
+            // Hold _stateChangeLock across the unsubscribed-check, the state transition
+            // and ResolvePromises so a ReadyAsync caller can't observe Subscribing,
+            // miss our resolve, and then register a tcs that nobody will complete.
             lock (_stateChangeLock)
             {
                 if (_state == CentrifugeSubscriptionState.Unsubscribed)
@@ -696,42 +709,39 @@ namespace Centrifugal.Centrifuge
                     // Subscription was unsubscribed during subscribe, ignore the reply
                     return;
                 }
+
+                if (result.Positioned)
+                {
+                    _streamPosition = new CentrifugeStreamPosition(result.Offset, result.Epoch);
+                }
+
+                // Check if delta compression was negotiated with server
+                if (result.Delta)
+                {
+                    _deltaNegotiated = true;
+                }
+                else
+                {
+                    _deltaNegotiated = false;
+                    _prevValue = null;
+                }
+
+                // Clear refresh timer and reset attempts
+                ClearRefreshTimer();
+                _refreshAttempts = 0;
+                _refreshRequired = false;
+
+                // Schedule token refresh if token expires
+                if (result.Expires)
+                {
+                    ScheduleTokenRefresh(result.Ttl);
+                }
+
+                SetState(CentrifugeSubscriptionState.Subscribed);
+
+                // Resolve ready promises
+                ResolvePromises();
             }
-
-            bool wasRecovering = _streamPosition != null;
-            bool recovered = result.Recovered;
-
-            if (result.Positioned)
-            {
-                _streamPosition = new CentrifugeStreamPosition(result.Offset, result.Epoch);
-            }
-
-            // Check if delta compression was negotiated with server
-            if (result.Delta)
-            {
-                _deltaNegotiated = true;
-            }
-            else
-            {
-                _deltaNegotiated = false;
-                _prevValue = null;
-            }
-
-            // Clear refresh timer and reset attempts
-            ClearRefreshTimer();
-            _refreshAttempts = 0;
-            _refreshRequired = false;
-
-            // Schedule token refresh if token expires
-            if (result.Expires)
-            {
-                ScheduleTokenRefresh(result.Ttl);
-            }
-
-            SetState(CentrifugeSubscriptionState.Subscribed);
-
-            // Resolve ready promises
-            ResolvePromises();
 
             Subscribed?.Invoke(this, new CentrifugeSubscribedEventArgs(
                 wasRecovering,
