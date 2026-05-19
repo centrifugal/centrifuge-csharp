@@ -19,9 +19,10 @@ namespace Centrifugal.Centrifuge.Transports
         private readonly string _endpoint;
         private readonly HttpClient _httpClient;
         private readonly bool _ownsHttpClient;
+        private readonly object _openCloseLock = new object();
         private CancellationTokenSource? _receiveCts;
         private Task? _receiveTask;
-        private bool _disposed;
+        private int _disposed;
         private bool _isOpen;
 
         /// <inheritdoc/>
@@ -80,12 +81,17 @@ namespace Centrifugal.Centrifuge.Transports
                 throw new InvalidOperationException("Transport is already open");
             }
 
+            CancellationTokenSource? receiveCts = null;
             try
             {
                 var openedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                _receiveCts = new CancellationTokenSource();
-                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), openedTcs, _receiveCts.Token);
+                lock (_openCloseLock)
+                {
+                    _receiveCts = new CancellationTokenSource();
+                    receiveCts = _receiveCts;
+                }
+                _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), openedTcs, receiveCts.Token);
 
                 // Wait for the connection to open or timeout
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -99,12 +105,10 @@ namespace Centrifugal.Centrifuge.Transports
 
                 // Propagate any exception the receive loop set on openedTcs (early HTTP failure, etc.)
                 await openedTcs.Task.ConfigureAwait(false);
-
-                _isOpen = true;
             }
             catch (Exception ex)
             {
-                _receiveCts?.Cancel();
+                receiveCts?.Cancel();
                 throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
             }
         }
@@ -118,7 +122,13 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
         {
-            if (!_isOpen)
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 0, 0) != 0)
+            {
+                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "HTTP stream transport is disposed");
+            }
+            bool isOpen;
+            lock (_openCloseLock) { isOpen = _isOpen; }
+            if (!isOpen)
             {
                 throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "HTTP stream transport is not open");
             }
@@ -139,7 +149,7 @@ namespace Centrifugal.Centrifuge.Transports
                 using var content = new ByteArrayContent(requestBytes);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
-                var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
+                using var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
             }
             catch (Exception ex)
@@ -151,11 +161,17 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task CloseAsync()
         {
-            if (!_isOpen) return;
+            CancellationTokenSource? cts;
+            lock (_openCloseLock)
+            {
+                if (!_isOpen && _receiveCts == null) return;
+                cts = _receiveCts;
+                _isOpen = false;
+            }
 
             try
             {
-                _receiveCts?.Cancel();
+                cts?.Cancel();
 
                 if (_receiveTask != null)
                 {
@@ -166,14 +182,11 @@ namespace Centrifugal.Centrifuge.Transports
             {
                 // Ignore errors during close
             }
-            finally
-            {
-                _isOpen = false;
-            }
         }
 
         private async Task ReceiveLoopAsync(byte[] initialData, TaskCompletionSource<bool> openedTcs, CancellationToken cancellationToken)
         {
+            bool connectionOpened = false;
             try
             {
                 // Send initial POST request with varint-delimited connect command
@@ -189,80 +202,74 @@ namespace Centrifugal.Centrifuge.Transports
                 request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
                 request.Headers.ConnectionClose = false; // Keep connection alive for streaming
 
-                var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                     .ConfigureAwait(false);
 
-                // Check for HTTP errors and map to appropriate close codes
+                // Non-2xx response: propagate via openedTcs so OpenAsync throws and the normal
+                // reconnect path handles retrying.  Do NOT fire Closed — OnTransportClosed is
+                // already registered and firing it would cause a duplicate reconnect.
                 if (!response.IsSuccessStatusCode)
                 {
                     int statusCode = (int)response.StatusCode;
-                    int closeCode;
-                    string errorReason = $"http error {statusCode}";
-
-                    // Map specific HTTP 4xx client errors to BadProtocol (non-reconnectable)
-                    // Only 400, 401, 403, 404, 405 are considered permanent client errors
-                    if (statusCode == 400 || statusCode == 401 || statusCode == 403 ||
-                        statusCode == 404 || statusCode == 405)
-                    {
-                        closeCode = CentrifugeDisconnectedCodes.BadProtocol;
-                    }
-                    else
-                    {
-                        // All other errors use TransportClosed (reconnectable)
-                        closeCode = CentrifugeConnectingCodes.TransportClosed;
-                    }
-
-                    // Signal the early failure to OpenAsync so it doesn't wait for the 10s timeout
-                    openedTcs.TrySetException(new CentrifugeException(CentrifugeErrorCodes.TransportClosed, errorReason, true));
-                    Closed?.Invoke(this, new TransportClosedEventArgs(code: closeCode, reason: errorReason));
+                    openedTcs.TrySetException(new CentrifugeException(CentrifugeErrorCodes.TransportClosed, $"http error {statusCode}", true));
                     return;
                 }
 
-
-                // Connection established successfully
+                connectionOpened = true;
+                lock (_openCloseLock) { _isOpen = true; }
                 openedTcs.TrySetResult(true);
                 Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 byte[] tempBuffer = new byte[8192];
 
-                // Read varint-delimited messages from the stream
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, tempBuffer, cancellationToken).ConfigureAwait(false);
-                    if (message == null)
-                    {
-                        break;
-                    }
-
-                    // Invoke MessageReceived event synchronously
-                    // Exceptions will propagate to outer catch, firing Error and Closed events
+                    if (message == null) break;
                     MessageReceived?.Invoke(this, message);
+                }
+
+                // Server closed the stream (EOF) — fire Closed so the client can reconnect
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    Closed?.Invoke(this, new TransportClosedEventArgs());
                 }
             }
             catch (OperationCanceledException)
             {
-                // Normal cancellation — unblock OpenAsync if it's still waiting
                 openedTcs.TrySetCanceled();
             }
             catch (Exception ex)
             {
-                // Unblock OpenAsync if the failure happened before the connection opened
-                openedTcs.TrySetException(ex);
-                Error?.Invoke(this, ex);
-                // Close code should have been set by earlier status check if it was an HTTP error
-                Closed?.Invoke(this, new TransportClosedEventArgs(exception: ex));
+                if (connectionOpened)
+                {
+                    // Post-open failure: inform the client the transport died
+                    Error?.Invoke(this, ex);
+                    Closed?.Invoke(this, new TransportClosedEventArgs(exception: ex));
+                }
+                else
+                {
+                    // Pre-open failure: propagate via openedTcs so OpenAsync throws;
+                    // the caller's reconnect path handles retrying without a duplicate Closed
+                    openedTcs.TrySetException(ex);
+                }
             }
         }
 
         /// <inheritdoc/>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
-            _receiveCts?.Cancel();
-            _receiveCts?.Dispose();
+            CancellationTokenSource? cts;
+            lock (_openCloseLock)
+            {
+                cts = _receiveCts;
+                _isOpen = false;
+            }
+            cts?.Cancel();
+            cts?.Dispose();
 
             if (_ownsHttpClient)
             {
