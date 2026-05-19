@@ -18,7 +18,7 @@ namespace Centrifugal.Centrifuge.Transports
         private CancellationTokenSource? _receiveCts;
         private Task? _receiveTask;
         private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
-        private bool _disposed;
+        private int _disposed;
 
         /// <inheritdoc/>
         public CentrifugeTransportType Type => CentrifugeTransportType.WebSocket;
@@ -89,14 +89,14 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
         {
-            if (_webSocket == null || _webSocket.State != WebSocketState.Open)
-            {
-                throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "WebSocket is not open");
-            }
-
             await _sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (_webSocket == null || _webSocket.State != WebSocketState.Open)
+                {
+                    throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "WebSocket is not open");
+                }
+
                 await _webSocket.SendAsync(
                     new ArraySegment<byte>(data),
                     WebSocketMessageType.Binary,
@@ -121,18 +121,22 @@ namespace Centrifugal.Centrifuge.Transports
         {
             if (_webSocket == null) return;
 
+            // Capture fields as locals to avoid racing with concurrent Dispose().
+            var cts = _receiveCts;
+            var receiveTask = _receiveTask;
+
             // Cancel the receive loop and wait for it to fully exit BEFORE issuing
             // any further socket operations. ClientWebSocket allows at most one
             // outstanding ReceiveAsync; calling CloseAsync (which reads to wait
             // for the close ack) while ReceiveLoopAsync is still in ReceiveAsync
             // produces undefined behaviour and has been observed to hang on Linux.
-            _receiveCts?.Cancel();
+            try { cts?.Cancel(); } catch (ObjectDisposedException) { }
 
-            if (_receiveTask != null)
+            if (receiveTask != null)
             {
                 try
                 {
-                    await _receiveTask.ConfigureAwait(false);
+                    await receiveTask.ConfigureAwait(false);
                 }
                 catch
                 {
@@ -147,8 +151,8 @@ namespace Centrifugal.Centrifuge.Transports
                     // CloseOutputAsync only sends the close frame; it does not block
                     // waiting for a server ack. The connection is being torn down
                     // anyway, so we don't need a clean handshake.
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    await _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", cts.Token)
+                    using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Client disconnect", closeCts.Token)
                         .ConfigureAwait(false);
                 }
             }
@@ -165,10 +169,13 @@ namespace Centrifugal.Centrifuge.Transports
         {
             var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
             var ms = new MemoryStream();
+            // Capture the socket as a local so a concurrent Dispose nulling _webSocket
+            // (future-proofing) can't cause NREs mid-loop.
+            var webSocket = _webSocket;
 
             try
             {
-                while (!cancellationToken.IsCancellationRequested && _webSocket != null)
+                while (!cancellationToken.IsCancellationRequested && webSocket != null)
                 {
                     WebSocketReceiveResult result;
                     ms.SetLength(0);
@@ -176,7 +183,7 @@ namespace Centrifugal.Centrifuge.Transports
                     // Read the complete WebSocket message
                     do
                     {
-                        result = await _webSocket.ReceiveAsync(
+                        result = await webSocket.ReceiveAsync(
                             new ArraySegment<byte>(buffer),
                             cancellationToken
                         ).ConfigureAwait(false);
@@ -227,8 +234,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
             _receiveCts?.Cancel();
             _receiveCts?.Dispose();

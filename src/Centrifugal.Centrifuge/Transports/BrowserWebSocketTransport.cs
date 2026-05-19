@@ -22,8 +22,9 @@ namespace Centrifugal.Centrifuge.Transports
         private IJSObjectReference? _jsModule;
         private DotNetObjectReference<BrowserWebSocketTransport>? _dotnetRef;
         private int _socketId;
-        private bool _disposed;
-        private bool _isOpen;
+        private int _disposed;
+        private int _cleanupStarted;
+        private volatile bool _isOpen;
         private TaskCompletionSource<bool>? _openTcs;
 
         /// <inheritdoc/>
@@ -208,6 +209,8 @@ namespace Centrifugal.Centrifuge.Transports
         public void OnOpen()
         {
             _logger?.LogDebug($"OnOpen called for socket {_socketId}");
+            // Discard stale callback if CleanupAsync already ran (e.g. OpenAsync timed out).
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             // Set _isOpen BEFORE firing events so handlers can use the transport immediately
             _isOpen = true;
             var result = _openTcs?.TrySetResult(true);
@@ -258,6 +261,7 @@ namespace Centrifugal.Centrifuge.Transports
         [JSInvokable]
         public void OnError(string message)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             Error?.Invoke(this, new Exception(message ?? "WebSocket error"));
         }
 
@@ -269,6 +273,7 @@ namespace Centrifugal.Centrifuge.Transports
         [JSInvokable]
         public void OnClose(object? codeObj, object? reasonObj)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             // Log directly via JavaScript to ensure it shows up
             _ = _jsRuntime.InvokeVoidAsync("console.log", "[C#] OnClose called with codeObj:", codeObj, "reasonObj:", reasonObj);
 
@@ -303,6 +308,7 @@ namespace Centrifugal.Centrifuge.Transports
 
         private async Task CleanupAsync(bool alreadyClosed = false)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 1, 0) != 0) return;
             _logger?.LogDebug($"CleanupAsync called for socket {_socketId}, alreadyClosed: {alreadyClosed}");
             _isOpen = false;
             _openTcs?.TrySetCanceled();
@@ -361,8 +367,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
             _ = CloseAsync();
         }

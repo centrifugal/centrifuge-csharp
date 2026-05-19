@@ -40,7 +40,8 @@ namespace Centrifugal.Centrifuge
         private readonly object _commandBatchLock = new object();
 
         private ITransport? _transport;
-        private CentrifugeClientState _state = CentrifugeClientState.Disconnected;
+        private volatile CentrifugeClientState _state = CentrifugeClientState.Disconnected;
+        private int _epoch;
         private int _commandId;
         private int _reconnectAttempts;
         private CancellationTokenSource? _reconnectCts;
@@ -54,19 +55,19 @@ namespace Centrifugal.Centrifuge
         private string? _clientId;
         private string _session = string.Empty;
         private string _node = string.Empty;
-        private Command? _pendingConnectCommand; // For emulation transports, stores the connect command sent in initialData
-        private bool _disposed;
+        private volatile Command? _pendingConnectCommand; // For emulation transports, stores the connect command sent in initialData
+        private volatile int _disposed;
         private int _refreshAttempts;
         private bool _refreshRequired;
         private int _currentTransportIndex;
         private bool _transportWasOpen;
         private int _promiseId;
-        private bool _transportIsOpen;
+        private volatile bool _transportIsOpen;
         private Timer? _commandBatchTimer;
         private bool _commandBatchPending;
         private int _commandBatchSize;
 #if NET6_0_OR_GREATER
-        private static Microsoft.JSInterop.IJSRuntime? _globalJSRuntime;
+        private static volatile Microsoft.JSInterop.IJSRuntime? _globalJSRuntime;
         private readonly Microsoft.JSInterop.IJSRuntime? _jsRuntime;
 #endif
         private readonly ILogger? _logger;
@@ -317,18 +318,18 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public void Connect()
         {
-            if (_state == CentrifugeClientState.Connected)
+            ThrowIfDisposed();
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state == CentrifugeClientState.Connected || _state == CentrifugeClientState.Connecting) return;
             }
-
-            if (_state == CentrifugeClientState.Connecting)
-            {
-                return;
-            }
-
-            _reconnectAttempts = 0;
             StartConnecting();
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 0, 0) != 0)
+                throw new ObjectDisposedException(nameof(CentrifugeClient));
         }
 
         /// <summary>
@@ -336,7 +337,7 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public void Disconnect()
         {
-            _ = SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", false);
+            _ = SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called");
         }
 
         /// <summary>
@@ -349,6 +350,9 @@ namespace Centrifugal.Centrifuge
         /// <returns>A task that completes when connected.</returns>
         public Task ReadyAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 0, 0) != 0)
+                return Task.FromException(new ObjectDisposedException(nameof(CentrifugeClient)));
+
             TaskCompletionSource<bool> tcs;
             int promiseId;
 
@@ -418,18 +422,17 @@ namespace Centrifugal.Centrifuge
         /// <returns>The subscription instance.</returns>
         public CentrifugeSubscription NewSubscription(string channel, CentrifugeSubscriptionOptions? options = null)
         {
+            ThrowIfDisposed();
             if (string.IsNullOrWhiteSpace(channel))
             {
                 throw new ArgumentException("Channel cannot be null or empty", nameof(channel));
             }
 
-            if (_subscriptions.ContainsKey(channel))
+            var subscription = new CentrifugeSubscription(this, channel, options);
+            if (!_subscriptions.TryAdd(channel, subscription))
             {
                 throw new CentrifugeDuplicateSubscriptionException(channel);
             }
-
-            var subscription = new CentrifugeSubscription(this, channel, options);
-            _subscriptions[channel] = subscription;
             return subscription;
         }
 
@@ -452,12 +455,12 @@ namespace Centrifugal.Centrifuge
         {
             if (subscription == null) throw new ArgumentNullException(nameof(subscription));
 
-            if (subscription.State != CentrifugeSubscriptionState.Unsubscribed)
-            {
-                subscription.Unsubscribe();
-            }
+            subscription.Unsubscribe();
 
-            _subscriptions.TryRemove(subscription.Channel, out _);
+            if (_subscriptions.TryRemove(subscription.Channel, out var removed))
+            {
+                removed.Dispose();
+            }
         }
 
 
@@ -553,6 +556,9 @@ namespace Centrifugal.Centrifuge
             // Wait for client to be ready
             await ReadyAsync(_options.Timeout, cancellationToken).ConfigureAwait(false);
 
+            // Send commands have no reply (id stays 0). Route through SendCommandsImmediateAsync
+            // so the command gets varint-framed and uses the emulation endpoint when the
+            // transport requires it.
             var cmd = new Command
             {
                 Send = new SendRequest
@@ -561,12 +567,7 @@ namespace Centrifugal.Centrifuge
                 }
             };
 
-            if (_transport == null || _state != CentrifugeClientState.Connected)
-            {
-                throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
-            }
-
-            await _transport.SendAsync(cmd.ToByteArray(), cancellationToken).ConfigureAwait(false);
+            await SendCommandsImmediateAsync(new[] { cmd }, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -763,13 +764,15 @@ namespace Centrifugal.Centrifuge
 
         internal async Task<Reply> SendCommandAsync(Command command, CancellationToken cancellationToken)
         {
-            if (_transport == null || (_state != CentrifugeClientState.Connected && _state != CentrifugeClientState.Connecting))
+            var tcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_stateChangeLock)
             {
-                throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
+                if (_transport == null || (_state != CentrifugeClientState.Connected && _state != CentrifugeClientState.Connecting))
+                {
+                    throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
+                }
+                _pendingCalls[command.Id] = tcs;
             }
-
-            var tcs = new TaskCompletionSource<Reply>();
-            _pendingCalls[command.Id] = tcs;
 
             try
             {
@@ -797,6 +800,9 @@ namespace Centrifugal.Centrifuge
 
                 if (completedTask != tcs.Task)
                 {
+                    // Distinguish caller cancellation from per-command timeout so
+                    // standard `await x.WaitAsync(ct)` patterns observe OCE, not a timeout.
+                    cancellationToken.ThrowIfCancellationRequested();
                     throw new CentrifugeTimeoutException();
                 }
 
@@ -810,7 +816,16 @@ namespace Centrifugal.Centrifuge
 
         private async Task SendCommandsImmediateAsync(IEnumerable<Command> commands, CancellationToken cancellationToken)
         {
-            if (_transport == null)
+            ITransport? transport;
+            string? session;
+            string? node;
+            lock (_stateChangeLock)
+            {
+                transport = _transport;
+                session = _session;
+                node = _node;
+            }
+            if (transport == null)
             {
                 throw new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "Client is not connected");
             }
@@ -824,9 +839,9 @@ namespace Centrifugal.Centrifuge
             // Don't send connect command for emulation transports - it was already sent during OpenAsync
             bool isConnectCommand = firstCommand.Connect != null;
 
-            if (!isConnectCommand || !_transport.UsesEmulation)
+            if (!isConnectCommand || !transport.UsesEmulation)
             {
-                if (_transport.UsesEmulation)
+                if (transport.UsesEmulation)
                 {
                     // For emulation transports, we need to pre-wrap commands with varint delimiters
                     // because SendEmulationAsync doesn't add them
@@ -838,7 +853,7 @@ namespace Centrifugal.Centrifuge
                     var delimitedCommands = ms.ToArray();
 
                     var emulationEndpoint = GetEmulationEndpoint();
-                    await _transport.SendEmulationAsync(delimitedCommands, _session, _node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
+                    await transport.SendEmulationAsync(delimitedCommands, session, node, emulationEndpoint, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -856,7 +871,7 @@ namespace Centrifugal.Centrifuge
                         _logger?.LogDebug($"Sending {commandsList.Count} commands in single frame ({delimitedData.Length} bytes)");
                     }
 
-                    await _transport.SendAsync(delimitedData, cancellationToken).ConfigureAwait(false);
+                    await transport.SendAsync(delimitedData, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -905,16 +920,15 @@ namespace Centrifugal.Centrifuge
 
         private async Task FlushCommandBatchAsync()
         {
+            lock (_stateChangeLock)
+            {
+                if (_state != CentrifugeClientState.Connected && _state != CentrifugeClientState.Connecting) return;
+            }
+
             List<Command> commandsToSend;
 
             lock (_commandBatchLock)
             {
-                // Check client state before taking commands from batch
-                if (_state != CentrifugeClientState.Connected && _state != CentrifugeClientState.Connecting)
-                {
-                    return;
-                }
-
                 if (!_transportIsOpen)
                 {
                     return;
@@ -951,7 +965,9 @@ namespace Centrifugal.Centrifuge
 
             // Auto-construct emulation endpoint from transport endpoint
             // Emulation endpoint is at root level: http://host:port/emulation
-            string endpoint = _endpoint ?? _transportEndpoints?[_currentTransportIndex].Endpoint ?? throw new CentrifugeConfigurationException("No endpoint configured");
+            int idx;
+            lock (_stateChangeLock) { idx = _currentTransportIndex; }
+            string endpoint = _endpoint ?? _transportEndpoints?[idx].Endpoint ?? throw new CentrifugeConfigurationException("No endpoint configured");
 
             var uri = new Uri(endpoint);
             return $"{uri.Scheme}://{uri.Authority}/emulation";
@@ -959,7 +975,17 @@ namespace Centrifugal.Centrifuge
 
         private void StartConnecting()
         {
-            SetState(CentrifugeClientState.Connecting);
+            // State check + SetState must be atomic so a concurrent SetDisconnectedAsync
+            // (e.g. Disconnect() called immediately after Connect()) cannot be overwritten.
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
+            {
+                if (_state != CentrifugeClientState.Disconnected) return;
+                _reconnectAttempts = 0;
+                prevState = SetState(CentrifugeClientState.Connecting);
+            }
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
             Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.ConnectCalled, "connect called"));
 
             _ = Task.Run(async () =>
@@ -972,21 +998,19 @@ namespace Centrifugal.Centrifuge
                 {
                     // Unauthorized exception should stop connection attempts permanently
                     _logger?.LogDebug($"Caught CentrifugeUnauthorizedException in StartConnecting: {ex.Message}");
-                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    // If using multi-transport fallback and transport failed before opening,
-                    // try the next transport in the list
-                    if (_transportEndpoints != null && !_transportWasOpen)
+                    lock (_stateChangeLock)
                     {
-                        _currentTransportIndex++;
-                        if (_currentTransportIndex >= _transportEndpoints.Count)
+                        if (_transportEndpoints != null && !_transportWasOpen)
                         {
-                            _currentTransportIndex = 0;
+                            _currentTransportIndex++;
+                            if (_currentTransportIndex >= _transportEndpoints.Count)
+                                _currentTransportIndex = 0;
                         }
                     }
-
                     OnError("transport", ex);
                     await ScheduleReconnectAsync().ConfigureAwait(false);
                 }
@@ -995,7 +1019,14 @@ namespace Centrifugal.Centrifuge
 
         private async Task StartConnectingAsync(int code, string reason)
         {
-            SetState(CentrifugeClientState.Connecting);
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
+            {
+                if (_state == CentrifugeClientState.Disconnected) return;
+                prevState = SetState(CentrifugeClientState.Connecting);
+            }
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
             Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(code, reason));
 
             try
@@ -1006,21 +1037,19 @@ namespace Centrifugal.Centrifuge
             {
                 // Unauthorized exception should stop connection attempts permanently
                 _logger?.LogDebug($"Caught CentrifugeUnauthorizedException in StartConnectingAsync: {ex.Message}");
-                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                // If using multi-transport fallback and transport failed before opening,
-                // try the next transport in the list
-                if (_transportEndpoints != null && !_transportWasOpen)
+                lock (_stateChangeLock)
                 {
-                    _currentTransportIndex++;
-                    if (_currentTransportIndex >= _transportEndpoints.Count)
+                    if (_transportEndpoints != null && !_transportWasOpen)
                     {
-                        _currentTransportIndex = 0;
+                        _currentTransportIndex++;
+                        if (_currentTransportIndex >= _transportEndpoints.Count)
+                            _currentTransportIndex = 0;
                     }
                 }
-
                 OnError("transport", ex);
                 await ScheduleReconnectAsync().ConfigureAwait(false);
             }
@@ -1028,15 +1057,21 @@ namespace Centrifugal.Centrifuge
 
         private async Task CreateTransportAsync()
         {
-            // Unsubscribe from old transport events before disposing to prevent race conditions
-            if (_transport != null)
+            // Defensively clean up any lingering transport (CleanupTransportAsync should have nulled it,
+            // but guard here in case this path is reached via an unexpected code path).
+            ITransport? staleTransport;
+            lock (_stateChangeLock)
             {
-                _transport.Opened -= OnTransportOpened;
-                _transport.MessageReceived -= OnTransportMessage;
-                _transport.Closed -= OnTransportClosed;
-                _transport.Error -= OnTransportError;
-                _transport.Dispose();
-                _transport = null;
+                staleTransport = _transport;
+                if (staleTransport != null) _transport = null;
+            }
+            if (staleTransport != null)
+            {
+                staleTransport.Opened -= OnTransportOpened;
+                staleTransport.MessageReceived -= OnTransportMessage;
+                staleTransport.Closed -= OnTransportClosed;
+                staleTransport.Error -= OnTransportError;
+                staleTransport.Dispose();
             }
 
             ITransport transport;
@@ -1045,36 +1080,42 @@ namespace Centrifugal.Centrifuge
             if (_transportEndpoints != null)
             {
                 // Move to next transport if we've exceeded the list
-                if (_currentTransportIndex >= _transportEndpoints.Count)
+                lock (_stateChangeLock)
                 {
-                    _currentTransportIndex = 0;
+                    if (_currentTransportIndex >= _transportEndpoints.Count)
+                        _currentTransportIndex = 0;
                 }
 
                 // Try transports until we find a supported one
                 int attempts = 0;
                 while (attempts < _transportEndpoints.Count)
                 {
-                    var transportConfig = _transportEndpoints[_currentTransportIndex];
+                    int idx;
+                    lock (_stateChangeLock) { idx = _currentTransportIndex; }
+                    var transportConfig = _transportEndpoints[idx];
 
                     try
                     {
                         transport = CreateTransport(transportConfig.Transport, transportConfig.Endpoint);
-                        _transport = transport;
+                        lock (_stateChangeLock) { _transport = transport; }
                         break;
                     }
                     catch (CentrifugeConfigurationException)
                     {
                         // Unsupported transport, try next one
-                        _currentTransportIndex++;
-                        if (_currentTransportIndex >= _transportEndpoints.Count)
+                        lock (_stateChangeLock)
                         {
-                            _currentTransportIndex = 0;
+                            _currentTransportIndex++;
+                            if (_currentTransportIndex >= _transportEndpoints.Count)
+                                _currentTransportIndex = 0;
                         }
                         attempts++;
                     }
                 }
 
-                if (_transport == null)
+                ITransport? currentTransport;
+                lock (_stateChangeLock) { currentTransport = _transport; }
+                if (currentTransport == null)
                 {
                     throw new CentrifugeConfigurationException("No supported transport found in the transport endpoints list");
                 }
@@ -1088,14 +1129,14 @@ namespace Centrifugal.Centrifuge
                 {
                     // Use the same logic as CreateTransport to properly select browser vs native transport
                     transport = CreateTransport(CentrifugeTransportType.WebSocket, _endpoint);
-                    _transport = transport;
+                    lock (_stateChangeLock) { _transport = transport; }
                 }
                 else if (_endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                          _endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
                     // Support HTTP streaming endpoint as well
                     transport = CreateTransport(CentrifugeTransportType.HttpStream, _endpoint);
-                    _transport = transport;
+                    lock (_stateChangeLock) { _transport = transport; }
                 }
                 else
                 {
@@ -1107,15 +1148,17 @@ namespace Centrifugal.Centrifuge
                 throw new CentrifugeConfigurationException("No endpoint configured");
             }
 
-            _transport.Opened += OnTransportOpened;
-            _transport.MessageReceived += OnTransportMessage;
-            _transport.Closed += OnTransportClosed;
-            _transport.Error += OnTransportError;
+            ITransport localTransport;
+            lock (_stateChangeLock) { localTransport = _transport!; }
+            localTransport.Opened += OnTransportOpened;
+            localTransport.MessageReceived += OnTransportMessage;
+            localTransport.Closed += OnTransportClosed;
+            localTransport.Error += OnTransportError;
 
             // For emulation transports, build connect command and send it during OpenAsync
             byte[]? initialData = null;
             TaskCompletionSource<Reply>? connectTcs = null;
-            if (_transport.UsesEmulation)
+            if (localTransport.UsesEmulation)
             {
                 // Build and store the connect command for later use in SendConnectCommandAsync
                 _pendingConnectCommand = await BuildConnectCommandObjectAsync().ConfigureAwait(false);
@@ -1123,18 +1166,40 @@ namespace Centrifugal.Centrifuge
 
                 // Register the pending call BEFORE opening the transport to avoid race condition
                 // where reply arrives before registration
-                connectTcs = new TaskCompletionSource<Reply>();
+                connectTcs = new TaskCompletionSource<Reply>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingCalls[_pendingConnectCommand.Id] = connectTcs;
+            }
+
+            // State check before opening: Disconnect() may have run while BuildConnectCommandObjectAsync
+            // was executing (no GetToken await means no prior re-check for already-set tokens).
+            lock (_stateChangeLock)
+            {
+                if (_state == CentrifugeClientState.Disconnected)
+                {
+                    if (_pendingConnectCommand != null)
+                        _pendingCalls.TryRemove(_pendingConnectCommand.Id, out _);
+                    localTransport.Opened -= OnTransportOpened;
+                    localTransport.MessageReceived -= OnTransportMessage;
+                    localTransport.Closed -= OnTransportClosed;
+                    localTransport.Error -= OnTransportError;
+                    return;
+                }
             }
 
             try
             {
-                await _transport.OpenAsync(initialData: initialData).ConfigureAwait(false);
+                await localTransport.OpenAsync(initialData: initialData).ConfigureAwait(false);
             }
             catch
             {
-                // OpenAsync failed before SendConnectCommandAsync's finally could clean up the
-                // pre-registered emulation entry — remove it here to avoid leaking _pendingCalls slots.
+                // Unregister event handlers so that async JS callbacks (onclose etc.) arriving
+                // after the failure do not fire OnTransportClosed and start a second reconnect.
+                localTransport.Opened -= OnTransportOpened;
+                localTransport.MessageReceived -= OnTransportMessage;
+                localTransport.Closed -= OnTransportClosed;
+                localTransport.Error -= OnTransportError;
+
+                // Remove the pre-registered emulation pending call to avoid leaking _pendingCalls slots.
                 if (_pendingConnectCommand != null)
                 {
                     _pendingCalls.TryRemove(_pendingConnectCommand.Id, out _);
@@ -1188,10 +1253,10 @@ namespace Centrifugal.Centrifuge
         {
             _logger?.LogDebug("OnTransportOpened called");
             // Defensive check: don't process events if client is disposed
-            if (_disposed) return;
+            if (_disposed != 0) return;
 
             // Mark that at least one transport successfully opened
-            _transportWasOpen = true;
+            lock (_stateChangeLock) { _transportWasOpen = true; }
 
             try
             {
@@ -1202,39 +1267,71 @@ namespace Centrifugal.Centrifuge
             catch (CentrifugeTimeoutException ex)
             {
                 _logger?.LogDebug($"Connect timeout: {ex.Message}");
-                // Connect timeout should trigger reconnect, not permanent disconnect
                 OnError("connect", new CentrifugeException(CentrifugeErrorCodes.Timeout, "connect timeout", true));
-                _transport?.Dispose();
-                _transport = null;
+                ITransport? t1;
+                lock (_stateChangeLock)
+                {
+                    t1 = _transport;
+                    if (t1 != null)
+                    {
+                        t1.Opened -= OnTransportOpened;
+                        t1.MessageReceived -= OnTransportMessage;
+                        t1.Closed -= OnTransportClosed;
+                        t1.Error -= OnTransportError;
+                        _transport = null;
+                    }
+                }
+                t1?.Dispose();
                 await ScheduleReconnectAsync().ConfigureAwait(false);
             }
             catch (CentrifugeException ex)
             {
                 _logger?.LogDebug($"CentrifugeException in connect: Code={ex.Code}, Message={ex.Message}, Temporary={ex.Temporary}");
-                // Error code 109 (token expired) or temporary errors should trigger reconnect
                 if (ex.Code == 109 || ex.Code < 100 || ex.Temporary)
                 {
                     _logger?.LogDebug("Triggering reconnect due to temporary error");
                     OnError("connect", ex);
-                    _transport?.Dispose();
-                    _transport = null;
+                    ITransport? t2;
+                    lock (_stateChangeLock)
+                    {
+                        t2 = _transport;
+                        if (t2 != null)
+                        {
+                            t2.Opened -= OnTransportOpened;
+                            t2.MessageReceived -= OnTransportMessage;
+                            t2.Closed -= OnTransportClosed;
+                            t2.Error -= OnTransportError;
+                            _transport = null;
+                        }
+                    }
+                    t2?.Dispose();
                     await ScheduleReconnectAsync().ConfigureAwait(false);
                 }
                 else
                 {
                     _logger?.LogDebug("Permanent error, disconnecting");
-                    // Permanent error - disconnect
                     OnError("connect", ex);
-                    await SetDisconnectedAsync(ex.Code, ex.Message, false).ConfigureAwait(false);
+                    await SetDisconnectedAsync(ex.Code, ex.Message).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogDebug($"General exception in connect: {ex.GetType().Name}: {ex.Message}");
-                // General exceptions during connect should trigger reconnect (e.g., GetToken errors)
                 OnError("connect", ex);
-                _transport?.Dispose();
-                _transport = null;
+                ITransport? t3;
+                lock (_stateChangeLock)
+                {
+                    t3 = _transport;
+                    if (t3 != null)
+                    {
+                        t3.Opened -= OnTransportOpened;
+                        t3.MessageReceived -= OnTransportMessage;
+                        t3.Closed -= OnTransportClosed;
+                        t3.Error -= OnTransportError;
+                        _transport = null;
+                    }
+                }
+                t3?.Dispose();
                 await ScheduleReconnectAsync().ConfigureAwait(false);
             }
         }
@@ -1242,19 +1339,24 @@ namespace Centrifugal.Centrifuge
         private async Task<Command> BuildConnectCommandObjectAsync()
         {
             string? token;
+            bool needsRefresh;
             lock (_stateChangeLock)
             {
                 token = _options.Token;
+                needsRefresh = _refreshRequired;
             }
 
             // If refresh is required or token is empty, try to get a new token
-            if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
+            if ((string.IsNullOrEmpty(token) || needsRefresh) && _options.GetToken != null)
             {
                 try
                 {
                     token = await _options.GetToken().ConfigureAwait(false);
+                    // State may have changed while we awaited GetToken (e.g. Disconnect called)
                     lock (_stateChangeLock)
                     {
+                        if (_state != CentrifugeClientState.Connecting)
+                            throw new OperationCanceledException("client is no longer connecting");
                         _options.Token = token;
                     }
                 }
@@ -1322,9 +1424,12 @@ namespace Centrifugal.Centrifuge
 
         private async Task SendConnectCommandAsync()
         {
-            _logger?.LogDebug($"SendConnectCommandAsync - UsesEmulation: {_transport!.UsesEmulation}");
+            ITransport? transport;
+            lock (_stateChangeLock) { transport = _transport; }
+            if (transport == null) return;
+            _logger?.LogDebug($"SendConnectCommandAsync - UsesEmulation: {transport.UsesEmulation}");
             // For emulation transports, reuse the command that was already sent during OpenAsync
-            if (_transport!.UsesEmulation && _pendingConnectCommand != null)
+            if (transport.UsesEmulation && _pendingConnectCommand != null)
             {
                 var pendingCmd = _pendingConnectCommand;
                 _pendingConnectCommand = null; // Clear it so it's not reused on reconnect
@@ -1351,8 +1456,11 @@ namespace Centrifugal.Centrifuge
 
                 if (connectReply.Error != null)
                 {
-                    var error = new CentrifugeException((int)connectReply.Error.Code, connectReply.Error.Message, connectReply.Error.Temporary);
-                    throw error;
+                    if (connectReply.Error.Code == 109)
+                    {
+                        lock (_stateChangeLock) { _refreshRequired = true; }
+                    }
+                    throw new CentrifugeException((int)connectReply.Error.Code, connectReply.Error.Message, connectReply.Error.Temporary);
                 }
 
                 HandleConnectReply(connectReply.Connect);
@@ -1360,25 +1468,29 @@ namespace Centrifugal.Centrifuge
             }
 
             string? token;
+            bool needsRefreshConnect;
             lock (_stateChangeLock)
             {
                 token = _options.Token;
+                needsRefreshConnect = _refreshRequired;
             }
 
             // If refresh is required or token is empty, try to get a new token
-            if ((string.IsNullOrEmpty(token) || _refreshRequired) && _options.GetToken != null)
+            if ((string.IsNullOrEmpty(token) || needsRefreshConnect) && _options.GetToken != null)
             {
                 try
                 {
                     token = await _options.GetToken().ConfigureAwait(false);
+                    // State may have changed while we awaited GetToken (e.g. Disconnect called)
                     lock (_stateChangeLock)
                     {
+                        if (_state != CentrifugeClientState.Connecting) return;
                         _options.Token = token;
                     }
                 }
                 catch (CentrifugeUnauthorizedException)
                 {
-                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                     return;
                 }
             }
@@ -1447,7 +1559,7 @@ namespace Centrifugal.Centrifuge
                 // Error code 109 means token expired - mark for refresh on next connect
                 if (reply.Error.Code == 109)
                 {
-                    _refreshRequired = true;
+                    lock (_stateChangeLock) { _refreshRequired = true; }
                 }
 
                 throw error;
@@ -1458,54 +1570,48 @@ namespace Centrifugal.Centrifuge
 
         private void HandleConnectReply(ConnectResult connectResult)
         {
-            // Check if this is a reconnection (we had a client ID from a previous connection)
-            bool isReconnect = !string.IsNullOrEmpty(_clientId);
-
-            _clientId = connectResult.Client;
-            _session = connectResult.Session;
-            _node = connectResult.Node;
-
-            // Hold _stateChangeLock across the state transition and ResolvePromises so a
-            // ReadyAsync caller can't observe Connecting, miss our resolve, and then register
-            // a tcs that nobody will complete.
+            // Hold _stateChangeLock across all field writes, the state transition, and
+            // ResolvePromises so a ReadyAsync caller can't observe Connecting, miss our
+            // resolve, and then register a tcs that nobody will complete.
+            string transportName;
+            CentrifugeClientState prevState;
             lock (_stateChangeLock)
             {
-                SetState(CentrifugeClientState.Connected);
+                _clientId = connectResult.Client;
+                _session = connectResult.Session;
+                _node = connectResult.Node;
+                prevState = SetState(CentrifugeClientState.Connected);
                 _transportIsOpen = true;
                 ResolvePromises();
+
+                _reconnectAttempts = 0;
+                ClearRefreshTimer();
+                _refreshAttempts = 0;
+                _refreshRequired = false;
+                if (connectResult.Expires) ScheduleConnectionRefresh(connectResult.Ttl);
+
+                if (connectResult.Ping > 0)
+                {
+                    _serverPingInterval = connectResult.Ping;
+                    _sendPong = connectResult.Pong;
+                    StartPingTimer(connectResult.Ping);
+                }
+                else
+                {
+                    _serverPingInterval = 0;
+                    _sendPong = false;
+                }
+
+                transportName = _transport?.Name ?? "unknown";
             }
 
+            if (prevState != CentrifugeClientState.Connected)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connected));
             Connected?.Invoke(this, new CentrifugeConnectedEventArgs(
                 connectResult.Client,
-                _transport?.Name ?? "unknown",
+                transportName,
                 connectResult.Data.ToByteArray()
             ));
-
-            _reconnectAttempts = 0;
-
-            // Clear refresh timer and reset attempts
-            ClearRefreshTimer();
-            _refreshAttempts = 0;
-            _refreshRequired = false;
-
-            // Schedule token refresh if token expires
-            if (connectResult.Expires)
-            {
-                ScheduleConnectionRefresh(connectResult.Ttl);
-            }
-
-            // Start ping timer if server sends pings
-            if (connectResult.Ping > 0)
-            {
-                _serverPingInterval = connectResult.Ping;
-                _sendPong = connectResult.Pong;
-                StartPingTimer(connectResult.Ping);
-            }
-            else
-            {
-                _serverPingInterval = 0;
-                _sendPong = false;
-            }
 
             // Process server-side subscriptions
             ProcessServerSubscriptions(connectResult.Subs);
@@ -1513,6 +1619,12 @@ namespace Centrifugal.Centrifuge
             // Send subscribe commands for all subscriptions in Subscribing state
             // This handles both first connect and reconnect scenarios
             SendSubscribeCommands();
+
+            // Flush any commands queued while we were Connecting (e.g. RpcAsync called
+            // from a Connecting event handler). Without this kick, those commands sit in
+            // _commandBatch until another Schedule/Flush trigger, potentially hanging up
+            // to the per-command timeout if there are no subscriptions to drive a flush.
+            _ = Task.Run(async () => await FlushCommandBatchAsync().ConfigureAwait(false));
         }
 
         private void SendSubscribeCommands()
@@ -1537,15 +1649,15 @@ namespace Centrifugal.Centrifuge
 
         private async Task SendSubscribeCommandsAsync()
         {
-            // Check client state before processing
-            if (_state != CentrifugeClientState.Connected || !_transportIsOpen)
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state != CentrifugeClientState.Connected || !_transportIsOpen) return;
             }
 
-            // Start all subscribe commands concurrently so they can be batched together
+            // Start all subscribe commands concurrently so they can be batched together.
+            // No .Where(sub.State) filter — SendSubscribeIfNeededAsync does the authoritative
+            // locked state check internally; a bare non-volatile read here would be stale anyway.
             var subscribeTasks = _subscriptions.Values
-                .Where(sub => sub.State == CentrifugeSubscriptionState.Subscribing)
                 .Select(sub => sub.SendSubscribeIfNeededAsync())
                 .ToList();
 
@@ -1558,12 +1670,14 @@ namespace Centrifugal.Centrifuge
         private void OnTransportMessage(object? sender, byte[] data)
         {
             // Defensive check: don't process events if client is disposed
-            if (_disposed) return;
+            if (_disposed != 0) return;
 
             try
             {
                 // Reset ping timer on any message received
-                if (_serverPingInterval > 0)
+                uint serverPingInterval;
+                lock (_stateChangeLock) { serverPingInterval = _serverPingInterval; }
+                if (serverPingInterval > 0)
                 {
                     ResetPingTimer();
                 }
@@ -1613,6 +1727,23 @@ namespace Centrifugal.Centrifuge
                     // Server-side subscription
                     var pub = CreatePublicationArgs(push.Channel, push.Pub);
                     Publication?.Invoke(this, pub);
+
+                    if (push.Pub.Offset > 0)
+                    {
+                        lock (_stateChangeLock)
+                        {
+                            if (_serverSubscriptions.TryGetValue(push.Channel, out var existing) &&
+                                push.Pub.Offset > existing.Offset)
+                            {
+                                _serverSubscriptions[push.Channel] = new ServerSubscription
+                                {
+                                    Offset = push.Pub.Offset,
+                                    Epoch = existing.Epoch,
+                                    Recoverable = existing.Recoverable
+                                };
+                            }
+                        }
+                    }
                 }
             }
             else if (push.Join != null)
@@ -1691,22 +1822,40 @@ namespace Centrifugal.Centrifuge
 
             if (reconnect)
             {
-                // Disconnect with reconnect
                 _logger?.LogDebug($"HandleDisconnectPush - calling HandleTransportClosedAsync for reconnect");
+                // Pre-unregister all transport handlers: the server closes the transport after sending
+                // the disconnect push. Without detaching Closed, OnTransportClosed would fire and trigger
+                // a second HandleTransportClosedAsync. Without detaching MessageReceived/Error/Opened,
+                // any frame already buffered between the disconnect push and the close would still
+                // dispatch user-facing events for a connection we've decided is dead.
+                // Capture transport under _stateChangeLock; unsubscribe outside the lock so a custom
+                // event accessor implementation can never block the state machine.
+                ITransport? transport;
+                lock (_stateChangeLock)
+                {
+                    transport = _transport;
+                }
+                if (transport != null)
+                {
+                    transport.Closed -= OnTransportClosed;
+                    transport.MessageReceived -= OnTransportMessage;
+                    transport.Error -= OnTransportError;
+                    transport.Opened -= OnTransportOpened;
+                }
                 _ = HandleTransportClosedAsync(new TransportClosedEventArgs(code: code, reason: disconnect.Reason));
             }
             else
             {
                 // Permanent disconnect
                 _logger?.LogDebug($"HandleDisconnectPush - calling SetDisconnectedAsync for permanent disconnect");
-                _ = SetDisconnectedAsync(code, disconnect.Reason, false);
+                _ = SetDisconnectedAsync(code, disconnect.Reason);
             }
         }
 
         private void OnTransportClosed(object? sender, TransportClosedEventArgs e)
         {
             // Defensive check: don't process events if client is disposed
-            if (_disposed) return;
+            if (_disposed != 0) return;
 
             _logger?.LogDebug($"OnTransportClosed - code: {e.Code}, reason: '{e.Reason}'");
             _ = HandleTransportClosedAsync(e);
@@ -1717,18 +1866,13 @@ namespace Centrifugal.Centrifuge
             _logger?.LogDebug($"HandleTransportClosedAsync - state: {_state}, code: {e.Code}, reason: '{e.Reason}'");
 
             // Don't process if already disconnected
-            if (_state == CentrifugeClientState.Disconnected)
+            lock (_stateChangeLock)
             {
-                _logger?.LogDebug($"HandleTransportClosedAsync - skipping (state is {_state})");
-                return;
-            }
-
-            // If already in Connecting state, cancel any pending reconnect and restart
-            // This handles the case where transport closes during connection (e.g., server sends disconnect while connecting)
-            if (_state == CentrifugeClientState.Connecting)
-            {
-                _logger?.LogDebug($"HandleTransportClosedAsync - transport closed while connecting, restarting reconnect logic");
-                _reconnectCts?.Cancel();
+                if (_state == CentrifugeClientState.Disconnected)
+                {
+                    _logger?.LogDebug("HandleTransportClosedAsync - skipping (already disconnected)");
+                    return;
+                }
             }
 
             // Determine if we should reconnect based on close code
@@ -1765,24 +1909,38 @@ namespace Centrifugal.Centrifuge
             if (!shouldReconnect)
             {
                 // Permanent disconnect
-                await SetDisconnectedAsync(code, reason, false).ConfigureAwait(false);
+                await SetDisconnectedAsync(code, reason).ConfigureAwait(false);
                 return;
             }
 
             // If using multi-transport fallback and transport closed before opening,
             // try the next transport in the list
-            if (_transportEndpoints != null && !_transportWasOpen)
+            lock (_stateChangeLock)
             {
-                _currentTransportIndex++;
-                if (_currentTransportIndex >= _transportEndpoints.Count)
+                if (_transportEndpoints != null && !_transportWasOpen)
                 {
-                    _currentTransportIndex = 0;
+                    _currentTransportIndex++;
+                    if (_currentTransportIndex >= _transportEndpoints.Count)
+                        _currentTransportIndex = 0;
                 }
             }
 
-            // Set state to Connecting FIRST to prevent duplicate processing
-            // This must happen before CleanupTransportAsync to block concurrent HandleTransportClosedAsync calls
-            SetState(CentrifugeClientState.Connecting);
+            // Transition to Connecting under _stateChangeLock so it can't race with a
+            // concurrent SetDisconnectedAsync (e.g. user calls Disconnect() at the same time).
+            // Also cancel any in-flight reconnect timer atomically with the state change.
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
+            {
+                // Re-check: SetDisconnectedAsync may have won the race and set Disconnected already
+                if (_state == CentrifugeClientState.Disconnected)
+                {
+                    _logger?.LogDebug("HandleTransportClosedAsync - aborting reconnect, state is already Disconnected");
+                    return;
+                }
+
+                _reconnectCts?.Cancel();
+                prevState = SetState(CentrifugeClientState.Connecting);
+            }
 
             // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
             foreach (var sub in _subscriptions.Values)
@@ -1790,7 +1948,8 @@ namespace Centrifugal.Centrifuge
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
             }
 
-            // Use the actual disconnect code and reason from the server (not hardcoded TransportClosed)
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
             _logger?.LogDebug($"Firing Connecting event with code: {code}, reason: '{reason}'");
             Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(code, reason));
 
@@ -1804,7 +1963,7 @@ namespace Centrifugal.Centrifuge
         private void OnTransportError(object? sender, Exception e)
         {
             // Defensive check: don't process events if client is disposed
-            if (_disposed) return;
+            if (_disposed != 0) return;
 
             OnError("transport", e);
         }
@@ -1812,32 +1971,48 @@ namespace Centrifugal.Centrifuge
         internal async Task HandleSubscribeTimeoutAsync()
         {
             // Subscribe timeout triggers client disconnect with reconnect
-            if (_state == CentrifugeClientState.Disconnected)
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state == CentrifugeClientState.Disconnected) return;
+                _reconnectCts?.Cancel();
+                prevState = SetState(CentrifugeClientState.Connecting);
             }
 
-            await StartConnectingAsync(CentrifugeConnectingCodes.SubscribeTimeout, "subscribe timeout").ConfigureAwait(false);
+            foreach (var sub in _subscriptions.Values)
+            {
+                sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+            }
 
-            // Properly clean up transport before reconnecting
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
+            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.SubscribeTimeout, "subscribe timeout"));
+
             await CleanupTransportAsync().ConfigureAwait(false);
-
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 
         internal async Task HandleUnsubscribeErrorAsync()
         {
             // Unsubscribe error triggers client disconnect with reconnect (matching centrifuge-js behavior)
-            if (_state == CentrifugeClientState.Disconnected)
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state == CentrifugeClientState.Disconnected) return;
+                _reconnectCts?.Cancel();
+                prevState = SetState(CentrifugeClientState.Connecting);
             }
 
-            await StartConnectingAsync(CentrifugeConnectingCodes.UnsubscribeError, "unsubscribe error").ConfigureAwait(false);
+            foreach (var sub in _subscriptions.Values)
+            {
+                sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+            }
 
-            // Properly clean up transport before reconnecting
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
+            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.UnsubscribeError, "unsubscribe error"));
+
             await CleanupTransportAsync().ConfigureAwait(false);
-
             await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 
@@ -1847,91 +2022,131 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         private async Task CleanupTransportAsync()
         {
-            if (_transport == null)
+            ITransport? transport;
+            Timer? pingTimer;
+            List<TaskCompletionSource<Reply>>? pendingToFail;
+            lock (_stateChangeLock)
             {
-                return;
-            }
-
-            try
-            {
-                // Stop ping timer
-                _pingTimer?.Dispose();
+                transport = _transport;
+                _transport = null;
+                pingTimer = _pingTimer;
                 _pingTimer = null;
                 _serverPingInterval = 0;
                 _sendPong = false;
+                _transportIsOpen = false;
+                // Atomically snapshot and clear pending calls while _transport is null.
+                // SendCommandAsync guards on (_transport != null) under this same lock, so after
+                // this block no new entries can be added — all existing ones are captured here.
+                if (transport != null)
+                {
+                    pendingToFail = new List<TaskCompletionSource<Reply>>(_pendingCalls.Values);
+                    _pendingCalls.Clear();
+                }
+                else
+                {
+                    pendingToFail = null;
+                }
+            }
 
-                // Clear inflight requests
-                ClearInflightRequests();
+            pingTimer?.Dispose();
+
+            // Complete captured pending calls outside the lock (TCS continuations may be synchronous).
+            if (pendingToFail != null)
+            {
+                var connClosedEx = new CentrifugeException(CentrifugeErrorCodes.ConnectionClosed, "connection closed", false);
+                foreach (var tcs in pendingToFail) tcs.TrySetException(connClosedEx);
+            }
+
+            if (transport == null) return;
+
+            try
+            {
+                // Clear pending batch commands
+                lock (_commandBatchLock)
+                {
+                    _commandBatch.Clear();
+                    _commandBatchSize = 0;
+                    _commandBatchPending = false;
+                    _commandBatchTimer?.Dispose();
+                    _commandBatchTimer = null;
+                }
 
                 // Unsubscribe from transport events BEFORE closing to prevent race conditions
-                _transport.Opened -= OnTransportOpened;
-                _transport.MessageReceived -= OnTransportMessage;
-                _transport.Closed -= OnTransportClosed;
-                _transport.Error -= OnTransportError;
+                transport.Opened -= OnTransportOpened;
+                transport.MessageReceived -= OnTransportMessage;
+                transport.Closed -= OnTransportClosed;
+                transport.Error -= OnTransportError;
 
                 // Close and dispose transport
-                await _transport.CloseAsync().ConfigureAwait(false);
-                _transport.Dispose();
-                _transport = null;
+                await transport.CloseAsync().ConfigureAwait(false);
+                transport.Dispose();
             }
             catch
             {
-                // Ignore cleanup errors, but ensure transport is set to null
-                _transport = null;
+                // Ignore cleanup errors
             }
         }
 
         private async Task ScheduleReconnectAsync()
         {
-            if (_state == CentrifugeClientState.Disconnected)
+            CancellationToken reconnectToken;
+            int currentAttempts;
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state == CentrifugeClientState.Disconnected) return;
+
+                var oldCts = _reconnectCts;
+                _reconnectCts = new CancellationTokenSource();
+                oldCts?.Cancel();
+                oldCts?.Dispose();
+                reconnectToken = _reconnectCts.Token;
+                currentAttempts = _reconnectAttempts++;
             }
-
-            var oldReconnectCts = _reconnectCts;
-            _reconnectCts = new CancellationTokenSource();
-            oldReconnectCts?.Cancel();
-            oldReconnectCts?.Dispose();
-
             int delay = Utilities.CalculateBackoff(
-                _reconnectAttempts++,
+                currentAttempts,
                 _options.MinReconnectDelay,
                 _options.MaxReconnectDelay
             );
 
             try
             {
-                await Task.Delay(delay, _reconnectCts.Token).ConfigureAwait(false);
+                await Task.Delay(delay, reconnectToken).ConfigureAwait(false);
+                lock (_stateChangeLock)
+                {
+                    if (_state == CentrifugeClientState.Disconnected) return;
+                }
                 await CreateTransportAsync().ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 // Reconnect was cancelled
             }
+            catch (ObjectDisposedException)
+            {
+                // _reconnectCts was disposed by Dispose()/DisposeAsync() between our
+                // capture above and Task.Delay's registration — treat as cancellation.
+            }
             catch (Exception ex)
             {
-                // CreateTransportAsync failed - report error and schedule next reconnection attempt
-                // If using multi-transport fallback and transport failed before opening,
-                // try the next transport in the list
-                if (_transportEndpoints != null && !_transportWasOpen)
+                lock (_stateChangeLock)
                 {
-                    _currentTransportIndex++;
-                    if (_currentTransportIndex >= _transportEndpoints.Count)
+                    if (_transportEndpoints != null && !_transportWasOpen)
                     {
-                        _currentTransportIndex = 0;
+                        _currentTransportIndex++;
+                        if (_currentTransportIndex >= _transportEndpoints.Count)
+                            _currentTransportIndex = 0;
                     }
                 }
-
                 OnError("transport", ex);
-
-                // Schedule next reconnection attempt
                 await ScheduleReconnectAsync().ConfigureAwait(false);
             }
         }
 
-        private async Task SetDisconnectedAsync(int code, string reason, bool shouldReconnect)
+        private async Task SetDisconnectedAsync(int code, string reason)
         {
-            // Change state synchronously first
+            // Change state synchronously first; fire events OUTSIDE the lock to avoid
+            // deadlocking if a user's synchronous event handler calls back into the SDK.
+            CentrifugeClientState prevState;
             lock (_stateChangeLock)
             {
                 if (_state == CentrifugeClientState.Disconnected)
@@ -1939,22 +2154,19 @@ namespace Centrifugal.Centrifuge
                     return;
                 }
 
-                if (shouldReconnect)
-                {
-                    SetState(CentrifugeClientState.Connecting);
-                    Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(code, reason));
-                }
-                else
-                {
-                    SetState(CentrifugeClientState.Disconnected);
-                    Disconnected?.Invoke(this, new CentrifugeDisconnectedEventArgs(code, reason));
-
-                    // Reject ready promises when disconnecting
-                    RejectPromises(new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "client disconnected"));
-                }
+                prevState = SetState(CentrifugeClientState.Disconnected);
+                RejectPromises(new CentrifugeException(CentrifugeErrorCodes.ClientDisconnected, "client disconnected"));
 
                 _transportIsOpen = false;
+                _transportWasOpen = false;
+                try { _reconnectCts?.Cancel(); } catch (ObjectDisposedException) { }
+                _reconnectCts?.Dispose();
+                _reconnectCts = null;
             }
+
+            if (prevState != CentrifugeClientState.Disconnected)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Disconnected));
+            Disconnected?.Invoke(this, new CentrifugeDisconnectedEventArgs(code, reason));
 
             // Now do async cleanup without holding locks
             // Defense-in-depth: catch ObjectDisposedException in case an event handler was already
@@ -1971,9 +2183,7 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                _reconnectCts?.Cancel();
-                ClearRefreshTimer();
-                _transportWasOpen = false;
+                lock (_stateChangeLock) { ClearRefreshTimer(); }
 
                 // Clean up transport (ping timer, events, close, dispose)
                 await CleanupTransportAsync().ConfigureAwait(false);
@@ -1997,15 +2207,33 @@ namespace Centrifugal.Centrifuge
             }
         }
 
-        private void SetState(CentrifugeClientState newState)
+        private CentrifugeClientState SetState(CentrifugeClientState newState)
         {
             var oldState = _state;
             _state = newState;
+            if (oldState != newState) _epoch++;
+            return oldState;
+        }
 
-            if (oldState != newState)
+        internal async Task HandleNoPingAsync()
+        {
+            CentrifugeClientState prevState;
+            lock (_stateChangeLock)
             {
-                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(oldState, newState));
+                if (_state != CentrifugeClientState.Connected) return;
+                _reconnectCts?.Cancel();
+                prevState = SetState(CentrifugeClientState.Connecting);
             }
+
+            foreach (var sub in _subscriptions.Values)
+                sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+
+            if (prevState != CentrifugeClientState.Connecting)
+                StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
+            Connecting?.Invoke(this, new CentrifugeConnectingEventArgs(CentrifugeConnectingCodes.NoPing, "no ping"));
+
+            await CleanupTransportAsync().ConfigureAwait(false);
+            await ScheduleReconnectAsync().ConfigureAwait(false);
         }
 
         private void StartPingTimer(uint pingInterval)
@@ -2015,74 +2243,77 @@ namespace Centrifugal.Centrifuge
             var interval = (int)(pingInterval * 1000) + (int)_options.MaxServerPingDelay.TotalMilliseconds;
             _pingTimer = new Timer(_ =>
             {
-                _ = StartConnectingAsync(CentrifugeConnectingCodes.NoPing, "no ping");
+                _ = HandleNoPingAsync();
             }, null, interval, System.Threading.Timeout.Infinite);
         }
 
         private void ResetPingTimer()
         {
-            if (_pingTimer == null || _serverPingInterval == 0 || _state != CentrifugeClientState.Connected)
+            Timer? timer;
+            uint pingInterval;
+            lock (_stateChangeLock)
             {
-                return;
+                if (_pingTimer == null || _serverPingInterval == 0 || _state != CentrifugeClientState.Connected)
+                    return;
+                timer = _pingTimer;
+                pingInterval = _serverPingInterval;
             }
-
-            var interval = (int)(_serverPingInterval * 1000) + (int)_options.MaxServerPingDelay.TotalMilliseconds;
-            _pingTimer.Change(interval, System.Threading.Timeout.Infinite);
+            var interval = (int)(pingInterval * 1000) + (int)_options.MaxServerPingDelay.TotalMilliseconds;
+            try { timer.Change(interval, System.Threading.Timeout.Infinite); }
+            catch (ObjectDisposedException) { }
         }
 
         private void HandleServerPing()
         {
-            if (_sendPong)
+            bool sendPong;
+            ITransport? transport;
+            string? session, node;
+            lock (_stateChangeLock)
             {
-                // Send empty command as pong
-                var cmd = new Command
-                {
-                    // No Id, no payload - just empty command
-                };
+                sendPong = _sendPong;
+                transport = _transport;
+                session = _session;
+                node = _node;
+            }
 
-                try
-                {
-                    if (_transport != null)
-                    {
-                        if (_transport.UsesEmulation)
-                        {
-                            // For emulation transports (non-connect commands), use SendEmulationAsync with session and node
-                            // The command must be varint-delimited
-                            using var ms = new MemoryStream();
-                            VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
-                            var delimitedCommand = ms.ToArray();
+            if (!sendPong || transport == null) return;
 
-                            var emulationEndpoint = GetEmulationEndpoint();
-                            // Fire-and-forget: this runs on the receive thread; observe the
-                            // task so a faulted send doesn't surface as an unobserved exception.
-                            _ = _transport.SendEmulationAsync(delimitedCommand, _session, _node, emulationEndpoint, CancellationToken.None).ContinueWith(
-                                t => { _ = t.Exception; },
-                                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-                        }
-                        else
-                        {
-                            // For WebSocket, wrap with varint delimiter.
-                            // Fire-and-forget: this runs on the receive thread; blocking on
-                            // SendAsync here would stall message processing.
-                            using var ms = new MemoryStream();
-                            VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
-                            var pongBytes = ms.ToArray();
-                            _ = _transport.SendAsync(pongBytes).ContinueWith(
-                                t => { _ = t.Exception; },
-                                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-                        }
-                    }
-                }
-                catch
+            var cmd = new Command { };
+
+            try
+            {
+                if (transport.UsesEmulation)
                 {
-                    // Ignore errors sending pong
+                    using var ms = new MemoryStream();
+                    VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                    var delimitedCommand = ms.ToArray();
+                    var emulationEndpoint = GetEmulationEndpoint();
+                    _ = transport.SendEmulationAsync(delimitedCommand, session, node, emulationEndpoint, CancellationToken.None).ContinueWith(
+                        t => { _ = t.Exception; },
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                 }
+                else
+                {
+                    using var ms = new MemoryStream();
+                    VarintCodec.WriteDelimitedMessage(ms, cmd.ToByteArray());
+                    var pongBytes = ms.ToArray();
+                    _ = transport.SendAsync(pongBytes).ContinueWith(
+                        t => { _ = t.Exception; },
+                        TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                }
+            }
+            catch
+            {
+                // Ignore errors sending pong
             }
         }
 
         private void ScheduleConnectionRefresh(uint ttl)
         {
             _refreshTimer?.Dispose();
+            _refreshTimer = null;
+            // ttl=0 means "no expiry given" — skip scheduling rather than busy-loop.
+            if (ttl == 0) return;
             var delay = Utilities.TtlToMilliseconds(ttl);
             _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
         }
@@ -2093,11 +2324,13 @@ namespace Centrifugal.Centrifuge
             _refreshTimer = null;
         }
 
-        private async Task RefreshConnectionTokenAsync()
+        internal async Task RefreshConnectionTokenAsync()
         {
-            if (_state != CentrifugeClientState.Connected || _options.GetToken == null)
+            int epochSnapshot;
+            lock (_stateChangeLock)
             {
-                return;
+                if (_state != CentrifugeClientState.Connected || _options.GetToken == null) return;
+                epochSnapshot = _epoch;
             }
 
             try
@@ -2105,12 +2338,15 @@ namespace Centrifugal.Centrifuge
                 var token = await _options.GetToken().ConfigureAwait(false);
                 if (string.IsNullOrEmpty(token))
                 {
-                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                    await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
                     return;
                 }
 
                 lock (_stateChangeLock)
                 {
+                    // Discard the token if the connection left/re-entered Connected during the await —
+                    // the token belongs to a prior session.
+                    if (_state != CentrifugeClientState.Connected || _epoch != epochSnapshot) return;
                     _options.Token = token;
                 }
 
@@ -2140,68 +2376,57 @@ namespace Centrifugal.Centrifuge
             }
             catch (CentrifugeUnauthorizedException)
             {
-                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized", false).ConfigureAwait(false);
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 OnError("refreshToken", ex);
-                // Schedule retry
-                var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
-                _refreshAttempts++;
-                _refreshTimer?.Dispose();
-                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
+                lock (_stateChangeLock)
+                {
+                    if (_state != CentrifugeClientState.Connected) return;
+                    var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
+                    _refreshAttempts++;
+                    ClearRefreshTimer();
+                    _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
+                }
             }
         }
 
         private void HandleRefreshReply(RefreshResult result)
         {
-            if (_state != CentrifugeClientState.Connected)
+            lock (_stateChangeLock)
             {
-                return;
-            }
-
-            ClearRefreshTimer();
-            _refreshAttempts = 0;
-            _clientId = result.Client;
-
-            // Schedule next refresh if token expires
-            if (result.Expires)
-            {
-                ScheduleConnectionRefresh(result.Ttl);
+                if (_state != CentrifugeClientState.Connected) return;
+                ClearRefreshTimer();
+                _refreshAttempts = 0;
+                _clientId = result.Client;
+                if (result.Expires)
+                {
+                    ScheduleConnectionRefresh(result.Ttl);
+                }
             }
         }
 
         private void HandleRefreshError(CentrifugeException error)
         {
-            // If error is temporary, retry with backoff
             if (error.Code < 100 || error.Temporary)
             {
                 OnError("refreshToken", error);
-                var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
-                _refreshAttempts++;
-                _refreshTimer?.Dispose();
-                _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
+                lock (_stateChangeLock)
+                {
+                    if (_state != CentrifugeClientState.Connected) return;
+                    var delay = Utilities.CalculateBackoff(_refreshAttempts, _options.MinReconnectDelay, _options.MaxReconnectDelay);
+                    _refreshAttempts++;
+                    ClearRefreshTimer();
+                    _refreshTimer = new Timer(_ => _ = RefreshConnectionTokenAsync(), null, delay, System.Threading.Timeout.Infinite);
+                }
             }
             else
             {
-                // Permanent error - disconnect
-                _ = SetDisconnectedAsync((int)error.Code, error.Message, false);
+                _ = SetDisconnectedAsync((int)error.Code, error.Message);
             }
         }
 
-        private void ClearInflightRequests()
-        {
-            // Cancel all pending requests with connection closed error
-            foreach (var kvp in _pendingCalls)
-            {
-                kvp.Value.TrySetException(new CentrifugeException(
-                    CentrifugeErrorCodes.ConnectionClosed,
-                    "connection closed",
-                    false
-                ));
-            }
-            _pendingCalls.Clear();
-        }
 
         private void ProcessServerSubscriptions(Google.Protobuf.Collections.MapField<string, SubscribeResult> subs)
         {
@@ -2219,20 +2444,23 @@ namespace Centrifugal.Centrifuge
                 var sub = kvp.Value;
                 subsToKeep.Add(channel);
 
-                bool wasRecovering = _serverSubscriptions.ContainsKey(channel);
+                bool wasRecovering;
+                lock (_stateChangeLock)
+                {
+                    wasRecovering = _serverSubscriptions.ContainsKey(channel);
+                    _serverSubscriptions[channel] = new ServerSubscription
+                    {
+                        Offset = sub.Offset,
+                        Epoch = sub.Epoch,
+                        Recoverable = sub.Recoverable
+                    };
+                }
 
                 // Fire ServerSubscribing event for new subscriptions
                 if (!wasRecovering)
                 {
                     ServerSubscribing?.Invoke(this, new CentrifugeServerSubscribingEventArgs(channel));
                 }
-
-                _serverSubscriptions[channel] = new ServerSubscription
-                {
-                    Offset = sub.Offset,
-                    Epoch = sub.Epoch,
-                    Recoverable = sub.Recoverable
-                };
 
                 CentrifugeStreamPosition? streamPosition = null;
                 if (sub.Positioned)
@@ -2260,7 +2488,19 @@ namespace Centrifugal.Centrifuge
 
                         if (sub.Positioned && pub.Offset > 0)
                         {
-                            _serverSubscriptions[channel].Offset = pub.Offset;
+                            lock (_stateChangeLock)
+                            {
+                                if (_serverSubscriptions.TryGetValue(channel, out var existing) &&
+                                    pub.Offset > existing.Offset)
+                                {
+                                    _serverSubscriptions[channel] = new ServerSubscription
+                                    {
+                                        Offset = pub.Offset,
+                                        Epoch = existing.Epoch,
+                                        Recoverable = existing.Recoverable
+                                    };
+                                }
+                            }
                         }
                     }
                 }
@@ -2285,14 +2525,17 @@ namespace Centrifugal.Centrifuge
 
         private void HandleServerSubscribe(string channel, Subscribe sub)
         {
-            bool wasRecovering = _serverSubscriptions.ContainsKey(channel);
-
-            _serverSubscriptions[channel] = new ServerSubscription
+            bool wasRecovering;
+            lock (_stateChangeLock)
             {
-                Offset = sub.Offset,
-                Epoch = sub.Epoch,
-                Recoverable = sub.Recoverable
-            };
+                wasRecovering = _serverSubscriptions.ContainsKey(channel);
+                _serverSubscriptions[channel] = new ServerSubscription
+                {
+                    Offset = sub.Offset,
+                    Epoch = sub.Epoch,
+                    Recoverable = sub.Recoverable
+                };
+            }
 
             CentrifugeStreamPosition? streamPosition = null;
             if (sub.Positioned)
@@ -2333,11 +2576,15 @@ namespace Centrifugal.Centrifuge
                     _ = clientSub.ResubscribeAsync();
                 }
             }
-            else if (_serverSubscriptions.ContainsKey(channel))
+            else
             {
-                // Server-side subscription
-                _serverSubscriptions.TryRemove(channel, out _);
-                ServerUnsubscribed?.Invoke(this, new CentrifugeServerUnsubscribedEventArgs(channel));
+                bool removed;
+                lock (_stateChangeLock)
+                {
+                    removed = _serverSubscriptions.TryRemove(channel, out _);
+                }
+                if (removed)
+                    ServerUnsubscribed?.Invoke(this, new CentrifugeServerUnsubscribedEventArgs(channel));
             }
         }
 
@@ -2348,7 +2595,14 @@ namespace Centrifugal.Centrifuge
 
         internal uint NextCommandId()
         {
-            return (uint)Interlocked.Increment(ref _commandId);
+            // The protocol uses uint32 ids; id == 0 is reserved for push messages
+            // (no reply), so skip it on wrap-around to avoid colliding with pushes.
+            uint id;
+            do
+            {
+                id = (uint)Interlocked.Increment(ref _commandId);
+            } while (id == 0);
+            return id;
         }
 
         private int NextPromiseId()
@@ -2415,17 +2669,19 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public async ValueTask DisposeAsync()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
             try
             {
-                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", false).ConfigureAwait(false);
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called").ConfigureAwait(false);
             }
             catch
             {
                 // Suppress exceptions during disposal - we're shutting down anyway
             }
+
+            foreach (var sub in _subscriptions.Values) sub.Dispose();
+            _subscriptions.Clear();
 
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();
@@ -2440,12 +2696,11 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
             try
             {
-                SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", false)
+                SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called")
                     .ConfigureAwait(false)
                     .GetAwaiter()
                     .GetResult();
@@ -2454,6 +2709,9 @@ namespace Centrifugal.Centrifuge
             {
                 // Suppress exceptions during disposal - we're shutting down anyway
             }
+
+            foreach (var sub in _subscriptions.Values) sub.Dispose();
+            _subscriptions.Clear();
 
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();

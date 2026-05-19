@@ -22,8 +22,9 @@ namespace Centrifugal.Centrifuge.Transports
         private IJSObjectReference? _jsModule;
         private DotNetObjectReference<BrowserHttpStreamTransport>? _dotnetRef;
         private int _streamId;
-        private bool _disposed;
-        private bool _isOpen;
+        private int _disposed;
+        private int _cleanupStarted;
+        private volatile bool _isOpen;
         private TaskCompletionSource<bool>? _openTcs;
         private MemoryStream _chunkBuffer = new();
         private readonly object _bufferLock = new object();
@@ -222,6 +223,8 @@ namespace Centrifugal.Centrifuge.Transports
         public void OnOpen()
         {
             _logger?.LogDebug($"OnOpen called for stream {_streamId}");
+            // Discard stale callback if CleanupAsync already ran (e.g. OpenAsync timed out).
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             // Set _isOpen BEFORE firing events so handlers can use the transport immediately
             _isOpen = true;
             var result = _openTcs?.TrySetResult(true);
@@ -305,28 +308,15 @@ namespace Centrifugal.Centrifuge.Transports
         [JSInvokable]
         public void OnError(int statusCode, string message)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             var exception = new Exception(message ?? "HTTP stream error");
             Error?.Invoke(this, exception);
 
-            // If we haven't opened yet, fail the open operation
+            // If we haven't opened yet, fail the open operation via openedTcs only.
+            // The caller's catch handler already schedules reconnect; firing Closed here
+            // would trigger HandleTransportClosedAsync concurrently → double reconnect.
             if (_openTcs != null && !_openTcs.Task.IsCompleted)
             {
-                // Map HTTP status code to close code
-                int closeCode;
-                if (statusCode == 400 || statusCode == 401 || statusCode == 403 ||
-                    statusCode == 404 || statusCode == 405)
-                {
-                    closeCode = CentrifugeDisconnectedCodes.BadProtocol;
-                }
-                else if (statusCode > 0)
-                {
-                    closeCode = CentrifugeConnectingCodes.TransportClosed;
-                }
-                else
-                {
-                    closeCode = 0;
-                }
-
                 var transportException = new CentrifugeException(
                     CentrifugeErrorCodes.TransportClosed,
                     message ?? "HTTP stream error",
@@ -334,9 +324,6 @@ namespace Centrifugal.Centrifuge.Transports
                     exception
                 );
                 _openTcs.TrySetException(transportException);
-
-                // Also trigger close event
-                Closed?.Invoke(this, new TransportClosedEventArgs(closeCode, message ?? "HTTP stream error", exception));
             }
         }
 
@@ -348,6 +335,7 @@ namespace Centrifugal.Centrifuge.Transports
         [JSInvokable]
         public void OnClose(int code, string reason)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
             _isOpen = false;
             Closed?.Invoke(this, new TransportClosedEventArgs(code, reason));
             _ = CleanupAsync();
@@ -355,6 +343,7 @@ namespace Centrifugal.Centrifuge.Transports
 
         private async Task CleanupAsync(bool alreadyClosed = false)
         {
+            if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 1, 0) != 0) return;
             _logger?.LogDebug($"CleanupAsync called for stream {_streamId}, alreadyClosed: {alreadyClosed}");
             _isOpen = false;
             _openTcs?.TrySetCanceled();
@@ -419,8 +408,7 @@ namespace Centrifugal.Centrifuge.Transports
         /// <inheritdoc/>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 1, 0) != 0) return;
 
             _ = CloseAsync();
         }
