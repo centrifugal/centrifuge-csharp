@@ -502,7 +502,14 @@ namespace Centrifugal.Centrifuge
             bool inflightClearedEarly = false;
             try
             {
-                await SendSubscribeCommandAsync().ConfigureAwait(false);
+                var result = await SendSubscribeCommandAsync().ConfigureAwait(false);
+                // Success path: clear _inflight BEFORE HandleSubscribeReply fires the
+                // Subscribed event / resolves ReadyAsync. A user handler that calls
+                // ResubscribeAsync() in response to Subscribed must not observe a stale
+                // _inflight=true and silently no-op.
+                lock (_stateChangeLock) { _inflight = false; }
+                inflightClearedEarly = true;
+                if (result != null) HandleSubscribeReply(result);
             }
             catch (CentrifugeTimeoutException)
             {
@@ -582,7 +589,7 @@ namespace Centrifugal.Centrifuge
             await SendSubscribeIfNeededAsync().ConfigureAwait(false);
         }
 
-        private async Task SendSubscribeCommandAsync()
+        private async Task<SubscribeResult?> SendSubscribeCommandAsync()
         {
             string? token;
             bool needsRefresh;
@@ -600,14 +607,14 @@ namespace Centrifugal.Centrifuge
                     token = await _options.GetToken(Channel).ConfigureAwait(false);
                     lock (_stateChangeLock)
                     {
-                        if (_state != CentrifugeSubscriptionState.Subscribing) return;
+                        if (_state != CentrifugeSubscriptionState.Subscribing) return null;
                         _options.Token = token;
                     }
                 }
                 catch (CentrifugeUnauthorizedException)
                 {
                     await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
-                    return;
+                    return null;
                 }
             }
 
@@ -675,7 +682,7 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            HandleSubscribeReply(reply.Subscribe);
+            return reply.Subscribe;
         }
 
         private void HandleSubscribeReply(SubscribeResult result)
