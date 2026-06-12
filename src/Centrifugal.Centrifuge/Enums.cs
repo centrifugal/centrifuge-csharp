@@ -124,6 +124,29 @@ namespace Centrifugal.Centrifuge
         /// Bad configuration.
         /// </summary>
         public const int BadConfiguration = 12;
+
+        /// <summary>
+        /// Subscription GetState callback error.
+        /// </summary>
+        public const int SubscriptionGetState = 13;
+
+        /// <summary>
+        /// Server error code returned when recovery from the provided position is
+        /// impossible (only sent when the reject_unrecovered subscribe flag was requested).
+        /// </summary>
+        public const int UnrecoverablePosition = 112;
+    }
+
+    /// <summary>
+    /// Subscription feature flags — bitmask sent in SubscribeRequest flag field.
+    /// </summary>
+    internal static class CentrifugeSubscriptionFlags
+    {
+        /// <summary>
+        /// Ask the server to reject the subscribe with error 112 when recovery from
+        /// the provided position is impossible, instead of returning recovered=false.
+        /// </summary>
+        public const long RejectUnrecovered = 2;
     }
 
     /// <summary>

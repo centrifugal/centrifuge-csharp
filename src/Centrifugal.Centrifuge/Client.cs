@@ -2142,7 +2142,7 @@ namespace Centrifugal.Centrifuge
             }
         }
 
-        private async Task SetDisconnectedAsync(int code, string reason)
+        private async Task SetDisconnectedAsync(int code, string reason, bool clearSubscriptions = false)
         {
             // Change state synchronously first; fire events OUTSIDE the lock to avoid
             // deadlocking if a user's synchronous event handler calls back into the SDK.
@@ -2168,6 +2168,20 @@ namespace Centrifugal.Centrifuge
                 StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Disconnected));
             Disconnected?.Invoke(this, new CentrifugeDisconnectedEventArgs(code, reason));
 
+            if (!clearSubscriptions)
+            {
+                // Keep client-side subscriptions registered: move them to subscribing
+                // state so they automatically resubscribe on next connect. This matches
+                // other Centrifugal SDKs — only explicit Unsubscribe(), unauthorized
+                // errors, terminal server unsubscribe codes or client disposal move a
+                // subscription to unsubscribed state. Done before the async cleanup so
+                // the transition is visible as soon as Disconnect() returns.
+                foreach (var sub in _subscriptions.Values)
+                {
+                    sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+                }
+            }
+
             // Now do async cleanup without holding locks
             // Defense-in-depth: catch ObjectDisposedException in case an event handler was already
             // executing when we unsubscribed, or if there's a race with disposal
@@ -2188,10 +2202,13 @@ namespace Centrifugal.Centrifuge
                 // Clean up transport (ping timer, events, close, dispose)
                 await CleanupTransportAsync().ConfigureAwait(false);
 
-                // Unsubscribe all subscriptions
-                foreach (var sub in _subscriptions.Values)
+                if (clearSubscriptions)
                 {
-                    _ = sub.SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.ClientClosed, "client closed");
+                    // Client is being disposed — terminally unsubscribe all subscriptions.
+                    foreach (var sub in _subscriptions.Values)
+                    {
+                        _ = sub.SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.ClientClosed, "client closed");
+                    }
                 }
             }
             finally
@@ -2673,7 +2690,7 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called").ConfigureAwait(false);
+                await SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", clearSubscriptions: true).ConfigureAwait(false);
             }
             catch
             {
@@ -2700,7 +2717,7 @@ namespace Centrifugal.Centrifuge
 
             try
             {
-                SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called")
+                SetDisconnectedAsync(CentrifugeDisconnectedCodes.DisconnectCalled, "disconnect called", clearSubscriptions: true)
                     .ConfigureAwait(false)
                     .GetAwaiter()
                     .GetResult();

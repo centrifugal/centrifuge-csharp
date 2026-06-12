@@ -524,8 +524,31 @@ namespace Centrifugal.Centrifuge
                 inflightClearedEarly = true;
                 await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
             }
+            catch (CentrifugeGetStateException ex)
+            {
+                OnError("getState", ex);
+                lock (_stateChangeLock) { _inflight = false; }
+                inflightClearedEarly = true;
+                await ScheduleResubscribeAsync().ConfigureAwait(false);
+                return;
+            }
             catch (CentrifugeException ex)
             {
+                if (ex.Code == CentrifugeErrorCodes.UnrecoverablePosition && _options.GetState != null)
+                {
+                    // Unrecoverable position with GetState: reset position so the next
+                    // subscribe attempt calls GetState to reload app state from scratch.
+                    // No error event raised — matches other SDKs.
+                    lock (_stateChangeLock)
+                    {
+                        _streamPosition = null;
+                        lock (_deltaLock) { _prevValue = null; }
+                        _inflight = false;
+                    }
+                    inflightClearedEarly = true;
+                    await ScheduleResubscribeAsync().ConfigureAwait(false);
+                    return;
+                }
                 OnError("subscribe", ex);
                 if (ex.Code < 100 || ex.Code == 109 || ex.Temporary)
                 {
@@ -591,6 +614,34 @@ namespace Centrifugal.Centrifuge
 
         private async Task<SubscribeResult?> SendSubscribeCommandAsync()
         {
+            // GetState: ask the app for its current state position. Only called when
+            // we don't have a saved position (first subscribe or after a position reset
+            // due to unrecoverable position error 112). On normal reconnects with a
+            // valid saved position we skip GetState and let the server try recovery —
+            // GetState is only called again if recovery fails.
+            bool needGetState;
+            lock (_stateChangeLock)
+            {
+                needGetState = _options.GetState != null && _streamPosition == null;
+            }
+            if (needGetState)
+            {
+                CentrifugeStreamPosition position;
+                try
+                {
+                    position = await _options.GetState!(Channel).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    throw new CentrifugeGetStateException(ex);
+                }
+                lock (_stateChangeLock)
+                {
+                    if (_state != CentrifugeSubscriptionState.Subscribing) return null;
+                    _streamPosition = position;
+                }
+            }
+
             string? token;
             bool needsRefresh;
             lock (_stateChangeLock)
@@ -659,6 +710,14 @@ namespace Centrifugal.Centrifuge
                 request.Delta = _options.Delta;
             }
 
+            if (_options.GetState != null)
+            {
+                // Ask the server to reject the subscribe with error 112 when recovery
+                // from the provided position is impossible, instead of returning
+                // recovered=false — so we can call GetState again to reload state.
+                request.Flag = CentrifugeSubscriptionFlags.RejectUnrecovered;
+            }
+
             var cmd = new Command
             {
                 Id = _client.NextCommandId(),
@@ -708,7 +767,10 @@ namespace Centrifugal.Centrifuge
                     return;
                 }
 
-                if (result.Positioned)
+                // Server returns stream position when subscription is positioned OR
+                // recoverable — track it in both cases so recovery on reconnect works
+                // for recoverable-only channels too.
+                if (result.Positioned || result.Recoverable)
                 {
                     _streamPosition = new CentrifugeStreamPosition(result.Offset, result.Epoch);
                 }
@@ -774,7 +836,7 @@ namespace Centrifugal.Centrifuge
                     OnError("publication", ex);
                 }
 
-                if (result.Positioned && pub.Offset > 0)
+                if ((result.Positioned || result.Recoverable) && pub.Offset > 0)
                 {
                     lock (_stateChangeLock)
                     {
