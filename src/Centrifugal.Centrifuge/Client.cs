@@ -1842,7 +1842,7 @@ namespace Centrifugal.Centrifuge
                     transport.Error -= OnTransportError;
                     transport.Opened -= OnTransportOpened;
                 }
-                _ = HandleTransportClosedAsync(new TransportClosedEventArgs(code: code, reason: disconnect.Reason));
+                _ = HandleTransportClosedAsync(transport, new TransportClosedEventArgs(code: code, reason: disconnect.Reason));
             }
             else
             {
@@ -1858,10 +1858,10 @@ namespace Centrifugal.Centrifuge
             if (_disposed != 0) return;
 
             _logger?.LogDebug($"OnTransportClosed - code: {e.Code}, reason: '{e.Reason}'");
-            _ = HandleTransportClosedAsync(e);
+            _ = HandleTransportClosedAsync(sender as ITransport, e);
         }
 
-        private async Task HandleTransportClosedAsync(TransportClosedEventArgs e)
+        private async Task HandleTransportClosedAsync(ITransport? closedTransport, TransportClosedEventArgs e)
         {
             _logger?.LogDebug($"HandleTransportClosedAsync - state: {_state}, code: {e.Code}, reason: '{e.Reason}'");
 
@@ -1871,6 +1871,16 @@ namespace Centrifugal.Centrifuge
                 if (_state == CentrifugeClientState.Disconnected)
                 {
                     _logger?.LogDebug("HandleTransportClosedAsync - skipping (already disconnected)");
+                    return;
+                }
+                // Ignore close events from a transport that is no longer the current one —
+                // e.g. a stale Closed event from an old connection that was queued on the
+                // thread pool just before CleanupTransportAsync detached its handlers. Such
+                // an event arriving after a successful reconnect would otherwise tear down
+                // the healthy new connection and flip the client back to Connecting.
+                if (closedTransport != null && !ReferenceEquals(closedTransport, _transport))
+                {
+                    _logger?.LogDebug("HandleTransportClosedAsync - skipping (stale transport close)");
                     return;
                 }
             }
@@ -1935,6 +1945,14 @@ namespace Centrifugal.Centrifuge
                 if (_state == CentrifugeClientState.Disconnected)
                 {
                     _logger?.LogDebug("HandleTransportClosedAsync - aborting reconnect, state is already Disconnected");
+                    return;
+                }
+
+                // Re-check transport identity: a concurrent reconnect may have swapped the
+                // transport since the first check — this transition is the authoritative one.
+                if (closedTransport != null && !ReferenceEquals(closedTransport, _transport))
+                {
+                    _logger?.LogDebug("HandleTransportClosedAsync - aborting reconnect (stale transport close)");
                     return;
                 }
 
