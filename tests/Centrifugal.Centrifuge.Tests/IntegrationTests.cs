@@ -785,17 +785,21 @@ namespace Centrifugal.Centrifuge.Tests
                 MinReconnectDelay = TimeSpan.FromMilliseconds(1),
                 MaxReconnectDelay = TimeSpan.FromMilliseconds(50)
             });
+            // Count events registered up-front and wait for the SECOND of each — see
+            // NoPing_TriggersResubscribeAfterReconnect for why one-shot handlers
+            // registered after ReadyAsync race with the initial events.
+            int connectedCount = 0, subscribedCount = 0;
+            var reconnectedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resubscribedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            client.Connected += (_, _) => { if (Interlocked.Increment(ref connectedCount) >= 2) reconnectedTcs.TrySetResult(true); };
+
             client.Connect();
             await client.ReadyAsync();
 
             var sub = client.NewSubscription("test-sub-timeout");
+            sub.Subscribed += (_, _) => { if (Interlocked.Increment(ref subscribedCount) >= 2) resubscribedTcs.TrySetResult(true); };
             sub.Subscribe();
             await sub.ReadyAsync();
-
-            var connectedTcs = new TaskCompletionSource<bool>();
-            var subscribedTcs = new TaskCompletionSource<bool>();
-            client.Connected += (_, _) => connectedTcs.TrySetResult(true);
-            sub.Subscribed += (_, _) => subscribedTcs.TrySetResult(true);
 
             // Directly invoke the internal method to simulate subscribe timeout path.
             // Bug: this calls StartConnectingAsync (opens transport) then CleanupTransportAsync
@@ -803,8 +807,8 @@ namespace Centrifugal.Centrifuge.Tests
             // Fix: directly transitions state without creating a throwaway transport.
             await client.HandleSubscribeTimeoutAsync();
 
-            await connectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await subscribedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await reconnectedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await resubscribedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(CentrifugeClientState.Connected, client.State);
             Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub.State);
@@ -824,25 +828,30 @@ namespace Centrifugal.Centrifuge.Tests
             client.Connect();
             await client.ReadyAsync();
 
+            // Count events instead of registering one-shot handlers after ReadyAsync:
+            // ReadyAsync promises resolve BEFORE the Subscribed event fires inside
+            // HandleSubscribeReply, so a handler registered "after ReadyAsync" can still
+            // observe the INITIAL Subscribed event and treat it as the post-reconnect one
+            // (the assert below then runs while the reconnect is still in flight).
+            // Waiting explicitly for the SECOND event of each kind is race-free.
             var sub = client.NewSubscription("test-noping-resubscribe");
+            int subscribingCount = 0, subscribedCount = 0;
+            var movedToSubscribingTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resubscribedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Subscribing #1 fires on Subscribe(); #2 must come from the NoPing reconnect —
+            // if the bug is present, NoPing skips MoveToSubscribing and #2 never fires.
+            sub.Subscribing += (_, _) => { if (Interlocked.Increment(ref subscribingCount) >= 2) movedToSubscribingTcs.TrySetResult(true); };
+            sub.Subscribed += (_, _) => { if (Interlocked.Increment(ref subscribedCount) >= 2) resubscribedTcs.TrySetResult(true); };
+
             sub.Subscribe();
             await sub.ReadyAsync();
-
-            // Listen for the Subscribing event — if the bug is present, NoPing reconnect
-            // goes through StartConnectingAsync which skips MoveToSubscribing, so the
-            // subscription stays in Subscribed state and never fires Subscribing again.
-            var subscribingTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var subscribedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            sub.Subscribing += (_, _) => subscribingTcs.TrySetResult(true);
-            sub.Subscribed += (_, _) => subscribedTcs.TrySetResult(true);
 
             // Simulate what the ping timer fires when server stops pinging.
             await client.HandleNoPingAsync();
 
             // Subscription must cycle through Subscribing → Subscribed on the fresh connection.
-            // Without the fix this times out because subscriptions are never moved to Subscribing.
-            await subscribingTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await subscribedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await movedToSubscribingTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await resubscribedTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal(CentrifugeClientState.Connected, client.State);
             Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub.State);
