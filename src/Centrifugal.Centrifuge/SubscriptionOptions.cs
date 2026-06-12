@@ -70,6 +70,40 @@ namespace Centrifugal.Centrifuge
         public string? Delta { get; set; }
 
         /// <summary>
+        /// Gets or sets the callback to load the app's current state and stream position.
+        /// Requires Centrifugo &gt;= 6.8.0.
+        /// <para>
+        /// The SDK calls the callback:
+        /// <list type="bullet">
+        /// <item>On initial subscribe (no saved position)</item>
+        /// <item>On reconnect when recovery fails (server returns error 112 — unrecoverable position)</item>
+        /// </list>
+        /// NOT called on reconnects where the server successfully recovers missed publications —
+        /// in that case the recovered publications arrive as events and the callback is skipped.
+        /// </para>
+        /// <para>
+        /// The app should load its data from its own source of truth (database, API), render it,
+        /// and return the stream position. The SDK subscribes with recovery from the returned
+        /// position, so any publications between the state read and the subscribe are delivered
+        /// as publication events.
+        /// </para>
+        /// <para>
+        /// IMPORTANT: inside the callback, read the stream position FIRST, then read your data.
+        /// This ensures the position is a lower bound — any data loaded after the position read
+        /// is guaranteed to be included. The reverse order can produce gaps.
+        /// </para>
+        /// <para>
+        /// Recovered publications may overlap with data already loaded by the callback. This works
+        /// correctly when updates are idempotent (applying the same update twice produces the same
+        /// result). For non-idempotent updates, deduplicate by publication offset.
+        /// </para>
+        /// <para>
+        /// On error, the SDK raises the Error event (type "getState") and retries with backoff.
+        /// </para>
+        /// </summary>
+        public Func<string, Task<CentrifugeStreamPosition>>? GetState { get; set; }
+
+        /// <summary>
         /// Validates the options.
         /// </summary>
         public void Validate()

@@ -80,88 +80,102 @@ namespace Centrifugal.Centrifuge.Protocol {
             "b3RvY29sLkRpc2Nvbm5lY3QSOQoHcmVmcmVzaBgMIAEoCzIoLmNlbnRyaWZ1",
             "Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuUmVmcmVzaEoECAMQBCJQCgpDbGll",
             "bnRJbmZvEgwKBHVzZXIYASABKAkSDgoGY2xpZW50GAIgASgJEhEKCWNvbm5f",
-            "aW5mbxgDIAEoDBIRCgljaGFuX2luZm8YBCABKAwimQIKC1B1YmxpY2F0aW9u",
+            "aW5mbxgDIAEoDBIRCgljaGFuX2luZm8YBCABKAwi+QIKC1B1YmxpY2F0aW9u",
             "EgwKBGRhdGEYBCABKAwSOQoEaW5mbxgFIAEoCzIrLmNlbnRyaWZ1Z2FsLmNl",
             "bnRyaWZ1Z2UucHJvdG9jb2wuQ2xpZW50SW5mbxIOCgZvZmZzZXQYBiABKAQS",
             "RAoEdGFncxgHIAMoCzI2LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9j",
             "b2wuUHVibGljYXRpb24uVGFnc0VudHJ5Eg0KBWRlbHRhGAggASgIEgwKBHRp",
-            "bWUYCSABKAMSDwoHY2hhbm5lbBgKIAEoCRorCglUYWdzRW50cnkSCwoDa2V5",
-            "GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECAEQAkoECAIQA0oECAMQBCJB",
-            "CgRKb2luEjkKBGluZm8YASABKAsyKy5jZW50cmlmdWdhbC5jZW50cmlmdWdl",
-            "LnByb3RvY29sLkNsaWVudEluZm8iQgoFTGVhdmUSOQoEaW5mbxgBIAEoCzIr",
-            "LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuQ2xpZW50SW5mbyIx",
-            "CgtVbnN1YnNjcmliZRIMCgRjb2RlGAIgASgNEg4KBnJlYXNvbhgDIAEoCUoE",
-            "CAEQAiJtCglTdWJzY3JpYmUSEwoLcmVjb3ZlcmFibGUYASABKAgSDQoFZXBv",
-            "Y2gYBCABKAkSDgoGb2Zmc2V0GAUgASgEEhIKCnBvc2l0aW9uZWQYBiABKAgS",
-            "DAoEZGF0YRgHIAEoDEoECAIQA0oECAMQBCIXCgdNZXNzYWdlEgwKBGRhdGEY",
-            "ASABKAwiwAIKB0Nvbm5lY3QSDgoGY2xpZW50GAEgASgJEg8KB3ZlcnNpb24Y",
-            "AiABKAkSDAoEZGF0YRgDIAEoDBJACgRzdWJzGAQgAygLMjIuY2VudHJpZnVn",
-            "YWwuY2VudHJpZnVnZS5wcm90b2NvbC5Db25uZWN0LlN1YnNFbnRyeRIPCgdl",
-            "eHBpcmVzGAUgASgIEgsKA3R0bBgGIAEoDRIMCgRwaW5nGAcgASgNEgwKBHBv",
-            "bmcYCCABKAgSDwoHc2Vzc2lvbhgJIAEoCRIMCgRub2RlGAogASgJEgwKBHRp",
-            "bWUYCyABKAMaXQoJU3Vic0VudHJ5EgsKA2tleRgBIAEoCRI/CgV2YWx1ZRgC",
-            "IAEoCzIwLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuU3Vic2Ny",
-            "aWJlUmVzdWx0OgI4ASI9CgpEaXNjb25uZWN0EgwKBGNvZGUYASABKA0SDgoG",
-            "cmVhc29uGAIgASgJEhEKCXJlY29ubmVjdBgDIAEoCCInCgdSZWZyZXNoEg8K",
-            "B2V4cGlyZXMYASABKAgSCwoDdHRsGAIgASgNIoIDCg5Db25uZWN0UmVxdWVz",
-            "dBINCgV0b2tlbhgBIAEoCRIMCgRkYXRhGAIgASgMEkcKBHN1YnMYAyADKAsy",
-            "OS5jZW50cmlmdWdhbC5jZW50cmlmdWdlLnByb3RvY29sLkNvbm5lY3RSZXF1",
-            "ZXN0LlN1YnNFbnRyeRIMCgRuYW1lGAQgASgJEg8KB3ZlcnNpb24YBSABKAkS",
-            "TQoHaGVhZGVycxgGIAMoCzI8LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJv",
-            "dG9jb2wuQ29ubmVjdFJlcXVlc3QuSGVhZGVyc0VudHJ5EgwKBGZsYWcYByAB",
-            "KAMaXgoJU3Vic0VudHJ5EgsKA2tleRgBIAEoCRJACgV2YWx1ZRgCIAEoCzIx",
-            "LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuU3Vic2NyaWJlUmVx",
-            "dWVzdDoCOAEaLgoMSGVhZGVyc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1",
-            "ZRgCIAEoCToCOAEizAIKDUNvbm5lY3RSZXN1bHQSDgoGY2xpZW50GAEgASgJ",
-            "Eg8KB3ZlcnNpb24YAiABKAkSDwoHZXhwaXJlcxgDIAEoCBILCgN0dGwYBCAB",
-            "KA0SDAoEZGF0YRgFIAEoDBJGCgRzdWJzGAYgAygLMjguY2VudHJpZnVnYWwu",
-            "Y2VudHJpZnVnZS5wcm90b2NvbC5Db25uZWN0UmVzdWx0LlN1YnNFbnRyeRIM",
-            "CgRwaW5nGAcgASgNEgwKBHBvbmcYCCABKAgSDwoHc2Vzc2lvbhgJIAEoCRIM",
-            "CgRub2RlGAogASgJEgwKBHRpbWUYCyABKAMaXQoJU3Vic0VudHJ5EgsKA2tl",
-            "eRgBIAEoCRI/CgV2YWx1ZRgCIAEoCzIwLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1",
-            "Z2UucHJvdG9jb2wuU3Vic2NyaWJlUmVzdWx0OgI4ASIfCg5SZWZyZXNoUmVx",
-            "dWVzdBINCgV0b2tlbhgBIAEoCSJOCg1SZWZyZXNoUmVzdWx0Eg4KBmNsaWVu",
-            "dBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEg8KB2V4cGlyZXMYAyABKAgSCwoD",
-            "dHRsGAQgASgNIo8CChBTdWJzY3JpYmVSZXF1ZXN0Eg8KB2NoYW5uZWwYASAB",
-            "KAkSDQoFdG9rZW4YAiABKAkSDwoHcmVjb3ZlchgDIAEoCBINCgVlcG9jaBgG",
-            "IAEoCRIOCgZvZmZzZXQYByABKAQSDAoEZGF0YRgIIAEoDBISCgpwb3NpdGlv",
-            "bmVkGAkgASgIEhMKC3JlY292ZXJhYmxlGAogASgIEhIKCmpvaW5fbGVhdmUY",
-            "CyABKAgSDQoFZGVsdGEYDCABKAkSNwoCdGYYDSABKAsyKy5jZW50cmlmdWdh",
-            "bC5jZW50cmlmdWdlLnByb3RvY29sLkZpbHRlck5vZGUSDAoEZmxhZxgOIAEo",
-            "A0oECAQQBUoECAUQBiKbAgoPU3Vic2NyaWJlUmVzdWx0Eg8KB2V4cGlyZXMY",
-            "ASABKAgSCwoDdHRsGAIgASgNEhMKC3JlY292ZXJhYmxlGAMgASgIEg0KBWVw",
-            "b2NoGAYgASgJEkIKDHB1YmxpY2F0aW9ucxgHIAMoCzIsLmNlbnRyaWZ1Z2Fs",
-            "LmNlbnRyaWZ1Z2UucHJvdG9jb2wuUHVibGljYXRpb24SEQoJcmVjb3ZlcmVk",
-            "GAggASgIEg4KBm9mZnNldBgJIAEoBBISCgpwb3NpdGlvbmVkGAogASgIEgwK",
-            "BGRhdGEYCyABKAwSFgoOd2FzX3JlY292ZXJpbmcYDCABKAgSDQoFZGVsdGEY",
-            "DSABKAgSCgoCaWQYDiABKANKBAgEEAVKBAgFEAYiMwoRU3ViUmVmcmVzaFJl",
-            "cXVlc3QSDwoHY2hhbm5lbBgBIAEoCRINCgV0b2tlbhgCIAEoCSIwChBTdWJS",
-            "ZWZyZXNoUmVzdWx0Eg8KB2V4cGlyZXMYASABKAgSCwoDdHRsGAIgASgNIiUK",
-            "ElVuc3Vic2NyaWJlUmVxdWVzdBIPCgdjaGFubmVsGAEgASgJIhMKEVVuc3Vi",
-            "c2NyaWJlUmVzdWx0Ii8KDlB1Ymxpc2hSZXF1ZXN0Eg8KB2NoYW5uZWwYASAB",
-            "KAkSDAoEZGF0YRgCIAEoDCIPCg1QdWJsaXNoUmVzdWx0IiIKD1ByZXNlbmNl",
-            "UmVxdWVzdBIPCgdjaGFubmVsGAEgASgJIr8BCg5QcmVzZW5jZVJlc3VsdBJP",
-            "CghwcmVzZW5jZRgBIAMoCzI9LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJv",
-            "dG9jb2wuUHJlc2VuY2VSZXN1bHQuUHJlc2VuY2VFbnRyeRpcCg1QcmVzZW5j",
-            "ZUVudHJ5EgsKA2tleRgBIAEoCRI6CgV2YWx1ZRgCIAEoCzIrLmNlbnRyaWZ1",
-            "Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuQ2xpZW50SW5mbzoCOAEiJwoUUHJl",
-            "c2VuY2VTdGF0c1JlcXVlc3QSDwoHY2hhbm5lbBgBIAEoCSI9ChNQcmVzZW5j",
-            "ZVN0YXRzUmVzdWx0EhMKC251bV9jbGllbnRzGAEgASgNEhEKCW51bV91c2Vy",
-            "cxgCIAEoDSIvCg5TdHJlYW1Qb3NpdGlvbhIOCgZvZmZzZXQYASABKAQSDQoF",
-            "ZXBvY2gYAiABKAkinwEKDkhpc3RvcnlSZXF1ZXN0Eg8KB2NoYW5uZWwYASAB",
-            "KAkSDQoFbGltaXQYByABKAUSPgoFc2luY2UYCCABKAsyLy5jZW50cmlmdWdh",
-            "bC5jZW50cmlmdWdlLnByb3RvY29sLlN0cmVhbVBvc2l0aW9uEg8KB3JldmVy",
-            "c2UYCSABKAhKBAgCEANKBAgDEARKBAgEEAVKBAgFEAZKBAgGEAcicgoNSGlz",
-            "dG9yeVJlc3VsdBJCCgxwdWJsaWNhdGlvbnMYASADKAsyLC5jZW50cmlmdWdh",
-            "bC5jZW50cmlmdWdlLnByb3RvY29sLlB1YmxpY2F0aW9uEg0KBWVwb2NoGAIg",
-            "ASgJEg4KBm9mZnNldBgDIAEoBCINCgtQaW5nUmVxdWVzdCIMCgpQaW5nUmVz",
-            "dWx0IioKClJQQ1JlcXVlc3QSDAoEZGF0YRgBIAEoDBIOCgZtZXRob2QYAiAB",
-            "KAkiGQoJUlBDUmVzdWx0EgwKBGRhdGEYASABKAwiGwoLU2VuZFJlcXVlc3QS",
-            "DAoEZGF0YRgBIAEoDCKJAQoKRmlsdGVyTm9kZRIKCgJvcBgBIAEoCRILCgNr",
-            "ZXkYAiABKAkSCwoDY21wGAMgASgJEgsKA3ZhbBgEIAEoCRIMCgR2YWxzGAUg",
-            "AygJEjoKBW5vZGVzGAYgAygLMisuY2VudHJpZnVnYWwuY2VudHJpZnVnZS5w",
-            "cm90b2NvbC5GaWx0ZXJOb2RlQiFaH2dpdGh1Yi5jb20vY2VudHJpZnVnYWwv",
-            "cHJvdG9jb2xiBnByb3RvMw=="));
+            "bWUYCSABKAMSDwoHY2hhbm5lbBgKIAEoCRILCgNrZXkYCyABKAkSDwoHcmVt",
+            "b3ZlZBgMIAEoCBINCgVzY29yZRgNIAEoEhINCgVlcG9jaBgOIAEoCRIRCglw",
+            "cmV2X2RhdGEYDyABKAwSDwoHdmVyc2lvbhgQIAEoBBorCglUYWdzRW50cnkS",
+            "CwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUoECAEQAkoECAIQA0oE",
+            "CAMQBCJBCgRKb2luEjkKBGluZm8YASABKAsyKy5jZW50cmlmdWdhbC5jZW50",
+            "cmlmdWdlLnByb3RvY29sLkNsaWVudEluZm8iQgoFTGVhdmUSOQoEaW5mbxgB",
+            "IAEoCzIrLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuQ2xpZW50",
+            "SW5mbyIxCgtVbnN1YnNjcmliZRIMCgRjb2RlGAIgASgNEg4KBnJlYXNvbhgD",
+            "IAEoCUoECAEQAiJtCglTdWJzY3JpYmUSEwoLcmVjb3ZlcmFibGUYASABKAgS",
+            "DQoFZXBvY2gYBCABKAkSDgoGb2Zmc2V0GAUgASgEEhIKCnBvc2l0aW9uZWQY",
+            "BiABKAgSDAoEZGF0YRgHIAEoDEoECAIQA0oECAMQBCIXCgdNZXNzYWdlEgwK",
+            "BGRhdGEYASABKAwiwAIKB0Nvbm5lY3QSDgoGY2xpZW50GAEgASgJEg8KB3Zl",
+            "cnNpb24YAiABKAkSDAoEZGF0YRgDIAEoDBJACgRzdWJzGAQgAygLMjIuY2Vu",
+            "dHJpZnVnYWwuY2VudHJpZnVnZS5wcm90b2NvbC5Db25uZWN0LlN1YnNFbnRy",
+            "eRIPCgdleHBpcmVzGAUgASgIEgsKA3R0bBgGIAEoDRIMCgRwaW5nGAcgASgN",
+            "EgwKBHBvbmcYCCABKAgSDwoHc2Vzc2lvbhgJIAEoCRIMCgRub2RlGAogASgJ",
+            "EgwKBHRpbWUYCyABKAMaXQoJU3Vic0VudHJ5EgsKA2tleRgBIAEoCRI/CgV2",
+            "YWx1ZRgCIAEoCzIwLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wu",
+            "U3Vic2NyaWJlUmVzdWx0OgI4ASI9CgpEaXNjb25uZWN0EgwKBGNvZGUYASAB",
+            "KA0SDgoGcmVhc29uGAIgASgJEhEKCXJlY29ubmVjdBgDIAEoCCInCgdSZWZy",
+            "ZXNoEg8KB2V4cGlyZXMYASABKAgSCwoDdHRsGAIgASgNIoIDCg5Db25uZWN0",
+            "UmVxdWVzdBINCgV0b2tlbhgBIAEoCRIMCgRkYXRhGAIgASgMEkcKBHN1YnMY",
+            "AyADKAsyOS5jZW50cmlmdWdhbC5jZW50cmlmdWdlLnByb3RvY29sLkNvbm5l",
+            "Y3RSZXF1ZXN0LlN1YnNFbnRyeRIMCgRuYW1lGAQgASgJEg8KB3ZlcnNpb24Y",
+            "BSABKAkSTQoHaGVhZGVycxgGIAMoCzI8LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1",
+            "Z2UucHJvdG9jb2wuQ29ubmVjdFJlcXVlc3QuSGVhZGVyc0VudHJ5EgwKBGZs",
+            "YWcYByABKAMaXgoJU3Vic0VudHJ5EgsKA2tleRgBIAEoCRJACgV2YWx1ZRgC",
+            "IAEoCzIxLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuU3Vic2Ny",
+            "aWJlUmVxdWVzdDoCOAEaLgoMSGVhZGVyc0VudHJ5EgsKA2tleRgBIAEoCRIN",
+            "CgV2YWx1ZRgCIAEoCToCOAEizAIKDUNvbm5lY3RSZXN1bHQSDgoGY2xpZW50",
+            "GAEgASgJEg8KB3ZlcnNpb24YAiABKAkSDwoHZXhwaXJlcxgDIAEoCBILCgN0",
+            "dGwYBCABKA0SDAoEZGF0YRgFIAEoDBJGCgRzdWJzGAYgAygLMjguY2VudHJp",
+            "ZnVnYWwuY2VudHJpZnVnZS5wcm90b2NvbC5Db25uZWN0UmVzdWx0LlN1YnNF",
+            "bnRyeRIMCgRwaW5nGAcgASgNEgwKBHBvbmcYCCABKAgSDwoHc2Vzc2lvbhgJ",
+            "IAEoCRIMCgRub2RlGAogASgJEgwKBHRpbWUYCyABKAMaXQoJU3Vic0VudHJ5",
+            "EgsKA2tleRgBIAEoCRI/CgV2YWx1ZRgCIAEoCzIwLmNlbnRyaWZ1Z2FsLmNl",
+            "bnRyaWZ1Z2UucHJvdG9jb2wuU3Vic2NyaWJlUmVzdWx0OgI4ASIfCg5SZWZy",
+            "ZXNoUmVxdWVzdBINCgV0b2tlbhgBIAEoCSJOCg1SZWZyZXNoUmVzdWx0Eg4K",
+            "BmNsaWVudBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEg8KB2V4cGlyZXMYAyAB",
+            "KAgSCwoDdHRsGAQgASgNItgCChBTdWJzY3JpYmVSZXF1ZXN0Eg8KB2NoYW5u",
+            "ZWwYASABKAkSDQoFdG9rZW4YAiABKAkSDwoHcmVjb3ZlchgDIAEoCBINCgVl",
+            "cG9jaBgGIAEoCRIOCgZvZmZzZXQYByABKAQSDAoEZGF0YRgIIAEoDBISCgpw",
+            "b3NpdGlvbmVkGAkgASgIEhMKC3JlY292ZXJhYmxlGAogASgIEhIKCmpvaW5f",
+            "bGVhdmUYCyABKAgSDQoFZGVsdGEYDCABKAkSNwoCdGYYDSABKAsyKy5jZW50",
+            "cmlmdWdhbC5jZW50cmlmdWdlLnByb3RvY29sLkZpbHRlck5vZGUSDAoEZmxh",
+            "ZxgOIAEoAxIMCgR0eXBlGA8gASgFEg0KBXBoYXNlGBAgASgFEg4KBmN1cnNv",
+            "chgRIAEoCRINCgVsaW1pdBgSIAEoBRILCgNhc2MYEyABKAhKBAgEEAVKBAgF",
+            "EAYinwMKD1N1YnNjcmliZVJlc3VsdBIPCgdleHBpcmVzGAEgASgIEgsKA3R0",
+            "bBgCIAEoDRITCgtyZWNvdmVyYWJsZRgDIAEoCBINCgVlcG9jaBgGIAEoCRJC",
+            "CgxwdWJsaWNhdGlvbnMYByADKAsyLC5jZW50cmlmdWdhbC5jZW50cmlmdWdl",
+            "LnByb3RvY29sLlB1YmxpY2F0aW9uEhEKCXJlY292ZXJlZBgIIAEoCBIOCgZv",
+            "ZmZzZXQYCSABKAQSEgoKcG9zaXRpb25lZBgKIAEoCBIMCgRkYXRhGAsgASgM",
+            "EhYKDndhc19yZWNvdmVyaW5nGAwgASgIEg0KBWRlbHRhGA0gASgIEgoKAmlk",
+            "GA4gASgDEgwKBHR5cGUYDyABKAUSDQoFcGhhc2UYECABKAUSDgoGY3Vyc29y",
+            "GBEgASgJEjsKBXN0YXRlGBIgAygLMiwuY2VudHJpZnVnYWwuY2VudHJpZnVn",
+            "ZS5wcm90b2NvbC5QdWJsaWNhdGlvbhIYChBwdWJsaXNoX2RlYm91bmNlGBMg",
+            "ASgNSgQIBBAFSgQIBRAGIikKCUtleWVkSXRlbRILCgNrZXkYASABKAkSDwoH",
+            "dmVyc2lvbhgCIAEoBCJaCgpUcmFja0JhdGNoEhEKCXNpZ25hdHVyZRgBIAEo",
+            "CRI5CgVpdGVtcxgCIAMoCzIqLmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2UucHJv",
+            "dG9jb2wuS2V5ZWRJdGVtIo4BChFTdWJSZWZyZXNoUmVxdWVzdBIPCgdjaGFu",
+            "bmVsGAEgASgJEg0KBXRva2VuGAIgASgJEgwKBHR5cGUYAyABKAUSOgoFdHJh",
+            "Y2sYBCADKAsyKy5jZW50cmlmdWdhbC5jZW50cmlmdWdlLnByb3RvY29sLlRy",
+            "YWNrQmF0Y2gSDwoHdW50cmFjaxgFIAMoCSJtChBTdWJSZWZyZXNoUmVzdWx0",
+            "Eg8KB2V4cGlyZXMYASABKAgSCwoDdHRsGAIgASgNEjsKBWl0ZW1zGAMgAygL",
+            "MiwuY2VudHJpZnVnYWwuY2VudHJpZnVnZS5wcm90b2NvbC5QdWJsaWNhdGlv",
+            "biIlChJVbnN1YnNjcmliZVJlcXVlc3QSDwoHY2hhbm5lbBgBIAEoCSITChFV",
+            "bnN1YnNjcmliZVJlc3VsdCJbCg5QdWJsaXNoUmVxdWVzdBIPCgdjaGFubmVs",
+            "GAEgASgJEgwKBGRhdGEYAiABKAwSDAoEdHlwZRgDIAEoBRILCgNrZXkYBCAB",
+            "KAkSDwoHcmVtb3ZlZBgFIAEoCCIPCg1QdWJsaXNoUmVzdWx0IiIKD1ByZXNl",
+            "bmNlUmVxdWVzdBIPCgdjaGFubmVsGAEgASgJIr8BCg5QcmVzZW5jZVJlc3Vs",
+            "dBJPCghwcmVzZW5jZRgBIAMoCzI9LmNlbnRyaWZ1Z2FsLmNlbnRyaWZ1Z2Uu",
+            "cHJvdG9jb2wuUHJlc2VuY2VSZXN1bHQuUHJlc2VuY2VFbnRyeRpcCg1QcmVz",
+            "ZW5jZUVudHJ5EgsKA2tleRgBIAEoCRI6CgV2YWx1ZRgCIAEoCzIrLmNlbnRy",
+            "aWZ1Z2FsLmNlbnRyaWZ1Z2UucHJvdG9jb2wuQ2xpZW50SW5mbzoCOAEiJwoU",
+            "UHJlc2VuY2VTdGF0c1JlcXVlc3QSDwoHY2hhbm5lbBgBIAEoCSI9ChNQcmVz",
+            "ZW5jZVN0YXRzUmVzdWx0EhMKC251bV9jbGllbnRzGAEgASgNEhEKCW51bV91",
+            "c2VycxgCIAEoDSIvCg5TdHJlYW1Qb3NpdGlvbhIOCgZvZmZzZXQYASABKAQS",
+            "DQoFZXBvY2gYAiABKAkinwEKDkhpc3RvcnlSZXF1ZXN0Eg8KB2NoYW5uZWwY",
+            "ASABKAkSDQoFbGltaXQYByABKAUSPgoFc2luY2UYCCABKAsyLy5jZW50cmlm",
+            "dWdhbC5jZW50cmlmdWdlLnByb3RvY29sLlN0cmVhbVBvc2l0aW9uEg8KB3Jl",
+            "dmVyc2UYCSABKAhKBAgCEANKBAgDEARKBAgEEAVKBAgFEAZKBAgGEAcicgoN",
+            "SGlzdG9yeVJlc3VsdBJCCgxwdWJsaWNhdGlvbnMYASADKAsyLC5jZW50cmlm",
+            "dWdhbC5jZW50cmlmdWdlLnByb3RvY29sLlB1YmxpY2F0aW9uEg0KBWVwb2No",
+            "GAIgASgJEg4KBm9mZnNldBgDIAEoBCINCgtQaW5nUmVxdWVzdCIMCgpQaW5n",
+            "UmVzdWx0IioKClJQQ1JlcXVlc3QSDAoEZGF0YRgBIAEoDBIOCgZtZXRob2QY",
+            "AiABKAkiGQoJUlBDUmVzdWx0EgwKBGRhdGEYASABKAwiGwoLU2VuZFJlcXVl",
+            "c3QSDAoEZGF0YRgBIAEoDCKJAQoKRmlsdGVyTm9kZRIKCgJvcBgBIAEoCRIL",
+            "CgNrZXkYAiABKAkSCwoDY21wGAMgASgJEgsKA3ZhbBgEIAEoCRIMCgR2YWxz",
+            "GAUgAygJEjoKBW5vZGVzGAYgAygLMisuY2VudHJpZnVnYWwuY2VudHJpZnVn",
+            "ZS5wcm90b2NvbC5GaWx0ZXJOb2RlQiFaH2dpdGh1Yi5jb20vY2VudHJpZnVn",
+            "YWwvcHJvdG9jb2xiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -171,7 +185,7 @@ namespace Centrifugal.Centrifuge.Protocol {
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Reply), global::Centrifugal.Centrifuge.Protocol.Reply.Parser, new[]{ "Id", "Error", "Push", "Connect", "Subscribe", "Unsubscribe", "Publish", "Presence", "PresenceStats", "History", "Ping", "Rpc", "Refresh", "SubRefresh" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Push), global::Centrifugal.Centrifuge.Protocol.Push.Parser, new[]{ "Id", "Channel", "Pub", "Join", "Leave", "Unsubscribe", "Message", "Subscribe", "Connect", "Disconnect", "Refresh" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.ClientInfo), global::Centrifugal.Centrifuge.Protocol.ClientInfo.Parser, new[]{ "User", "Client", "ConnInfo", "ChanInfo" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Publication), global::Centrifugal.Centrifuge.Protocol.Publication.Parser, new[]{ "Data", "Info", "Offset", "Tags", "Delta", "Time", "Channel" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Publication), global::Centrifugal.Centrifuge.Protocol.Publication.Parser, new[]{ "Data", "Info", "Offset", "Tags", "Delta", "Time", "Channel", "Key", "Removed", "Score", "Epoch", "PrevData", "Version" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Join), global::Centrifugal.Centrifuge.Protocol.Join.Parser, new[]{ "Info" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Leave), global::Centrifugal.Centrifuge.Protocol.Leave.Parser, new[]{ "Info" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.Unsubscribe), global::Centrifugal.Centrifuge.Protocol.Unsubscribe.Parser, new[]{ "Code", "Reason" }, null, null, null, null),
@@ -184,13 +198,15 @@ namespace Centrifugal.Centrifuge.Protocol {
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.ConnectResult), global::Centrifugal.Centrifuge.Protocol.ConnectResult.Parser, new[]{ "Client", "Version", "Expires", "Ttl", "Data", "Subs", "Ping", "Pong", "Session", "Node", "Time" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.RefreshRequest), global::Centrifugal.Centrifuge.Protocol.RefreshRequest.Parser, new[]{ "Token" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.RefreshResult), global::Centrifugal.Centrifuge.Protocol.RefreshResult.Parser, new[]{ "Client", "Version", "Expires", "Ttl" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubscribeRequest), global::Centrifugal.Centrifuge.Protocol.SubscribeRequest.Parser, new[]{ "Channel", "Token", "Recover", "Epoch", "Offset", "Data", "Positioned", "Recoverable", "JoinLeave", "Delta", "Tf", "Flag" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubscribeResult), global::Centrifugal.Centrifuge.Protocol.SubscribeResult.Parser, new[]{ "Expires", "Ttl", "Recoverable", "Epoch", "Publications", "Recovered", "Offset", "Positioned", "Data", "WasRecovering", "Delta", "Id" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubRefreshRequest), global::Centrifugal.Centrifuge.Protocol.SubRefreshRequest.Parser, new[]{ "Channel", "Token" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubRefreshResult), global::Centrifugal.Centrifuge.Protocol.SubRefreshResult.Parser, new[]{ "Expires", "Ttl" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubscribeRequest), global::Centrifugal.Centrifuge.Protocol.SubscribeRequest.Parser, new[]{ "Channel", "Token", "Recover", "Epoch", "Offset", "Data", "Positioned", "Recoverable", "JoinLeave", "Delta", "Tf", "Flag", "Type", "Phase", "Cursor", "Limit", "Asc" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubscribeResult), global::Centrifugal.Centrifuge.Protocol.SubscribeResult.Parser, new[]{ "Expires", "Ttl", "Recoverable", "Epoch", "Publications", "Recovered", "Offset", "Positioned", "Data", "WasRecovering", "Delta", "Id", "Type", "Phase", "Cursor", "State", "PublishDebounce" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.KeyedItem), global::Centrifugal.Centrifuge.Protocol.KeyedItem.Parser, new[]{ "Key", "Version" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.TrackBatch), global::Centrifugal.Centrifuge.Protocol.TrackBatch.Parser, new[]{ "Signature", "Items" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubRefreshRequest), global::Centrifugal.Centrifuge.Protocol.SubRefreshRequest.Parser, new[]{ "Channel", "Token", "Type", "Track", "Untrack" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.SubRefreshResult), global::Centrifugal.Centrifuge.Protocol.SubRefreshResult.Parser, new[]{ "Expires", "Ttl", "Items" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.UnsubscribeRequest), global::Centrifugal.Centrifuge.Protocol.UnsubscribeRequest.Parser, new[]{ "Channel" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.UnsubscribeResult), global::Centrifugal.Centrifuge.Protocol.UnsubscribeResult.Parser, null, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.PublishRequest), global::Centrifugal.Centrifuge.Protocol.PublishRequest.Parser, new[]{ "Channel", "Data" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.PublishRequest), global::Centrifugal.Centrifuge.Protocol.PublishRequest.Parser, new[]{ "Channel", "Data", "Type", "Key", "Removed" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.PublishResult), global::Centrifugal.Centrifuge.Protocol.PublishResult.Parser, null, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.PresenceRequest), global::Centrifugal.Centrifuge.Protocol.PresenceRequest.Parser, new[]{ "Channel" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Centrifugal.Centrifuge.Protocol.PresenceResult), global::Centrifugal.Centrifuge.Protocol.PresenceResult.Parser, new[]{ "Presence" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
@@ -425,7 +441,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -452,7 +472,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -689,7 +713,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -716,7 +744,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -1291,7 +1323,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -1394,7 +1430,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -2080,7 +2120,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -2190,7 +2234,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -2780,7 +2828,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -2866,7 +2918,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -3194,7 +3250,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -3225,7 +3285,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -3297,6 +3361,12 @@ namespace Centrifugal.Centrifuge.Protocol {
       delta_ = other.delta_;
       time_ = other.time_;
       channel_ = other.channel_;
+      key_ = other.key_;
+      removed_ = other.removed_;
+      score_ = other.score_;
+      epoch_ = other.epoch_;
+      prevData_ = other.prevData_;
+      version_ = other.version_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -3410,6 +3480,93 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
     }
 
+    /// <summary>Field number for the "key" field.</summary>
+    public const int KeyFieldNumber = 11;
+    private string key_ = "";
+    /// <summary>
+    /// Optional key associated with publication.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Key {
+      get { return key_; }
+      set {
+        key_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "removed" field.</summary>
+    public const int RemovedFieldNumber = 12;
+    private bool removed_;
+    /// <summary>
+    /// When set indicates that this publication is a removal of a previously published item.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Removed {
+      get { return removed_; }
+      set {
+        removed_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "score" field.</summary>
+    public const int ScoreFieldNumber = 13;
+    private long score_;
+    /// <summary>
+    /// Represents score to order.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public long Score {
+      get { return score_; }
+      set {
+        score_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "epoch" field.</summary>
+    public const int EpochFieldNumber = 14;
+    private string epoch_ = "";
+    /// <summary>
+    /// Optional epoch.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Epoch {
+      get { return epoch_; }
+      set {
+        epoch_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "prev_data" field.</summary>
+    public const int PrevDataFieldNumber = 15;
+    private pb::ByteString prevData_ = pb::ByteString.Empty;
+    /// <summary>
+    /// Previous data for delta computation in broker fan-out.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString PrevData {
+      get { return prevData_; }
+      set {
+        prevData_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "version" field.</summary>
+    public const int VersionFieldNumber = 16;
+    private ulong version_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Version {
+      get { return version_; }
+      set {
+        version_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -3432,6 +3589,12 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Delta != other.Delta) return false;
       if (Time != other.Time) return false;
       if (Channel != other.Channel) return false;
+      if (Key != other.Key) return false;
+      if (Removed != other.Removed) return false;
+      if (Score != other.Score) return false;
+      if (Epoch != other.Epoch) return false;
+      if (PrevData != other.PrevData) return false;
+      if (Version != other.Version) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -3446,6 +3609,12 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Delta != false) hash ^= Delta.GetHashCode();
       if (Time != 0L) hash ^= Time.GetHashCode();
       if (Channel.Length != 0) hash ^= Channel.GetHashCode();
+      if (Key.Length != 0) hash ^= Key.GetHashCode();
+      if (Removed != false) hash ^= Removed.GetHashCode();
+      if (Score != 0L) hash ^= Score.GetHashCode();
+      if (Epoch.Length != 0) hash ^= Epoch.GetHashCode();
+      if (PrevData.Length != 0) hash ^= PrevData.GetHashCode();
+      if (Version != 0UL) hash ^= Version.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -3489,6 +3658,30 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(82);
         output.WriteString(Channel);
       }
+      if (Key.Length != 0) {
+        output.WriteRawTag(90);
+        output.WriteString(Key);
+      }
+      if (Removed != false) {
+        output.WriteRawTag(96);
+        output.WriteBool(Removed);
+      }
+      if (Score != 0L) {
+        output.WriteRawTag(104);
+        output.WriteSInt64(Score);
+      }
+      if (Epoch.Length != 0) {
+        output.WriteRawTag(114);
+        output.WriteString(Epoch);
+      }
+      if (PrevData.Length != 0) {
+        output.WriteRawTag(122);
+        output.WriteBytes(PrevData);
+      }
+      if (Version != 0UL) {
+        output.WriteRawTag(128, 1);
+        output.WriteUInt64(Version);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -3524,6 +3717,30 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(82);
         output.WriteString(Channel);
       }
+      if (Key.Length != 0) {
+        output.WriteRawTag(90);
+        output.WriteString(Key);
+      }
+      if (Removed != false) {
+        output.WriteRawTag(96);
+        output.WriteBool(Removed);
+      }
+      if (Score != 0L) {
+        output.WriteRawTag(104);
+        output.WriteSInt64(Score);
+      }
+      if (Epoch.Length != 0) {
+        output.WriteRawTag(114);
+        output.WriteString(Epoch);
+      }
+      if (PrevData.Length != 0) {
+        output.WriteRawTag(122);
+        output.WriteBytes(PrevData);
+      }
+      if (Version != 0UL) {
+        output.WriteRawTag(128, 1);
+        output.WriteUInt64(Version);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -3552,6 +3769,24 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Channel.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Channel);
+      }
+      if (Key.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Key);
+      }
+      if (Removed != false) {
+        size += 1 + 1;
+      }
+      if (Score != 0L) {
+        size += 1 + pb::CodedOutputStream.ComputeSInt64Size(Score);
+      }
+      if (Epoch.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Epoch);
+      }
+      if (PrevData.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(PrevData);
+      }
+      if (Version != 0UL) {
+        size += 2 + pb::CodedOutputStream.ComputeUInt64Size(Version);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -3587,6 +3822,24 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Channel.Length != 0) {
         Channel = other.Channel;
       }
+      if (other.Key.Length != 0) {
+        Key = other.Key;
+      }
+      if (other.Removed != false) {
+        Removed = other.Removed;
+      }
+      if (other.Score != 0L) {
+        Score = other.Score;
+      }
+      if (other.Epoch.Length != 0) {
+        Epoch = other.Epoch;
+      }
+      if (other.PrevData.Length != 0) {
+        PrevData = other.PrevData;
+      }
+      if (other.Version != 0UL) {
+        Version = other.Version;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -3598,7 +3851,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -3633,6 +3890,30 @@ namespace Centrifugal.Centrifuge.Protocol {
             Channel = input.ReadString();
             break;
           }
+          case 90: {
+            Key = input.ReadString();
+            break;
+          }
+          case 96: {
+            Removed = input.ReadBool();
+            break;
+          }
+          case 104: {
+            Score = input.ReadSInt64();
+            break;
+          }
+          case 114: {
+            Epoch = input.ReadString();
+            break;
+          }
+          case 122: {
+            PrevData = input.ReadBytes();
+            break;
+          }
+          case 128: {
+            Version = input.ReadUInt64();
+            break;
+          }
         }
       }
     #endif
@@ -3644,7 +3925,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -3677,6 +3962,30 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 82: {
             Channel = input.ReadString();
+            break;
+          }
+          case 90: {
+            Key = input.ReadString();
+            break;
+          }
+          case 96: {
+            Removed = input.ReadBool();
+            break;
+          }
+          case 104: {
+            Score = input.ReadSInt64();
+            break;
+          }
+          case 114: {
+            Epoch = input.ReadString();
+            break;
+          }
+          case 122: {
+            PrevData = input.ReadBytes();
+            break;
+          }
+          case 128: {
+            Version = input.ReadUInt64();
             break;
           }
         }
@@ -3848,7 +4157,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -3870,7 +4183,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -4050,7 +4367,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -4072,7 +4393,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -4278,7 +4603,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -4301,7 +4630,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -4595,7 +4928,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -4630,7 +4967,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -4820,7 +5161,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -4839,7 +5184,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -5292,7 +5641,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -5351,7 +5704,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -5620,7 +5977,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -5647,7 +6008,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -5855,7 +6220,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -5878,7 +6247,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -6208,7 +6581,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -6251,7 +6628,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -6728,7 +7109,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -6787,7 +7172,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -6998,7 +7387,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -7017,7 +7410,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -7275,7 +7672,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -7306,7 +7707,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -7380,6 +7785,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       delta_ = other.delta_;
       tf_ = other.tf_ != null ? other.tf_.Clone() : null;
       flag_ = other.flag_;
+      type_ = other.type_;
+      phase_ = other.phase_;
+      cursor_ = other.cursor_;
+      limit_ = other.limit_;
+      asc_ = other.asc_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -7539,6 +7949,66 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
     }
 
+    /// <summary>Field number for the "type" field.</summary>
+    public const int TypeFieldNumber = 15;
+    private int type_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Type {
+      get { return type_; }
+      set {
+        type_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "phase" field.</summary>
+    public const int PhaseFieldNumber = 16;
+    private int phase_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Phase {
+      get { return phase_; }
+      set {
+        phase_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "cursor" field.</summary>
+    public const int CursorFieldNumber = 17;
+    private string cursor_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Cursor {
+      get { return cursor_; }
+      set {
+        cursor_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "limit" field.</summary>
+    public const int LimitFieldNumber = 18;
+    private int limit_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Limit {
+      get { return limit_; }
+      set {
+        limit_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "asc" field.</summary>
+    public const int AscFieldNumber = 19;
+    private bool asc_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Asc {
+      get { return asc_; }
+      set {
+        asc_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -7566,6 +8036,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Delta != other.Delta) return false;
       if (!object.Equals(Tf, other.Tf)) return false;
       if (Flag != other.Flag) return false;
+      if (Type != other.Type) return false;
+      if (Phase != other.Phase) return false;
+      if (Cursor != other.Cursor) return false;
+      if (Limit != other.Limit) return false;
+      if (Asc != other.Asc) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -7585,6 +8060,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Delta.Length != 0) hash ^= Delta.GetHashCode();
       if (tf_ != null) hash ^= Tf.GetHashCode();
       if (Flag != 0L) hash ^= Flag.GetHashCode();
+      if (Type != 0) hash ^= Type.GetHashCode();
+      if (Phase != 0) hash ^= Phase.GetHashCode();
+      if (Cursor.Length != 0) hash ^= Cursor.GetHashCode();
+      if (Limit != 0) hash ^= Limit.GetHashCode();
+      if (Asc != false) hash ^= Asc.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -7651,6 +8131,26 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(112);
         output.WriteInt64(Flag);
       }
+      if (Type != 0) {
+        output.WriteRawTag(120);
+        output.WriteInt32(Type);
+      }
+      if (Phase != 0) {
+        output.WriteRawTag(128, 1);
+        output.WriteInt32(Phase);
+      }
+      if (Cursor.Length != 0) {
+        output.WriteRawTag(138, 1);
+        output.WriteString(Cursor);
+      }
+      if (Limit != 0) {
+        output.WriteRawTag(144, 1);
+        output.WriteInt32(Limit);
+      }
+      if (Asc != false) {
+        output.WriteRawTag(152, 1);
+        output.WriteBool(Asc);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -7709,6 +8209,26 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(112);
         output.WriteInt64(Flag);
       }
+      if (Type != 0) {
+        output.WriteRawTag(120);
+        output.WriteInt32(Type);
+      }
+      if (Phase != 0) {
+        output.WriteRawTag(128, 1);
+        output.WriteInt32(Phase);
+      }
+      if (Cursor.Length != 0) {
+        output.WriteRawTag(138, 1);
+        output.WriteString(Cursor);
+      }
+      if (Limit != 0) {
+        output.WriteRawTag(144, 1);
+        output.WriteInt32(Limit);
+      }
+      if (Asc != false) {
+        output.WriteRawTag(152, 1);
+        output.WriteBool(Asc);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -7754,6 +8274,21 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Flag != 0L) {
         size += 1 + pb::CodedOutputStream.ComputeInt64Size(Flag);
+      }
+      if (Type != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Type);
+      }
+      if (Phase != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeInt32Size(Phase);
+      }
+      if (Cursor.Length != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeStringSize(Cursor);
+      }
+      if (Limit != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeInt32Size(Limit);
+      }
+      if (Asc != false) {
+        size += 2 + 1;
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -7806,6 +8341,21 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Flag != 0L) {
         Flag = other.Flag;
       }
+      if (other.Type != 0) {
+        Type = other.Type;
+      }
+      if (other.Phase != 0) {
+        Phase = other.Phase;
+      }
+      if (other.Cursor.Length != 0) {
+        Cursor = other.Cursor;
+      }
+      if (other.Limit != 0) {
+        Limit = other.Limit;
+      }
+      if (other.Asc != false) {
+        Asc = other.Asc;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -7817,7 +8367,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -7872,6 +8426,26 @@ namespace Centrifugal.Centrifuge.Protocol {
             Flag = input.ReadInt64();
             break;
           }
+          case 120: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 128: {
+            Phase = input.ReadInt32();
+            break;
+          }
+          case 138: {
+            Cursor = input.ReadString();
+            break;
+          }
+          case 144: {
+            Limit = input.ReadInt32();
+            break;
+          }
+          case 152: {
+            Asc = input.ReadBool();
+            break;
+          }
         }
       }
     #endif
@@ -7883,7 +8457,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -7936,6 +8514,26 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 112: {
             Flag = input.ReadInt64();
+            break;
+          }
+          case 120: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 128: {
+            Phase = input.ReadInt32();
+            break;
+          }
+          case 138: {
+            Cursor = input.ReadString();
+            break;
+          }
+          case 144: {
+            Limit = input.ReadInt32();
+            break;
+          }
+          case 152: {
+            Asc = input.ReadBool();
             break;
           }
         }
@@ -7992,6 +8590,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       wasRecovering_ = other.wasRecovering_;
       delta_ = other.delta_;
       id_ = other.id_;
+      type_ = other.type_;
+      phase_ = other.phase_;
+      cursor_ = other.cursor_;
+      state_ = other.state_.Clone();
+      publishDebounce_ = other.publishDebounce_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -8147,6 +8750,80 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
     }
 
+    /// <summary>Field number for the "type" field.</summary>
+    public const int TypeFieldNumber = 15;
+    private int type_;
+    /// <summary>
+    /// Server must echo back type.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Type {
+      get { return type_; }
+      set {
+        type_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "phase" field.</summary>
+    public const int PhaseFieldNumber = 16;
+    private int phase_;
+    /// <summary>
+    /// The result phase of the operation (LIVE = 0, STREAM = 1, STATE = 2)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Phase {
+      get { return phase_; }
+      set {
+        phase_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "cursor" field.</summary>
+    public const int CursorFieldNumber = 17;
+    private string cursor_ = "";
+    /// <summary>
+    /// Next page cursor (empty = last page)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Cursor {
+      get { return cursor_; }
+      set {
+        cursor_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "state" field.</summary>
+    public const int StateFieldNumber = 18;
+    private static readonly pb::FieldCodec<global::Centrifugal.Centrifuge.Protocol.Publication> _repeated_state_codec
+        = pb::FieldCodec.ForMessage(146, global::Centrifugal.Centrifuge.Protocol.Publication.Parser);
+    private readonly pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication> state_ = new pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication>();
+    /// <summary>
+    /// Channel state entries.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication> State {
+      get { return state_; }
+    }
+
+    /// <summary>Field number for the "publish_debounce" field.</summary>
+    public const int PublishDebounceFieldNumber = 19;
+    private uint publishDebounce_;
+    /// <summary>
+    /// in ms, if >0 SDK should debounce publications to this channel. First one should not be debounced.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint PublishDebounce {
+      get { return publishDebounce_; }
+      set {
+        publishDebounce_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -8174,6 +8851,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (WasRecovering != other.WasRecovering) return false;
       if (Delta != other.Delta) return false;
       if (Id != other.Id) return false;
+      if (Type != other.Type) return false;
+      if (Phase != other.Phase) return false;
+      if (Cursor != other.Cursor) return false;
+      if(!state_.Equals(other.state_)) return false;
+      if (PublishDebounce != other.PublishDebounce) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -8193,6 +8875,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (WasRecovering != false) hash ^= WasRecovering.GetHashCode();
       if (Delta != false) hash ^= Delta.GetHashCode();
       if (Id != 0L) hash ^= Id.GetHashCode();
+      if (Type != 0) hash ^= Type.GetHashCode();
+      if (Phase != 0) hash ^= Phase.GetHashCode();
+      if (Cursor.Length != 0) hash ^= Cursor.GetHashCode();
+      hash ^= state_.GetHashCode();
+      if (PublishDebounce != 0) hash ^= PublishDebounce.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -8256,6 +8943,23 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(112);
         output.WriteInt64(Id);
       }
+      if (Type != 0) {
+        output.WriteRawTag(120);
+        output.WriteInt32(Type);
+      }
+      if (Phase != 0) {
+        output.WriteRawTag(128, 1);
+        output.WriteInt32(Phase);
+      }
+      if (Cursor.Length != 0) {
+        output.WriteRawTag(138, 1);
+        output.WriteString(Cursor);
+      }
+      state_.WriteTo(output, _repeated_state_codec);
+      if (PublishDebounce != 0) {
+        output.WriteRawTag(152, 1);
+        output.WriteUInt32(PublishDebounce);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -8311,6 +9015,23 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(112);
         output.WriteInt64(Id);
       }
+      if (Type != 0) {
+        output.WriteRawTag(120);
+        output.WriteInt32(Type);
+      }
+      if (Phase != 0) {
+        output.WriteRawTag(128, 1);
+        output.WriteInt32(Phase);
+      }
+      if (Cursor.Length != 0) {
+        output.WriteRawTag(138, 1);
+        output.WriteString(Cursor);
+      }
+      state_.WriteTo(ref output, _repeated_state_codec);
+      if (PublishDebounce != 0) {
+        output.WriteRawTag(152, 1);
+        output.WriteUInt32(PublishDebounce);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -8354,6 +9075,19 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Id != 0L) {
         size += 1 + pb::CodedOutputStream.ComputeInt64Size(Id);
+      }
+      if (Type != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Type);
+      }
+      if (Phase != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeInt32Size(Phase);
+      }
+      if (Cursor.Length != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeStringSize(Cursor);
+      }
+      size += state_.CalculateSize(_repeated_state_codec);
+      if (PublishDebounce != 0) {
+        size += 2 + pb::CodedOutputStream.ComputeUInt32Size(PublishDebounce);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -8401,6 +9135,19 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Id != 0L) {
         Id = other.Id;
       }
+      if (other.Type != 0) {
+        Type = other.Type;
+      }
+      if (other.Phase != 0) {
+        Phase = other.Phase;
+      }
+      if (other.Cursor.Length != 0) {
+        Cursor = other.Cursor;
+      }
+      state_.Add(other.state_);
+      if (other.PublishDebounce != 0) {
+        PublishDebounce = other.PublishDebounce;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -8412,7 +9159,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -8464,6 +9215,26 @@ namespace Centrifugal.Centrifuge.Protocol {
             Id = input.ReadInt64();
             break;
           }
+          case 120: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 128: {
+            Phase = input.ReadInt32();
+            break;
+          }
+          case 138: {
+            Cursor = input.ReadString();
+            break;
+          }
+          case 146: {
+            state_.AddEntriesFrom(input, _repeated_state_codec);
+            break;
+          }
+          case 152: {
+            PublishDebounce = input.ReadUInt32();
+            break;
+          }
         }
       }
     #endif
@@ -8475,7 +9246,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -8527,6 +9302,491 @@ namespace Centrifugal.Centrifuge.Protocol {
             Id = input.ReadInt64();
             break;
           }
+          case 120: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 128: {
+            Phase = input.ReadInt32();
+            break;
+          }
+          case 138: {
+            Cursor = input.ReadString();
+            break;
+          }
+          case 146: {
+            state_.AddEntriesFrom(ref input, _repeated_state_codec);
+            break;
+          }
+          case 152: {
+            PublishDebounce = input.ReadUInt32();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class KeyedItem : pb::IMessage<KeyedItem>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<KeyedItem> _parser = new pb::MessageParser<KeyedItem>(() => new KeyedItem());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<KeyedItem> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[21]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public KeyedItem() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public KeyedItem(KeyedItem other) : this() {
+      key_ = other.key_;
+      version_ = other.version_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public KeyedItem Clone() {
+      return new KeyedItem(this);
+    }
+
+    /// <summary>Field number for the "key" field.</summary>
+    public const int KeyFieldNumber = 1;
+    private string key_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Key {
+      get { return key_; }
+      set {
+        key_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "version" field.</summary>
+    public const int VersionFieldNumber = 2;
+    private ulong version_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Version {
+      get { return version_; }
+      set {
+        version_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as KeyedItem);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(KeyedItem other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Key != other.Key) return false;
+      if (Version != other.Version) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Key.Length != 0) hash ^= Key.GetHashCode();
+      if (Version != 0UL) hash ^= Version.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Key.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Key);
+      }
+      if (Version != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(Version);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Key.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Key);
+      }
+      if (Version != 0UL) {
+        output.WriteRawTag(16);
+        output.WriteUInt64(Version);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Key.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Key);
+      }
+      if (Version != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Version);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(KeyedItem other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Key.Length != 0) {
+        Key = other.Key;
+      }
+      if (other.Version != 0UL) {
+        Version = other.Version;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            Key = input.ReadString();
+            break;
+          }
+          case 16: {
+            Version = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            Key = input.ReadString();
+            break;
+          }
+          case 16: {
+            Version = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class TrackBatch : pb::IMessage<TrackBatch>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<TrackBatch> _parser = new pb::MessageParser<TrackBatch>(() => new TrackBatch());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<TrackBatch> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[22]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TrackBatch() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TrackBatch(TrackBatch other) : this() {
+      signature_ = other.signature_;
+      items_ = other.items_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TrackBatch Clone() {
+      return new TrackBatch(this);
+    }
+
+    /// <summary>Field number for the "signature" field.</summary>
+    public const int SignatureFieldNumber = 1;
+    private string signature_ = "";
+    /// <summary>
+    /// HMAC over (iat, expiry, user, channel, keys)
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Signature {
+      get { return signature_; }
+      set {
+        signature_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "items" field.</summary>
+    public const int ItemsFieldNumber = 2;
+    private static readonly pb::FieldCodec<global::Centrifugal.Centrifuge.Protocol.KeyedItem> _repeated_items_codec
+        = pb::FieldCodec.ForMessage(18, global::Centrifugal.Centrifuge.Protocol.KeyedItem.Parser);
+    private readonly pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.KeyedItem> items_ = new pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.KeyedItem>();
+    /// <summary>
+    /// FULL key set the signature was computed over;
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.KeyedItem> Items {
+      get { return items_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as TrackBatch);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(TrackBatch other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Signature != other.Signature) return false;
+      if(!items_.Equals(other.items_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Signature.Length != 0) hash ^= Signature.GetHashCode();
+      hash ^= items_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Signature.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Signature);
+      }
+      items_.WriteTo(output, _repeated_items_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Signature.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteString(Signature);
+      }
+      items_.WriteTo(ref output, _repeated_items_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Signature.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Signature);
+      }
+      size += items_.CalculateSize(_repeated_items_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(TrackBatch other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Signature.Length != 0) {
+        Signature = other.Signature;
+      }
+      items_.Add(other.items_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            Signature = input.ReadString();
+            break;
+          }
+          case 18: {
+            items_.AddEntriesFrom(input, _repeated_items_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            Signature = input.ReadString();
+            break;
+          }
+          case 18: {
+            items_.AddEntriesFrom(ref input, _repeated_items_codec);
+            break;
+          }
         }
       }
     }
@@ -8549,7 +9809,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[21]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[23]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8571,6 +9831,9 @@ namespace Centrifugal.Centrifuge.Protocol {
     public SubRefreshRequest(SubRefreshRequest other) : this() {
       channel_ = other.channel_;
       token_ = other.token_;
+      type_ = other.type_;
+      track_ = other.track_.Clone();
+      untrack_ = other.untrack_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -8604,6 +9867,49 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
     }
 
+    /// <summary>Field number for the "type" field.</summary>
+    public const int TypeFieldNumber = 3;
+    private int type_;
+    /// <summary>
+    /// 0=sub_refresh, 1=track, 2=untrack
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Type {
+      get { return type_; }
+      set {
+        type_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "track" field.</summary>
+    public const int TrackFieldNumber = 4;
+    private static readonly pb::FieldCodec<global::Centrifugal.Centrifuge.Protocol.TrackBatch> _repeated_track_codec
+        = pb::FieldCodec.ForMessage(34, global::Centrifugal.Centrifuge.Protocol.TrackBatch.Parser);
+    private readonly pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.TrackBatch> track_ = new pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.TrackBatch>();
+    /// <summary>
+    /// for type=1
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.TrackBatch> Track {
+      get { return track_; }
+    }
+
+    /// <summary>Field number for the "untrack" field.</summary>
+    public const int UntrackFieldNumber = 5;
+    private static readonly pb::FieldCodec<string> _repeated_untrack_codec
+        = pb::FieldCodec.ForString(42);
+    private readonly pbc::RepeatedField<string> untrack_ = new pbc::RepeatedField<string>();
+    /// <summary>
+    /// for type=2
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<string> Untrack {
+      get { return untrack_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -8621,6 +9927,9 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Channel != other.Channel) return false;
       if (Token != other.Token) return false;
+      if (Type != other.Type) return false;
+      if(!track_.Equals(other.track_)) return false;
+      if(!untrack_.Equals(other.untrack_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -8630,6 +9939,9 @@ namespace Centrifugal.Centrifuge.Protocol {
       int hash = 1;
       if (Channel.Length != 0) hash ^= Channel.GetHashCode();
       if (Token.Length != 0) hash ^= Token.GetHashCode();
+      if (Type != 0) hash ^= Type.GetHashCode();
+      hash ^= track_.GetHashCode();
+      hash ^= untrack_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -8656,6 +9968,12 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(18);
         output.WriteString(Token);
       }
+      if (Type != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Type);
+      }
+      track_.WriteTo(output, _repeated_track_codec);
+      untrack_.WriteTo(output, _repeated_untrack_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -8674,6 +9992,12 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(18);
         output.WriteString(Token);
       }
+      if (Type != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Type);
+      }
+      track_.WriteTo(ref output, _repeated_track_codec);
+      untrack_.WriteTo(ref output, _repeated_untrack_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -8690,6 +10014,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Token.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Token);
       }
+      if (Type != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Type);
+      }
+      size += track_.CalculateSize(_repeated_track_codec);
+      size += untrack_.CalculateSize(_repeated_untrack_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -8708,6 +10037,11 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Token.Length != 0) {
         Token = other.Token;
       }
+      if (other.Type != 0) {
+        Type = other.Type;
+      }
+      track_.Add(other.track_);
+      untrack_.Add(other.untrack_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -8719,7 +10053,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -8729,6 +10067,18 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 18: {
             Token = input.ReadString();
+            break;
+          }
+          case 24: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 34: {
+            track_.AddEntriesFrom(input, _repeated_track_codec);
+            break;
+          }
+          case 42: {
+            untrack_.AddEntriesFrom(input, _repeated_untrack_codec);
             break;
           }
         }
@@ -8742,7 +10092,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -8752,6 +10106,18 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 18: {
             Token = input.ReadString();
+            break;
+          }
+          case 24: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 34: {
+            track_.AddEntriesFrom(ref input, _repeated_track_codec);
+            break;
+          }
+          case 42: {
+            untrack_.AddEntriesFrom(ref input, _repeated_untrack_codec);
             break;
           }
         }
@@ -8776,7 +10142,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[22]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[24]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8798,6 +10164,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     public SubRefreshResult(SubRefreshResult other) : this() {
       expires_ = other.expires_;
       ttl_ = other.ttl_;
+      items_ = other.items_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -8822,6 +10189,9 @@ namespace Centrifugal.Centrifuge.Protocol {
     /// <summary>Field number for the "ttl" field.</summary>
     public const int TtlFieldNumber = 2;
     private uint ttl_;
+    /// <summary>
+    /// for type=0: token TTL. for type=1: MIN TTL across all batches.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public uint Ttl {
@@ -8829,6 +10199,17 @@ namespace Centrifugal.Centrifuge.Protocol {
       set {
         ttl_ = value;
       }
+    }
+
+    /// <summary>Field number for the "items" field.</summary>
+    public const int ItemsFieldNumber = 3;
+    private static readonly pb::FieldCodec<global::Centrifugal.Centrifuge.Protocol.Publication> _repeated_items_codec
+        = pb::FieldCodec.ForMessage(26, global::Centrifugal.Centrifuge.Protocol.Publication.Parser);
+    private readonly pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication> items_ = new pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Centrifugal.Centrifuge.Protocol.Publication> Items {
+      get { return items_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -8848,6 +10229,7 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Expires != other.Expires) return false;
       if (Ttl != other.Ttl) return false;
+      if(!items_.Equals(other.items_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -8857,6 +10239,7 @@ namespace Centrifugal.Centrifuge.Protocol {
       int hash = 1;
       if (Expires != false) hash ^= Expires.GetHashCode();
       if (Ttl != 0) hash ^= Ttl.GetHashCode();
+      hash ^= items_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -8883,6 +10266,7 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(16);
         output.WriteUInt32(Ttl);
       }
+      items_.WriteTo(output, _repeated_items_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -8901,6 +10285,7 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(16);
         output.WriteUInt32(Ttl);
       }
+      items_.WriteTo(ref output, _repeated_items_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -8917,6 +10302,7 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (Ttl != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Ttl);
       }
+      size += items_.CalculateSize(_repeated_items_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -8935,6 +10321,7 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Ttl != 0) {
         Ttl = other.Ttl;
       }
+      items_.Add(other.items_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -8946,7 +10333,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -8956,6 +10347,10 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 16: {
             Ttl = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            items_.AddEntriesFrom(input, _repeated_items_codec);
             break;
           }
         }
@@ -8969,7 +10364,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -8979,6 +10378,10 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 16: {
             Ttl = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            items_.AddEntriesFrom(ref input, _repeated_items_codec);
             break;
           }
         }
@@ -9003,7 +10406,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[23]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[25]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9144,7 +10547,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -9163,7 +10570,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -9193,7 +10604,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[24]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[26]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9305,7 +10716,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -9320,7 +10735,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -9346,7 +10765,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[25]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[27]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9368,6 +10787,9 @@ namespace Centrifugal.Centrifuge.Protocol {
     public PublishRequest(PublishRequest other) : this() {
       channel_ = other.channel_;
       data_ = other.data_;
+      type_ = other.type_;
+      key_ = other.key_;
+      removed_ = other.removed_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -9401,6 +10823,51 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
     }
 
+    /// <summary>Field number for the "type" field.</summary>
+    public const int TypeFieldNumber = 3;
+    private int type_;
+    /// <summary>
+    /// 0 = regular (default), 1 = map
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int Type {
+      get { return type_; }
+      set {
+        type_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "key" field.</summary>
+    public const int KeyFieldNumber = 4;
+    private string key_ = "";
+    /// <summary>
+    /// Map publish: key to publish/remove
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Key {
+      get { return key_; }
+      set {
+        key_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "removed" field.</summary>
+    public const int RemovedFieldNumber = 5;
+    private bool removed_;
+    /// <summary>
+    /// Map publish: true = remove this key
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Removed {
+      get { return removed_; }
+      set {
+        removed_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -9418,6 +10885,9 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Channel != other.Channel) return false;
       if (Data != other.Data) return false;
+      if (Type != other.Type) return false;
+      if (Key != other.Key) return false;
+      if (Removed != other.Removed) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -9427,6 +10897,9 @@ namespace Centrifugal.Centrifuge.Protocol {
       int hash = 1;
       if (Channel.Length != 0) hash ^= Channel.GetHashCode();
       if (Data.Length != 0) hash ^= Data.GetHashCode();
+      if (Type != 0) hash ^= Type.GetHashCode();
+      if (Key.Length != 0) hash ^= Key.GetHashCode();
+      if (Removed != false) hash ^= Removed.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -9453,6 +10926,18 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(18);
         output.WriteBytes(Data);
       }
+      if (Type != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Type);
+      }
+      if (Key.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Key);
+      }
+      if (Removed != false) {
+        output.WriteRawTag(40);
+        output.WriteBool(Removed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -9471,6 +10956,18 @@ namespace Centrifugal.Centrifuge.Protocol {
         output.WriteRawTag(18);
         output.WriteBytes(Data);
       }
+      if (Type != 0) {
+        output.WriteRawTag(24);
+        output.WriteInt32(Type);
+      }
+      if (Key.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Key);
+      }
+      if (Removed != false) {
+        output.WriteRawTag(40);
+        output.WriteBool(Removed);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -9486,6 +10983,15 @@ namespace Centrifugal.Centrifuge.Protocol {
       }
       if (Data.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeBytesSize(Data);
+      }
+      if (Type != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(Type);
+      }
+      if (Key.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Key);
+      }
+      if (Removed != false) {
+        size += 1 + 1;
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -9505,6 +11011,15 @@ namespace Centrifugal.Centrifuge.Protocol {
       if (other.Data.Length != 0) {
         Data = other.Data;
       }
+      if (other.Type != 0) {
+        Type = other.Type;
+      }
+      if (other.Key.Length != 0) {
+        Key = other.Key;
+      }
+      if (other.Removed != false) {
+        Removed = other.Removed;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -9516,7 +11031,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -9526,6 +11045,18 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 18: {
             Data = input.ReadBytes();
+            break;
+          }
+          case 24: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 34: {
+            Key = input.ReadString();
+            break;
+          }
+          case 40: {
+            Removed = input.ReadBool();
             break;
           }
         }
@@ -9539,7 +11070,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -9549,6 +11084,18 @@ namespace Centrifugal.Centrifuge.Protocol {
           }
           case 18: {
             Data = input.ReadBytes();
+            break;
+          }
+          case 24: {
+            Type = input.ReadInt32();
+            break;
+          }
+          case 34: {
+            Key = input.ReadString();
+            break;
+          }
+          case 40: {
+            Removed = input.ReadBool();
             break;
           }
         }
@@ -9573,7 +11120,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[26]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[28]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9685,7 +11232,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -9700,7 +11251,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -9726,7 +11281,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[27]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[29]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -9867,7 +11422,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -9886,7 +11445,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -9916,7 +11479,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[28]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[30]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10046,7 +11609,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -10065,7 +11632,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -10095,7 +11666,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[29]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[31]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10236,7 +11807,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -10255,7 +11830,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -10285,7 +11864,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[30]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[32]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10455,7 +12034,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -10478,7 +12061,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -10512,7 +12099,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[31]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[33]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10682,7 +12269,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -10705,7 +12296,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -10739,7 +12334,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[32]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[34]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -10970,7 +12565,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11004,7 +12603,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -11049,7 +12652,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[33]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[35]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11237,7 +12840,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11264,7 +12871,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -11302,7 +12913,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[34]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[36]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11414,7 +13025,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11429,7 +13044,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -11455,7 +13074,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[35]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[37]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11567,7 +13186,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11582,7 +13205,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -11608,7 +13235,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[36]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[38]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11778,7 +13405,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11801,7 +13432,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -11835,7 +13470,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[37]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[39]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -11976,7 +13611,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -11995,7 +13634,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -12025,7 +13668,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[38]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[40]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -12166,7 +13809,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -12185,7 +13832,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -12215,7 +13866,7 @@ namespace Centrifugal.Centrifuge.Protocol {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[39]; }
+      get { return global::Centrifugal.Centrifuge.Protocol.ClientReflection.Descriptor.MessageTypes[41]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -12517,7 +14168,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -12556,7 +14211,11 @@ namespace Centrifugal.Centrifuge.Protocol {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-        switch(tag) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;

@@ -43,6 +43,21 @@ namespace Centrifugal.Centrifuge
     }
 
     /// <summary>
+    /// Exception thrown when the GetState callback of a subscription fails.
+    /// The original callback error is available via InnerException.
+    /// </summary>
+    public class CentrifugeGetStateException : CentrifugeException
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CentrifugeGetStateException"/> class.
+        /// </summary>
+        public CentrifugeGetStateException(Exception innerException)
+            : base(CentrifugeErrorCodes.SubscriptionGetState, "get state error: " + innerException.Message, true, innerException)
+        {
+        }
+    }
+
+    /// <summary>
     /// Exception thrown when operation times out.
     /// </summary>
     public class CentrifugeTimeoutException : CentrifugeException
