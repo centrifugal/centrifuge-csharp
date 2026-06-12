@@ -45,6 +45,22 @@ namespace Centrifugal.Centrifuge
         public CentrifugeSubscriptionState State => _state;
 
         /// <summary>
+        /// Test hook: whether a resubscribe retry is currently armed (scheduled and not
+        /// cancelled). Lets integration tests synchronize with the retry pipeline through
+        /// state polling instead of wall-clock sleeps.
+        /// </summary>
+        internal bool HasPendingResubscribe
+        {
+            get
+            {
+                lock (_stateChangeLock)
+                {
+                    return _resubscribeCts != null && !_resubscribeCts.IsCancellationRequested;
+                }
+            }
+        }
+
+        /// <summary>
         /// Event raised when subscription state changes.
         /// </summary>
         public event EventHandler<CentrifugeSubscriptionStateEventArgs>? StateChanged;

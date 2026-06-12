@@ -893,21 +893,31 @@ namespace Centrifugal.Centrifuge.Tests
         {
             // Bug: MoveToSubscribing only cancels _resubscribeCts for Subscribed→Subscribing.
             // If already Subscribing (GetToken failed, resubscribe timer pending), the cancel
-            // is skipped and the stale timer fires calling GetToken again, causing an unwanted
-            // Unsubscribed event when that call throws Unauthorized.
+            // is skipped and a stale armed retry survives.
             // Fix: cancel _resubscribeCts for any non-Unsubscribed state.
+            //
+            // Determinism notes:
+            // - The subscribe pipeline can be triggered more than once around connect
+            //   (subscription's own batch + the connect reply's SendSubscribeCommands sweep,
+            //   both fire-and-forget Task.Run). So GetToken throws the transient error
+            //   exactly once — the only call that can arm a retry — and PARKS every later
+            //   call on a never-completing task: a parked stray pipeline can neither arm a
+            //   retry nor unsubscribe, keeping the armed/disarmed observations exact.
+            // - The retry delay is long enough that the armed timer can never fire during
+            //   the test; the test never waits for it, it asserts the cancel directly.
             int callCount = 0;
-            var firstErrorTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var parkCts = new CancellationTokenSource();
             var subOptions = new CentrifugeSubscriptionOptions
             {
                 GetToken = async (channel) =>
                 {
                     int n = Interlocked.Increment(ref callCount);
                     if (n == 1) throw new Exception("transient token error"); // → ScheduleResubscribeAsync
-                    throw new CentrifugeUnauthorizedException("unauthorized"); // stale timer fires this
+                    await Task.Delay(Timeout.Infinite, parkCts.Token); // park stray pipelines
+                    throw new OperationCanceledException();
                 },
-                MinResubscribeDelay = TimeSpan.FromMilliseconds(2500),
-                MaxResubscribeDelay = TimeSpan.FromMilliseconds(2500)
+                MinResubscribeDelay = TimeSpan.FromSeconds(30),
+                MaxResubscribeDelay = TimeSpan.FromSeconds(30)
             };
 
             using var client = CreateClient(transport, endpoint);
@@ -917,35 +927,41 @@ namespace Centrifugal.Centrifuge.Tests
             var sub = client.NewSubscription("test-stale-timer", subOptions);
             var unsubscribedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             sub.Unsubscribed += (_, _) => unsubscribedTcs.TrySetResult(true);
-            // The subscribe Error event fires right before ScheduleResubscribeAsync arms the
-            // retry timer (no awaits between them), making it the reliable "timer about to be
-            // armed" signal — waiting on the GetToken call itself races with the exception
-            // propagating through the subscribe pipeline on slow CI runners.
-            sub.Error += (_, _) => firstErrorTcs.TrySetResult(true);
 
             sub.Subscribe();
 
-            // Wait until the GetToken(1) failure was reported — ScheduleResubscribeAsync arms
-            // its timer synchronously right after this event; the extra delay is pure margin.
-            await firstErrorTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await Task.Delay(500);
+            // Eventual check: wait until the GetToken(1) failure has propagated through the
+            // subscribe pipeline and ScheduleResubscribeAsync has armed the retry.
+            await WaitUntilAsync(() => sub.HasPendingResubscribe, "resubscribe retry to be armed");
 
             // Directly call MoveToSubscribing (simulates what transport reconnect code does
             // when the subscription is already Subscribing).
             // Without fix: state != Subscribed → returns early, _resubscribeCts NOT cancelled.
-            // With fix: cancels _resubscribeCts so the 2500ms timer is interrupted.
+            // With fix: cancels _resubscribeCts, disarming the pending retry.
             sub.MoveToSubscribing(CentrifugeConnectingCodes.TransportClosed, "transport closed");
 
-            // Wait well past the 2500ms resubscribe timer (armed ~500ms ago, so without the
-            // cancel it would fire ~2000ms into this wait).
-            await Task.Delay(3000);
+            // The cancel happens synchronously inside MoveToSubscribing, and only the
+            // single GetToken(1) failure can ever arm a retry — so this is deterministic;
+            // no need to wait out the timer to observe its absence.
+            Assert.False(sub.HasPendingResubscribe, "stale resubscribe timer survived MoveToSubscribing");
+            Assert.False(unsubscribedTcs.Task.IsCompleted, "subscription unexpectedly unsubscribed");
+            Assert.True(callCount >= 1, "GetToken was never called");
 
-            // Without fix: stale timer fired → GetToken(2) → Unauthorized → Unsubscribed
-            // With fix: stale timer cancelled → GetToken(2) never called
-            Assert.False(unsubscribedTcs.Task.IsCompleted, "stale resubscribe timer fired after MoveToSubscribing");
-            Assert.Equal(1, callCount);
-
+            parkCts.Cancel(); // release any parked stray pipeline before teardown
             client.Disconnect();
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition, string description, int timeoutMs = 5000)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (!condition())
+            {
+                if (DateTime.UtcNow >= deadline)
+                {
+                    throw new TimeoutException($"Timed out waiting for: {description}");
+                }
+                await Task.Delay(10);
+            }
         }
 
         [Theory]
