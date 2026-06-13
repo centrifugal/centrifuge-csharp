@@ -143,6 +143,14 @@ namespace Centrifugal.Centrifuge
     internal static class CentrifugeSubscriptionFlags
     {
         /// <summary>
+        /// Offer channel compaction: the server may replace the string channel name
+        /// with a short numeric ID in subscription pushes (bandwidth optimization).
+        /// Safe to send unconditionally — servers that don't support or don't allow
+        /// it ignore the bit and keep sending the full channel name.
+        /// </summary>
+        public const long ChannelCompaction = 1;
+
+        /// <summary>
         /// Ask the server to reject the subscribe with error 112 when recovery from
         /// the provided position is impossible, instead of returning recovered=false.
         /// </summary>
