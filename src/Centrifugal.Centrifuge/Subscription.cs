@@ -790,6 +790,32 @@ namespace Centrifugal.Centrifuge
         /// whole registry on transport teardown, and on reconnect the server commonly
         /// assigns the same ID again — the registration must be restored.
         /// </summary>
+        // Resets cached subscription state on "state invalidated" (unsubscribe code
+        // 2502 or connection disconnect code 3014) so the resubscribe re-syncs:
+        // clears the token (and forces a fresh one via GetToken), the fossil delta
+        // base (a stale base would corrupt decoding of the first publication), and
+        // the channel-compaction ID mapping. The recovery position, when present
+        // (recoverable/positioned subscription), is reset to a sentinel epoch ("_")
+        // the server can never match — so the resubscribe reply reports
+        // WasRecovering=true, Recovered=false, letting the app reload via its
+        // existing recovery-failure path; a non-recoverable subscription has no
+        // stream position and simply resubscribes. The real epoch/offset are
+        // adopted from the subscribe reply.
+        internal void InvalidateState()
+        {
+            lock (_stateChangeLock)
+            {
+                _options.Token = string.Empty;
+                _refreshRequired = true;
+                if (_streamPosition != null)
+                {
+                    _streamPosition = new CentrifugeStreamPosition(0, "_");
+                }
+                _prevValue = null;
+                SetPushChannelId(0);
+            }
+        }
+
         private void SetPushChannelId(long id)
         {
             // Field and registry must change together under _stateChangeLock —
