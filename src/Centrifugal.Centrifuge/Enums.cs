@@ -212,6 +212,14 @@ namespace Centrifugal.Centrifuge
         /// Message size limit exceeded.
         /// </summary>
         public const int MessageSizeLimit = 3;
+
+        /// <summary>
+        /// State invalidated by the server: the connection token and/or cached
+        /// state are no longer valid. The client clears the connection token (to
+        /// force a fresh one via GetToken), invalidates all subscriptions, and
+        /// reconnects. Delivered as a WebSocket close code or a Disconnect push.
+        /// </summary>
+        public const int StateInvalidated = 3014;
     }
 
     /// <summary>
@@ -249,5 +257,13 @@ namespace Centrifugal.Centrifuge
         /// Client closed.
         /// </summary>
         public const int ClientClosed = 2;
+
+        /// <summary>
+        /// State invalidated by the server for this subscription: its token and/or
+        /// cached state are no longer valid. The client clears the subscription
+        /// token and cached state and resubscribes (this is a temporary unsubscribe
+        /// since the code is >= 2500).
+        /// </summary>
+        public const int StateInvalidated = 2502;
     }
 }

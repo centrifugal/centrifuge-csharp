@@ -2020,6 +2020,23 @@ namespace Centrifugal.Centrifuge
                 prevState = SetState(CentrifugeClientState.Connecting);
             }
 
+            if (code == CentrifugeDisconnectedCodes.StateInvalidated)
+            {
+                // State invalidated (delivered as a WebSocket close code or a Disconnect
+                // push — both funnel through here): drop the connection token so the next
+                // connect fetches a fresh one via GetToken, and invalidate every
+                // subscription's cached state before they move to subscribing below.
+                lock (_stateChangeLock)
+                {
+                    _options.Token = string.Empty;
+                    _refreshRequired = true;
+                }
+                foreach (var sub in _subscriptions.Values)
+                {
+                    sub.InvalidateState();
+                }
+            }
+
             // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
             foreach (var sub in _subscriptions.Values)
             {
@@ -2691,6 +2708,12 @@ namespace Centrifugal.Centrifuge
                 }
                 else
                 {
+                    if (unsubscribe.Code == CentrifugeUnsubscribedCodes.StateInvalidated)
+                    {
+                        // State invalidated: drop the subscription token and cached
+                        // state so the resubscribe obtains a fresh token and re-syncs.
+                        clientSub.InvalidateState();
+                    }
                     // Temporary unsubscribe - resubscribe
                     _ = clientSub.ResubscribeAsync();
                 }
