@@ -17,11 +17,15 @@ namespace Centrifugal.Centrifuge.Tests
     [Collection("Integration")]
     public class StaleReplyTests : IAsyncLifetime
     {
-        private readonly FakeCompactionServer _server = new();
+        private readonly FakeCentrifugoServer _server = new();
         private CentrifugeClient? _client;
 
         public async Task InitializeAsync()
         {
+            // Negotiate channel compaction so the post-reconnect resubscribe gets a
+            // numeric channel id (42) we can route pushes to in the assertions below.
+            _server.OnSubscribe = (channel, req) =>
+                new SubscribeResult { Id = (req.Flag & 1) != 0 ? 42 : 0 };
             await _server.StartAsync();
             _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions
             {
@@ -71,15 +75,15 @@ namespace Centrifugal.Centrifuge.Tests
             // ID 77 was not registered; ID 42 (registered by the legitimate
             // post-reconnect resubscribe) still routes. Ordered socket: when the
             // second push arrives, the first was already processed and dropped.
-            await _server.SendCompactedPubAsync(77, Encoding.UTF8.GetBytes("{\"stale\":true}"));
-            await _server.SendCompactedPubAsync(42, Encoding.UTF8.GetBytes("{\"ok\":true}"));
+            await _server.PublishIdAsync(77, Encoding.UTF8.GetBytes("{\"stale\":true}"));
+            await _server.PublishIdAsync(42, Encoding.UTF8.GetBytes("{\"ok\":true}"));
             var pub = await pubs.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal("{\"ok\":true}", Encoding.UTF8.GetString(pub.Data.Span));
             Assert.False(pubs.Reader.TryRead(out _), "stale reply must not have registered its channel ID");
 
             // The same reply stamped with the current generation applies normally.
             Assert.True(sub.HandleSubscribeReply(staleResult, _client.ConnectionGeneration));
-            await _server.SendCompactedPubAsync(77, Encoding.UTF8.GetBytes("{\"applied\":true}"));
+            await _server.PublishIdAsync(77, Encoding.UTF8.GetBytes("{\"applied\":true}"));
             pub = await pubs.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal("{\"applied\":true}", Encoding.UTF8.GetString(pub.Data.Span));
         }
