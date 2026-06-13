@@ -26,4 +26,10 @@
     <ProjectReference Include="../../src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Kestrel for the in-process fake server used by channel compaction tests
+         (HttpListener WebSockets are Windows-only). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

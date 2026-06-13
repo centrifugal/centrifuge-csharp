@@ -31,6 +31,11 @@ namespace Centrifugal.Centrifuge
         private readonly List<CentrifugeTransportEndpoint>? _transportEndpoints;
         private readonly CentrifugeClientOptions _options;
         private readonly ConcurrentDictionary<string, CentrifugeSubscription> _subscriptions = new();
+        // Channel compaction: numeric channel ID → subscription, used to route pushes
+        // that carry an ID instead of the string channel name. IDs are scoped to a
+        // server session — the registry is dropped on transport teardown and each
+        // subscription re-registers from its subscribe reply.
+        private readonly ConcurrentDictionary<long, CentrifugeSubscription> _subscriptionsByPushId = new();
         private readonly ConcurrentDictionary<string, ServerSubscription> _serverSubscriptions = new();
         private readonly ConcurrentDictionary<uint, TaskCompletionSource<Reply>> _pendingCalls = new();
         private readonly SemaphoreSlim _stateLock = new SemaphoreSlim(1, 1);
@@ -1713,14 +1718,56 @@ namespace Centrifugal.Centrifuge
             }
         }
 
+        /// <summary>
+        /// Update the channel compaction registry for a subscription: remove the old
+        /// numeric ID mapping (only if it still points to this subscription) and
+        /// register the new one. Either ID may be 0 meaning "no mapping".
+        /// </summary>
+        internal void UpdateSubscriptionPushId(CentrifugeSubscription sub, long oldId, long newId)
+        {
+            if (oldId > 0)
+            {
+                // Conditional removal: don't evict another subscription's registration
+                // after a cross-session ID collision.
+                _subscriptionsByPushId.TryRemove(new KeyValuePair<long, CentrifugeSubscription>(oldId, sub));
+            }
+            if (newId > 0)
+            {
+                _subscriptionsByPushId[newId] = sub;
+            }
+        }
+
+        /// <summary>
+        /// Resolve a client-side subscription for a push: by numeric channel ID when
+        /// channel compaction is in use (the push then has no channel name), by
+        /// channel name otherwise.
+        /// </summary>
+        private CentrifugeSubscription? ResolveSubscriptionForPush(string channel, long id)
+        {
+            if (id > 0)
+            {
+                _subscriptionsByPushId.TryGetValue(id, out var byId);
+                return byId;
+            }
+            _subscriptions.TryGetValue(channel, out var byChannel);
+            return byChannel;
+        }
+
         private void HandlePush(Push push)
         {
             if (push.Pub != null)
             {
                 // Dispatch to client-side subscription if exists
-                if (_subscriptions.TryGetValue(push.Channel, out var sub))
+                var sub = ResolveSubscriptionForPush(push.Channel, push.Id);
+                if (sub != null)
                 {
                     sub.HandlePublication(push.Pub);
+                }
+                else if (push.Id > 0)
+                {
+                    // Compacted push with an unknown ID (e.g. subscription already
+                    // unsubscribed) — drop it. Server-side subscriptions never use
+                    // compaction, so this cannot belong to one.
                 }
                 else
                 {
@@ -1748,9 +1795,14 @@ namespace Centrifugal.Centrifuge
             }
             else if (push.Join != null)
             {
-                if (_subscriptions.TryGetValue(push.Channel, out var sub))
+                var sub = ResolveSubscriptionForPush(push.Channel, push.Id);
+                if (sub != null)
                 {
                     sub.HandleJoin(push.Join);
+                }
+                else if (push.Id > 0)
+                {
+                    // Compacted push with an unknown ID — drop (see Pub branch).
                 }
                 else
                 {
@@ -1769,9 +1821,14 @@ namespace Centrifugal.Centrifuge
             }
             else if (push.Leave != null)
             {
-                if (_subscriptions.TryGetValue(push.Channel, out var sub))
+                var sub = ResolveSubscriptionForPush(push.Channel, push.Id);
+                if (sub != null)
                 {
                     sub.HandleLeave(push.Leave);
+                }
+                else if (push.Id > 0)
+                {
+                    // Compacted push with an unknown ID — drop (see Pub branch).
                 }
                 else
                 {
@@ -2052,6 +2109,9 @@ namespace Centrifugal.Centrifuge
                 _serverPingInterval = 0;
                 _sendPong = false;
                 _transportIsOpen = false;
+                // Channel compaction IDs are scoped to a server session — drop the
+                // routing registry; each resubscribe re-registers a fresh ID.
+                _subscriptionsByPushId.Clear();
                 // Atomically snapshot and clear pending calls while _transport is null.
                 // SendCommandAsync guards on (_transport != null) under this same lock, so after
                 // this block no new entries can be added — all existing ones are captured here.
@@ -2247,8 +2307,29 @@ namespace Centrifugal.Centrifuge
             var oldState = _state;
             _state = newState;
             if (oldState != newState) _epoch++;
+            // Leaving Connected ends the current connection session: replies produced
+            // by it that are still in flight through the processing pipeline must not
+            // be applied anymore (see HandleSubscribeReply generation check). SetState
+            // is always called under _stateChangeLock, before subscriptions are moved
+            // to subscribing — so a reply observing the old generation is guaranteed
+            // to have fully applied before the teardown touches subscription state.
+            if (oldState == CentrifugeClientState.Connected && newState != CentrifugeClientState.Connected)
+            {
+                Interlocked.Increment(ref _connectionGeneration);
+            }
             return oldState;
         }
+
+        /// <summary>
+        /// Identifies the current Connected session. Bumped whenever the client
+        /// leaves Connected state. Captured by the subscribe pipeline before
+        /// sending and compared when processing the reply, so a reply from a
+        /// torn-down connection can't flip a subscription to Subscribed after
+        /// the teardown already moved it to Subscribing.
+        /// </summary>
+        internal long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
+
+        private long _connectionGeneration;
 
         internal async Task HandleNoPingAsync()
         {
@@ -2717,6 +2798,7 @@ namespace Centrifugal.Centrifuge
 
             foreach (var sub in _subscriptions.Values) sub.Dispose();
             _subscriptions.Clear();
+            _subscriptionsByPushId.Clear();
 
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();
@@ -2747,6 +2829,7 @@ namespace Centrifugal.Centrifuge
 
             foreach (var sub in _subscriptions.Values) sub.Dispose();
             _subscriptions.Clear();
+            _subscriptionsByPushId.Clear();
 
             _stateLock?.Dispose();
             _reconnectCts?.Dispose();

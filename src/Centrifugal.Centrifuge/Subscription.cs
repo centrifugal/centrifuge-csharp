@@ -24,6 +24,9 @@ namespace Centrifugal.Centrifuge
         private int _resubscribeAttempts;
         private CancellationTokenSource? _resubscribeCts;
         private CentrifugeStreamPosition? _streamPosition;
+        // Numeric channel ID assigned by the server when channel compaction is
+        // negotiated. Pushes then carry this ID instead of the channel name.
+        private long _pushChannelId;
         private bool _deltaNegotiated;
         private byte[]? _prevValue;
         private Timer? _refreshTimer;
@@ -518,14 +521,21 @@ namespace Centrifugal.Centrifuge
             bool inflightClearedEarly = false;
             try
             {
-                var result = await SendSubscribeCommandAsync().ConfigureAwait(false);
+                var (result, connectionGeneration) = await SendSubscribeCommandAsync().ConfigureAwait(false);
                 // Success path: clear _inflight BEFORE HandleSubscribeReply fires the
                 // Subscribed event / resolves ReadyAsync. A user handler that calls
                 // ResubscribeAsync() in response to Subscribed must not observe a stale
                 // _inflight=true and silently no-op.
                 lock (_stateChangeLock) { _inflight = false; }
                 inflightClearedEarly = true;
-                if (result != null) HandleSubscribeReply(result);
+                if (result != null && !HandleSubscribeReply(result, connectionGeneration))
+                {
+                    // Stale reply from a connection that was torn down between the
+                    // reply arriving and being processed — discarded. The teardown's
+                    // resubscribe sweep may have already run and skipped this sub
+                    // (it was still inflight then), so schedule our own retry.
+                    await ScheduleResubscribeAsync().ConfigureAwait(false);
+                }
             }
             catch (CentrifugeTimeoutException)
             {
@@ -628,7 +638,7 @@ namespace Centrifugal.Centrifuge
             await SendSubscribeIfNeededAsync().ConfigureAwait(false);
         }
 
-        private async Task<SubscribeResult?> SendSubscribeCommandAsync()
+        private async Task<(SubscribeResult? Result, long ConnectionGeneration)> SendSubscribeCommandAsync()
         {
             // GetState: ask the app for its current state position. Only called when
             // we don't have a saved position (first subscribe or after a position reset
@@ -653,7 +663,7 @@ namespace Centrifugal.Centrifuge
                 }
                 lock (_stateChangeLock)
                 {
-                    if (_state != CentrifugeSubscriptionState.Subscribing) return null;
+                    if (_state != CentrifugeSubscriptionState.Subscribing) return (null, 0);
                     _streamPosition = position;
                 }
             }
@@ -674,14 +684,14 @@ namespace Centrifugal.Centrifuge
                     token = await _options.GetToken(Channel).ConfigureAwait(false);
                     lock (_stateChangeLock)
                     {
-                        if (_state != CentrifugeSubscriptionState.Subscribing) return null;
+                        if (_state != CentrifugeSubscriptionState.Subscribing) return (null, 0);
                         _options.Token = token;
                     }
                 }
                 catch (CentrifugeUnauthorizedException)
                 {
                     await SetUnsubscribedAsync(CentrifugeUnsubscribedCodes.Unauthorized, "unauthorized").ConfigureAwait(false);
-                    return null;
+                    return (null, 0);
                 }
             }
 
@@ -726,19 +736,31 @@ namespace Centrifugal.Centrifuge
                 request.Delta = _options.Delta;
             }
 
+            // Always offer channel compaction: when the server supports and allows it,
+            // the subscribe result carries a numeric channel ID and subsequent pushes
+            // use that ID instead of the string channel name.
+            long flag = CentrifugeSubscriptionFlags.ChannelCompaction;
             if (_options.GetState != null)
             {
                 // Ask the server to reject the subscribe with error 112 when recovery
                 // from the provided position is impossible, instead of returning
                 // recovered=false — so we can call GetState again to reload state.
-                request.Flag = CentrifugeSubscriptionFlags.RejectUnrecovered;
+                flag |= CentrifugeSubscriptionFlags.RejectUnrecovered;
             }
+            request.Flag = flag;
 
             var cmd = new Command
             {
                 Id = _client.NextCommandId(),
                 Subscribe = request
             };
+
+            // Capture the connection generation as close to the send as possible: the
+            // reply is only applied if the client is still in the same Connected
+            // session when it is processed (see HandleSubscribeReply). A teardown
+            // sneaking between this capture and the send only causes a benign
+            // discard-and-retry of an otherwise valid reply.
+            var connectionGeneration = _client.ConnectionGeneration;
 
             var reply = await _client.SendCommandAsync(cmd, CancellationToken.None).ConfigureAwait(false);
 
@@ -757,14 +779,46 @@ namespace Centrifugal.Centrifuge
                 );
             }
 
-            return reply.Subscribe;
+            return (reply.Subscribe, connectionGeneration);
         }
 
-        private void HandleSubscribeReply(SubscribeResult result)
+        /// <summary>
+        /// Update the channel compaction ID registration in the client's push
+        /// routing registry. Pass 0 to clear (no compaction / sub gone).
+        ///
+        /// Always re-registers even when the ID is unchanged: the client drops the
+        /// whole registry on transport teardown, and on reconnect the server commonly
+        /// assigns the same ID again — the registration must be restored.
+        /// </summary>
+        private void SetPushChannelId(long id)
+        {
+            // Field and registry must change together under _stateChangeLock —
+            // otherwise a concurrent clear (unsubscribe) and register (subscribe
+            // reply) can interleave so that the registry keeps an entry for an
+            // unsubscribed subscription. The registry itself is lock-free, so no
+            // lock-ordering hazard. The lock is reentrant: callers may already
+            // hold it.
+            lock (_stateChangeLock)
+            {
+                var oldId = _pushChannelId;
+                if (id == 0 && oldId == 0) return;
+                _pushChannelId = id;
+                _client.UpdateSubscriptionPushId(this, oldId, id);
+            }
+        }
+
+        /// <summary>
+        /// Applies a subscribe reply. Returns false when the reply was produced by a
+        /// connection that has been torn down since the command was sent (stale) and
+        /// was therefore discarded — the caller should schedule a resubscribe, because
+        /// the teardown's resubscribe sweep may have already run and skipped this
+        /// subscription while the reply was still inflight. Internal for tests.
+        /// </summary>
+        internal bool HandleSubscribeReply(SubscribeResult result, long connectionGeneration)
         {
             // Reply arrived after Dispose() — drop it to avoid creating a Timer/CTS that
-            // never gets cleaned up.
-            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 0, 0) != 0) return;
+            // never gets cleaned up. Nothing to retry on a disposed subscription.
+            if (System.Threading.Interlocked.CompareExchange(ref _disposed, 0, 0) != 0) return true;
 
             bool recovered = result.Recovered;
 
@@ -779,8 +833,23 @@ namespace Centrifugal.Centrifuge
                 wasRecovering = _streamPosition != null;
                 if (_state == CentrifugeSubscriptionState.Unsubscribed)
                 {
-                    // Subscription was unsubscribed during subscribe, ignore the reply
-                    return;
+                    // Subscription was unsubscribed during subscribe, ignore the reply.
+                    // No retry — unsubscribed is a deliberate terminal state here.
+                    return true;
+                }
+
+                // Stale-reply guard: the client left the Connected session this reply
+                // belongs to (transport closed / no ping / disconnect) after the reply
+                // arrived but before it was processed. Applying it would flip the
+                // subscription to Subscribed while the client is reconnecting, and the
+                // post-reconnect resubscribe sweep would then skip it — stranding the
+                // subscription without a server-side counterpart. The generation is
+                // bumped under the client's state lock before subscriptions are moved
+                // to subscribing, so observing a matching generation here guarantees
+                // the teardown has not started touching subscription state yet.
+                if (connectionGeneration != _client.ConnectionGeneration)
+                {
+                    return false;
                 }
 
                 // Server returns stream position when subscription is positioned OR
@@ -816,6 +885,14 @@ namespace Centrifugal.Centrifuge
 
                 prevState = SetState(CentrifugeSubscriptionState.Subscribed);
                 _resubscribeAttempts = 0;
+
+                // Channel compaction: register the numeric channel ID assigned by
+                // the server (0 when not negotiated — also clears a stale ID from a
+                // previous subscribe session). Must happen inside this critical
+                // section: it shares the lock with the unsubscribed-check above, so
+                // a concurrent unsubscribe either prevents the registration or runs
+                // its own clear strictly after it.
+                SetPushChannelId(result.Id);
 
                 // Capture stream position under lock so the Subscribed event sees a consistent snapshot.
                 streamPositionSnapshot = _streamPosition;
@@ -861,6 +938,8 @@ namespace Centrifugal.Centrifuge
                     }
                 }
             }
+
+            return true;
         }
 
         internal void HandlePublication(Publication pub)
@@ -988,6 +1067,9 @@ namespace Centrifugal.Centrifuge
                 // Reject ready promises
                 RejectPromises(new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed"));
             }
+
+            // Channel compaction ID is no longer valid once unsubscribed.
+            SetPushChannelId(0);
 
             // Fire events outside the lock so re-entrant SDK calls in handlers don't deadlock.
             if (prevState != CentrifugeSubscriptionState.Unsubscribed)
