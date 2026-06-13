@@ -1728,8 +1728,11 @@ namespace Centrifugal.Centrifuge
             if (oldId > 0)
             {
                 // Conditional removal: don't evict another subscription's registration
-                // after a cross-session ID collision.
-                _subscriptionsByPushId.TryRemove(new KeyValuePair<long, CentrifugeSubscription>(oldId, sub));
+                // after a cross-session ID collision. The TryRemove(KeyValuePair) overload
+                // isn't available on netstandard2.1, so go through ICollection.Remove which
+                // performs the same key+value conditional removal.
+                ((ICollection<KeyValuePair<long, CentrifugeSubscription>>)_subscriptionsByPushId)
+                    .Remove(new KeyValuePair<long, CentrifugeSubscription>(oldId, sub));
             }
             if (newId > 0)
             {
