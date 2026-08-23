@@ -93,6 +93,36 @@ namespace Centrifugal.Centrifuge.Tests
             // 100 seconds * 1000 * 0.95 = 95000ms
             Assert.Equal(95000, Utilities.TtlToMilliseconds(100));
         }
+
+        [Theory]
+        [InlineData(2592000u)]      // 30 days
+        [InlineData(3000000u)]      // ~34 days - exceeds int.MaxValue milliseconds
+        [InlineData(4294968u)]      // ~49.7 days - wraps uint milliseconds
+        [InlineData(31536000u)]     // 365 days
+        [InlineData(uint.MaxValue)]
+        public void TtlToMilliseconds_HugeTtl_ReturnsPositiveTimerSafeDelay(uint ttl)
+        {
+            var delay = Utilities.TtlToMilliseconds(ttl);
+
+            // Must stay a valid Timer due time: positive and <= int.MaxValue.
+            Assert.InRange(delay, 1, int.MaxValue);
+
+            // And must actually be usable as a Timer due time.
+            using var timer = new Timer(_ => { }, null, delay, Timeout.Infinite);
+        }
+
+        [Fact]
+        public void TtlToMilliseconds_IsMonotonic()
+        {
+            // A larger TTL must never schedule an earlier refresh.
+            uint[] ttls = { 1, 100, 86400, 2592000, 3000000, 4294968, 31536000, uint.MaxValue };
+            for (int i = 1; i < ttls.Length; i++)
+            {
+                Assert.True(
+                    Utilities.TtlToMilliseconds(ttls[i]) >= Utilities.TtlToMilliseconds(ttls[i - 1]),
+                    $"TtlToMilliseconds({ttls[i]}) < TtlToMilliseconds({ttls[i - 1]})");
+            }
+        }
     }
 
     public class VarintCodecTests

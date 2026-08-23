@@ -49,13 +49,24 @@ namespace Centrifugal.Centrifuge
         /// Converts TTL in seconds to milliseconds, accounting for clock skew.
         /// </summary>
         /// <param name="ttl">TTL in seconds.</param>
-        /// <returns>TTL in milliseconds, reduced by a small amount to account for network delays.</returns>
+        /// <returns>
+        /// TTL in milliseconds, reduced by a small amount to account for network delays,
+        /// clamped to <see cref="int.MaxValue"/> (~24.8 days).
+        /// </returns>
         public static int TtlToMilliseconds(uint ttl)
         {
             if (ttl == 0) return 0;
 
-            // Reduce by 5% to account for clock skew and network delays
-            double ms = ttl * 1000 * 0.95;
+            // Reduce by 5% to account for clock skew and network delays.
+            // Widen to double before multiplying: uint arithmetic wraps for TTLs above
+            // ~49 days (e.g. a 1 year token TTL), which would schedule the refresh far
+            // too early - a 49.7 day TTL wrapped to a ~670ms delay.
+            double ms = (double)ttl * 1000 * 0.95;
+
+            // Clamp so the result stays a valid Timer due time. Refreshing a token
+            // earlier than strictly necessary is harmless.
+            if (ms > int.MaxValue) return int.MaxValue;
+
             return (int)Math.Max(1, ms);
         }
     }
