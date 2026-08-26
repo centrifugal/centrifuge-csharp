@@ -16,6 +16,7 @@ C# client SDK for [Centrifugo](https://github.com/centrifugal/centrifugo) and [C
 - ✅ Automatic command batching for improved network efficiency
 - ✅ Automatic reconnection with exponential backoff and full jitter
 - ✅ Channel subscriptions with recovery and Fossil delta compression support
+- ✅ Server-side publication filtering based on tags
 - ✅ JWT authentication with automatic token refresh
 - ✅ Publications and RPC calls
 - ✅ Presence and presence stats, join/leave events
@@ -400,6 +401,33 @@ subscription.Subscribed += (sender, e) =>
 
 subscription.Subscribe();
 ```
+
+### Server-Side Publication Filtering
+
+Filter publications on the server side based on publication tags, so unwanted messages
+never reach the client. Build filter expressions with `CentrifugeFilterNodeBuilder`
+and pass them via `TagsFilter` (or `SetTagsFilter` to change the filter later). Cannot
+be used together with delta compression.
+
+```csharp
+var options = new CentrifugeSubscriptionOptions
+{
+    // Only deliver publications tagged with ticker=BTC and price > 50000
+    TagsFilter = CentrifugeFilterNodeBuilder.And(
+        CentrifugeFilterNodeBuilder.Eq("ticker", "BTC"),
+        CentrifugeFilterNodeBuilder.Gt("price", "50000")
+    )
+};
+
+var subscription = client.NewSubscription("prices", options);
+subscription.Subscribe();
+
+// Change the filter later - applied on the next (re)subscription attempt
+subscription.SetTagsFilter(CentrifugeFilterNodeBuilder.In("ticker", "BTC", "ETH", "SOL"));
+```
+
+Available comparisons: `Eq`, `Neq`, `In`, `Nin`, `Ex`, `Nex`, `StartsWith`, `EndsWith`,
+`Contains`, `Lt`, `Lte`, `Gt`, `Gte`, combined with `And`, `Or`, `Not`.
 
 ## Error Handling
 
