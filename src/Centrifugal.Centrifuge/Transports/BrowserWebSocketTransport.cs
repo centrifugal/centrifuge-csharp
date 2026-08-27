@@ -236,11 +236,10 @@ namespace Centrifugal.Centrifuge.Transports
 
                 // Process varint-delimited messages
                 using var ms = new MemoryStream(data);
-                byte[] tempBuffer = new byte[8192];
 
                 while (ms.Position < ms.Length)
                 {
-                    byte[]? message = VarintCodec.ReadDelimitedMessage(ms, tempBuffer, CancellationToken.None);
+                    byte[]? message = VarintCodec.ReadDelimitedMessage(ms, CancellationToken.None);
                     if (message == null) break;
 
                     // Invoke synchronously to preserve message order

@@ -256,12 +256,11 @@ namespace Centrifugal.Centrifuge.Transports
 
                     // Try to extract varint-delimited messages
                     _chunkBuffer.Position = 0;
-                    byte[] tempBuffer = new byte[8192];
 
                     while (_chunkBuffer.Position < _chunkBuffer.Length)
                     {
                         long startPos = _chunkBuffer.Position;
-                        byte[]? message = VarintCodec.ReadDelimitedMessage(_chunkBuffer, tempBuffer, CancellationToken.None);
+                        byte[]? message = VarintCodec.ReadDelimitedMessage(_chunkBuffer, CancellationToken.None);
 
                         if (message == null)
                         {

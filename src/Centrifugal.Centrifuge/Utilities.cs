@@ -80,10 +80,9 @@ namespace Centrifugal.Centrifuge
         /// Reads a varint-delimited message from a stream asynchronously.
         /// </summary>
         /// <param name="stream">The stream to read from.</param>
-        /// <param name="buffer">Buffer for reading.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The message bytes, or null if stream ended.</returns>
-        public static async Task<byte[]?> ReadDelimitedMessageAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
+        public static async Task<byte[]?> ReadDelimitedMessageAsync(Stream stream, CancellationToken cancellationToken)
         {
             // Read the varint length prefix
             int length = await ReadVarintAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -118,10 +117,9 @@ namespace Centrifugal.Centrifuge
         /// Reads a varint-delimited message from a stream.
         /// </summary>
         /// <param name="stream">The stream to read from.</param>
-        /// <param name="buffer">Buffer for reading.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The message bytes, or null if stream ended.</returns>
-        public static byte[]? ReadDelimitedMessage(Stream stream, byte[] buffer, CancellationToken cancellationToken)
+        public static byte[]? ReadDelimitedMessage(Stream stream, CancellationToken cancellationToken)
         {
             // Read the varint length prefix
             int length = ReadVarint(stream, cancellationToken);
