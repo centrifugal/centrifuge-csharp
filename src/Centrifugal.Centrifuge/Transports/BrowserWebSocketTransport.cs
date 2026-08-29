@@ -273,8 +273,6 @@ namespace Centrifugal.Centrifuge.Transports
         public void OnClose(object? codeObj, object? reasonObj)
         {
             if (System.Threading.Interlocked.CompareExchange(ref _cleanupStarted, 0, 0) != 0) return;
-            // Log directly via JavaScript to ensure it shows up
-            _ = _jsRuntime.InvokeVoidAsync("console.log", "[C#] OnClose called with codeObj:", codeObj, "reasonObj:", reasonObj);
 
             _logger?.LogDebug($"OnClose START - codeObj type: {codeObj?.GetType()?.Name ?? "null"}, value: {codeObj}, reasonObj type: {reasonObj?.GetType()?.Name ?? "null"}, value: '{reasonObj}'");
 
@@ -298,8 +296,6 @@ namespace Centrifugal.Centrifuge.Transports
             _isOpen = false;
             var args = new TransportClosedEventArgs(code, reason);
             _logger?.LogDebug($"OnClose - created args with Code: {args.Code}, Reason: '{args.Reason}'");
-
-            _ = _jsRuntime.InvokeVoidAsync("console.log", "[C#] Firing Closed event with Code:", args.Code, "Reason:", args.Reason);
 
             Closed?.Invoke(this, args);
             _ = CleanupAsync();
