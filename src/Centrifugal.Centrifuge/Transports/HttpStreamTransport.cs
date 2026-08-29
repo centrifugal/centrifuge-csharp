@@ -221,11 +221,10 @@ namespace Centrifugal.Centrifuge.Transports
                 Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                byte[] tempBuffer = new byte[8192];
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, tempBuffer, cancellationToken).ConfigureAwait(false);
+                    byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, cancellationToken).ConfigureAwait(false);
                     if (message == null) break;
                     MessageReceived?.Invoke(this, message);
                 }

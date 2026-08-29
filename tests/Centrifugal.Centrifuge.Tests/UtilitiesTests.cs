@@ -136,8 +136,7 @@ namespace Centrifugal.Centrifuge.Tests
             VarintCodec.WriteDelimitedMessage(stream, original);
 
             stream.Position = 0;
-            var buffer = new byte[256];
-            var result = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
+            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
 
             Assert.NotNull(result);
             Assert.Equal(original, result);
@@ -152,8 +151,7 @@ namespace Centrifugal.Centrifuge.Tests
             VarintCodec.WriteDelimitedMessage(stream, original);
 
             stream.Position = 0;
-            var buffer = new byte[256];
-            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, buffer, CancellationToken.None);
+            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, CancellationToken.None);
 
             Assert.NotNull(result);
             Assert.Equal(original, result);
@@ -168,8 +166,7 @@ namespace Centrifugal.Centrifuge.Tests
             VarintCodec.WriteDelimitedMessage(stream, original);
 
             stream.Position = 0;
-            var buffer = new byte[256];
-            var result = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
+            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
 
             Assert.NotNull(result);
             Assert.Empty(result);
@@ -185,8 +182,7 @@ namespace Centrifugal.Centrifuge.Tests
             VarintCodec.WriteDelimitedMessage(stream, original);
 
             stream.Position = 0;
-            var buffer = new byte[256];
-            var result = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
+            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
 
             Assert.NotNull(result);
             Assert.Equal(original, result);
@@ -196,9 +192,7 @@ namespace Centrifugal.Centrifuge.Tests
         public void ReadDelimitedMessage_EmptyStream_ReturnsNull()
         {
             var stream = new MemoryStream();
-            var buffer = new byte[256];
-
-            var result = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
+            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
 
             Assert.Null(result);
         }
@@ -207,9 +201,7 @@ namespace Centrifugal.Centrifuge.Tests
         public async Task ReadDelimitedMessageAsync_EmptyStream_ReturnsNull()
         {
             var stream = new MemoryStream();
-            var buffer = new byte[256];
-
-            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, buffer, CancellationToken.None);
+            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, CancellationToken.None);
 
             Assert.Null(result);
         }
@@ -227,12 +219,11 @@ namespace Centrifugal.Centrifuge.Tests
             VarintCodec.WriteDelimitedMessage(stream, msg3);
 
             stream.Position = 0;
-            var buffer = new byte[256];
 
-            var result1 = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
-            var result2 = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
-            var result3 = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
-            var result4 = VarintCodec.ReadDelimitedMessage(stream, buffer, CancellationToken.None);
+            var result1 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
+            var result2 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
+            var result3 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
+            var result4 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
 
             Assert.Equal(msg1, result1);
             Assert.Equal(msg2, result2);
@@ -250,9 +241,73 @@ namespace Centrifugal.Centrifuge.Tests
             // Truncate: keep varint prefix + only 5 bytes of data
             var truncated = new MemoryStream(bytes, 0, 7);
 
-            var buffer = new byte[256];
             Assert.Throws<IOException>(() =>
-                VarintCodec.ReadDelimitedMessage(truncated, buffer, CancellationToken.None));
+                VarintCodec.ReadDelimitedMessage(truncated, CancellationToken.None));
+        }
+
+        [Fact]
+        public void ReadDelimitedMessage_DoesNotAllocateDeadTempBuffer()
+        {
+            // Regression test: ReadDelimitedMessage used to take a `buffer` parameter
+            // that every call site allocated fresh (8192 bytes) but the method never
+            // read from or wrote to it. Guard that per-call allocations stay well
+            // under that old dead-buffer size.
+            var message = Encoding.UTF8.GetBytes("regression-test-message-payload");
+            var stream = new MemoryStream();
+            VarintCodec.WriteDelimitedMessage(stream, message);
+            var bytes = stream.ToArray();
+
+            // Warm up JIT before measuring.
+            for (int i = 0; i < 50; i++)
+            {
+                using var warm = new MemoryStream(bytes);
+                VarintCodec.ReadDelimitedMessage(warm, CancellationToken.None);
+            }
+
+            const int iterations = 1000;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < iterations; i++)
+            {
+                using var ms = new MemoryStream(bytes);
+                VarintCodec.ReadDelimitedMessage(ms, CancellationToken.None);
+            }
+            long after = GC.GetAllocatedBytesForCurrentThread();
+
+            double perCallBytes = (after - before) / (double)iterations;
+
+            Assert.True(
+                perCallBytes < 4096,
+                $"Expected per-call allocation well under the old 8KB dead buffer, but was {perCallBytes} bytes.");
+        }
+
+        [Fact]
+        public async Task ReadDelimitedMessageAsync_DoesNotAllocateDeadTempBuffer()
+        {
+            var message = Encoding.UTF8.GetBytes("regression-test-message-payload");
+            var stream = new MemoryStream();
+            VarintCodec.WriteDelimitedMessage(stream, message);
+            var bytes = stream.ToArray();
+
+            for (int i = 0; i < 50; i++)
+            {
+                using var warm = new MemoryStream(bytes);
+                await VarintCodec.ReadDelimitedMessageAsync(warm, CancellationToken.None);
+            }
+
+            const int iterations = 1000;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < iterations; i++)
+            {
+                using var ms = new MemoryStream(bytes);
+                await VarintCodec.ReadDelimitedMessageAsync(ms, CancellationToken.None);
+            }
+            long after = GC.GetAllocatedBytesForCurrentThread();
+
+            double perCallBytes = (after - before) / (double)iterations;
+
+            Assert.True(
+                perCallBytes < 4096,
+                $"Expected per-call allocation well under the old 8KB dead buffer, but was {perCallBytes} bytes.");
         }
     }
 
