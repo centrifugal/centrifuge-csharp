@@ -2045,14 +2045,17 @@ namespace Centrifugal.Centrifuge
                 // match, mirroring InvalidateState()'s handling of client-side subs.
                 foreach (var channel in _serverSubscriptions.Keys)
                 {
-                    if (_serverSubscriptions.TryGetValue(channel, out var existing))
+                    lock (_stateChangeLock)
                     {
-                        _serverSubscriptions[channel] = new ServerSubscription
+                        if (_serverSubscriptions.TryGetValue(channel, out var existing))
                         {
-                            Offset = 0,
-                            Epoch = "_",
-                            Recoverable = existing.Recoverable
-                        };
+                            _serverSubscriptions[channel] = new ServerSubscription
+                            {
+                                Offset = 0,
+                                Epoch = "_",
+                                Recoverable = existing.Recoverable
+                            };
+                        }
                     }
                 }
             }
