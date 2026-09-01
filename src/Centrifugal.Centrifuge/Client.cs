@@ -2035,6 +2035,26 @@ namespace Centrifugal.Centrifuge
                 {
                     sub.InvalidateState();
                 }
+
+                // Server-side subscriptions aren't Subscription objects and so don't go
+                // through InvalidateState() above — reset their cached recovery position
+                // here too, or the reconnect's Connect request would keep requesting
+                // recovery from the now-stale pre-invalidation offset/epoch, defeating
+                // the point of state invalidation. Recoverable is left untouched, only
+                // the position is reset to the sentinel epoch "_" the server can never
+                // match, mirroring InvalidateState()'s handling of client-side subs.
+                foreach (var channel in _serverSubscriptions.Keys)
+                {
+                    if (_serverSubscriptions.TryGetValue(channel, out var existing))
+                    {
+                        _serverSubscriptions[channel] = new ServerSubscription
+                        {
+                            Offset = 0,
+                            Epoch = "_",
+                            Recoverable = existing.Recoverable
+                        };
+                    }
+                }
             }
 
             // Move all subscribed subscriptions to subscribing state BEFORE emitting connecting event
