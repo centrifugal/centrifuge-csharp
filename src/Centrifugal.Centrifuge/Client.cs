@@ -2589,14 +2589,13 @@ namespace Centrifugal.Centrifuge
 
         private void ProcessServerSubscriptions(Google.Protobuf.Collections.MapField<string, SubscribeResult> subs)
         {
-            if (subs == null || subs.Count == 0)
-            {
-                return;
-            }
-
             var subsToKeep = new HashSet<string>();
 
-            // Process new/updated subscriptions
+            // Process new/updated subscriptions. An empty map is NOT an early exit: it
+            // means the connection no longer carries any server-side subscription, so
+            // every previously known one must still be dropped by the cleanup loop
+            // below — otherwise ServerUnsubscribed is never raised for it and the next
+            // connect command keeps asking to recover a channel we're not in anymore.
             foreach (var kvp in subs)
             {
                 var channel = kvp.Key;
