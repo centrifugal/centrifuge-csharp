@@ -115,6 +115,73 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal("e1", recover.Epoch);
         }
 
+        [Fact]
+        public async Task ServerSubscribingRaisedAgainOnReconnect()
+        {
+            // A server-side subscription has no Subscription object, so ServerSubscribing
+            // is the only signal that it went down. Losing the connection must raise it
+            // for every channel in the registry — otherwise the app sees ServerSubscribed
+            // twice in a row across a reconnect with nothing in between.
+            _server.ConnectResult = new ConnectResult
+            {
+                Client = "fake-client",
+                Version = "0.0.0",
+                Ping = 25,
+                Subs = { ["srv"] = new SubscribeResult { Recoverable = true, Epoch = "e1", Offset = 7 } }
+            };
+
+            var subscribing = NewChannel<CentrifugeServerSubscribingEventArgs>();
+            var subscribed = NewChannel<CentrifugeServerSubscribedEventArgs>();
+
+            _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions());
+            _client.ServerSubscribing += (_, e) => subscribing.Writer.TryWrite(e);
+            _client.ServerSubscribed += (_, e) => subscribed.Writer.TryWrite(e);
+            _client.Connect();
+            await _client.ReadyAsync();
+
+            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+            Assert.Equal("srv", (await ReadAsync(subscribed)).Channel);
+
+            _server.CloseConnection();
+
+            // subscribing on connection loss, then subscribed again once reconnected.
+            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+            Assert.Equal("srv", (await ReadAsync(subscribed)).Channel);
+        }
+
+        [Fact]
+        public async Task ServerSubscribingRaisedOnExplicitDisconnect()
+        {
+            // Same signal on an explicit Disconnect(): the registry survives, so the app
+            // must learn the subscription is no longer live.
+            _server.ConnectResult = new ConnectResult
+            {
+                Client = "fake-client",
+                Version = "0.0.0",
+                Ping = 25,
+                Subs = { ["srv"] = new SubscribeResult() }
+            };
+
+            var subscribing = NewChannel<CentrifugeServerSubscribingEventArgs>();
+            var subscribed = NewChannel<CentrifugeServerSubscribedEventArgs>();
+
+            _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions());
+            _client.ServerSubscribing += (_, e) => subscribing.Writer.TryWrite(e);
+            _client.ServerSubscribed += (_, e) => subscribed.Writer.TryWrite(e);
+            _client.Connect();
+            await _client.ReadyAsync();
+
+            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+            Assert.Equal("srv", (await ReadAsync(subscribed)).Channel);
+
+            _client.Disconnect();
+
+            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+        }
+
+        private static Task<T> ReadAsync<T>(System.Threading.Channels.Channel<T> channel) =>
+            channel.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
         private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
         {
             var deadline = DateTime.UtcNow + timeout;

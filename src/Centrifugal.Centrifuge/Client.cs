@@ -235,7 +235,10 @@ namespace Centrifugal.Centrifuge
         public event EventHandler<CentrifugeLeaveEventArgs>? Leave;
 
         /// <summary>
-        /// Event raised when server-side subscription is subscribing.
+        /// Event raised when server-side subscription is subscribing: once for a channel
+        /// the server announces for the first time, and again for every channel in the
+        /// registry whenever a connected session is lost (transport closed, no ping, or
+        /// an explicit <see cref="Disconnect"/>).
         /// </summary>
         /// <remarks>
         /// Keep handlers fast. Don't block on SDK async methods (will deadlock). Use <c>async void</c> with <c>await</c> for I/O.
@@ -2065,6 +2068,7 @@ namespace Centrifugal.Centrifuge
             {
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
             }
+            if (prevState == CentrifugeClientState.Connected) MoveServerSubscriptionsToSubscribing();
 
             if (prevState != CentrifugeClientState.Connecting)
                 StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
@@ -2101,6 +2105,7 @@ namespace Centrifugal.Centrifuge
             {
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
             }
+            if (prevState == CentrifugeClientState.Connected) MoveServerSubscriptionsToSubscribing();
 
             if (prevState != CentrifugeClientState.Connecting)
                 StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
@@ -2125,6 +2130,7 @@ namespace Centrifugal.Centrifuge
             {
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
             }
+            if (prevState == CentrifugeClientState.Connected) MoveServerSubscriptionsToSubscribing();
 
             if (prevState != CentrifugeClientState.Connecting)
                 StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
@@ -2301,6 +2307,7 @@ namespace Centrifugal.Centrifuge
                 {
                     sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
                 }
+                if (prevState == CentrifugeClientState.Connected) MoveServerSubscriptionsToSubscribing();
             }
 
             // Now do async cleanup without holding locks
@@ -2386,6 +2393,7 @@ namespace Centrifugal.Centrifuge
 
             foreach (var sub in _subscriptions.Values)
                 sub.MoveToSubscribing(CentrifugeSubscribingCodes.TransportClosed, "transport closed");
+            if (prevState == CentrifugeClientState.Connected) MoveServerSubscriptionsToSubscribing();
 
             if (prevState != CentrifugeClientState.Connecting)
                 StateChanged?.Invoke(this, new CentrifugeStateEventArgs(prevState, CentrifugeClientState.Connecting));
@@ -2586,6 +2594,27 @@ namespace Centrifugal.Centrifuge
             }
         }
 
+
+        /// <summary>
+        /// Raises ServerSubscribing for every server-side subscription currently in the
+        /// registry. Called when a Connected session ends (transport closed, no ping,
+        /// explicit disconnect).
+        /// <para>
+        /// Server-side subscriptions have no Subscription object of their own, so this is
+        /// the only signal an application gets that they went down and will be
+        /// re-established — or dropped — on the next connect. Without it the app observes
+        /// ServerSubscribed twice in a row across a reconnect with nothing in between.
+        /// Matches centrifuge-js, which emits `subscribing` for every entry of its server
+        /// subscription registry from _clearConnectedState().
+        /// </para>
+        /// </summary>
+        private void MoveServerSubscriptionsToSubscribing()
+        {
+            foreach (var channel in _serverSubscriptions.Keys)
+            {
+                ServerSubscribing?.Invoke(this, new CentrifugeServerSubscribingEventArgs(channel));
+            }
+        }
 
         private void ProcessServerSubscriptions(Google.Protobuf.Collections.MapField<string, SubscribeResult> subs)
         {
