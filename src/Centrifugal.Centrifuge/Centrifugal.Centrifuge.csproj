@@ -37,7 +37,7 @@
     <!-- Required for Blazor static assets -->
     <StaticWebAssetBasePath>_content/Centrifugal.Centrifuge</StaticWebAssetBasePath>
 
-    <!-- Enable SourceLink for debugging -->
+    <!-- SourceLink is built into the .NET SDK (8.0.100+), no package reference needed -->
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
@@ -63,9 +63,6 @@
     <!-- JSInterop for Blazor WASM support (not needed for netstandard2.1/Unity) -->
     <PackageReference Include="Microsoft.JSInterop" Version="6.0.0"
                       Condition="'$(TargetFramework)' != 'netstandard2.1'" />
-
-    <!-- Source link for better debugging experience -->
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
