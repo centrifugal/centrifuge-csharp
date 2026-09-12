@@ -1123,6 +1123,16 @@ namespace Centrifugal.Centrifuge
                     ClearRefreshTimer();
                 }
 
+                // Only tell the server when there is a live session to tell. Without an
+                // open transport the subscription has no server-side counterpart, so the
+                // command is pointless — and while the client is still connecting it
+                // would sit in the command batch until the connect completes. If that
+                // takes longer than the per-command timeout the send fails, and that
+                // failure is treated as an unsubscribe error that forces a needless
+                // reconnect. Matches centrifuge-js (_unsubscribe returns early when the
+                // transport is not open).
+                if (!_client.TransportIsOpen) return;
+
                 try
                 {
                     var cmd = new Command

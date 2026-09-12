@@ -66,6 +66,12 @@ namespace Centrifugal.Centrifuge.Tests
         /// <summary>Customize the subscribe result per channel (default: empty result).</summary>
         public Func<string, SubscribeRequest, SubscribeResult>? OnSubscribe { get; set; }
 
+        /// <summary>
+        /// Awaited before the WebSocket handshake is accepted. Lets a test hold the
+        /// client in the transport-opening phase (transport created, not yet open).
+        /// </summary>
+        public Func<Task>? BeforeAccept { get; set; }
+
         public string Url { get; private set; } = "";
 
         /// <summary>A copy of all commands received from the client, in order.</summary>
@@ -101,6 +107,8 @@ namespace Centrifugal.Centrifuge.Tests
                     context.Response.StatusCode = 400;
                     return;
                 }
+                var beforeAccept = BeforeAccept;
+                if (beforeAccept != null) await beforeAccept();
                 var ws = await context.WebSockets.AcceptWebSocketAsync("centrifuge-protobuf");
                 lock (_lock)
                 {
