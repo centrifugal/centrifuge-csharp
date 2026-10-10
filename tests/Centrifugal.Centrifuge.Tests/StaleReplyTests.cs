@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Centrifugal.Centrifuge;
@@ -8,11 +9,9 @@ using Xunit;
 namespace Centrifugal.Centrifuge.Tests
 {
     /// <summary>
-    /// Tests for the stale subscribe reply guard: a reply produced by a connection
-    /// that was torn down between the reply arriving and being processed must be
-    /// discarded, otherwise it would flip the subscription to Subscribed while the
-    /// client reconnects — and the post-reconnect resubscribe sweep would skip it,
-    /// stranding the subscription without a server-side counterpart.
+    /// A subscribe reply of a connection that was torn down must not apply: it would make the subscription
+    /// subscribed with the state of a server-side subscription that is gone, while the resubscribe of the new
+    /// connection is skipped.
     /// </summary>
     [Collection("Integration")]
     public class StaleReplyTests : IAsyncLifetime
@@ -22,10 +21,6 @@ namespace Centrifugal.Centrifuge.Tests
 
         public async Task InitializeAsync()
         {
-            // Negotiate channel compaction so the post-reconnect resubscribe gets a
-            // numeric channel id (42) we can route pushes to in the assertions below.
-            _server.OnSubscribe = (channel, req) =>
-                new SubscribeResult { Id = (req.Flag & 1) != 0 ? 42 : 0 };
             await _server.StartAsync();
             _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions
             {
@@ -41,10 +36,15 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Fact]
-        public async Task ConnectionGenerationBumpedOnTeardownAndStaleReplyDiscarded()
+        public async Task SubscribeReplyOfTornDownConnectionIsDiscarded()
         {
             var subscribedEvents = System.Threading.Channels.Channel.CreateUnbounded<CentrifugeSubscribedEventArgs>();
             var pubs = System.Threading.Channels.Channel.CreateUnbounded<CentrifugePublicationEventArgs>();
+
+            // The first subscribe is held unanswered; later ones get channel id 42.
+            var held = new TaskCompletionSource<Command>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _server.OnCommand = cmd => cmd.Subscribe != null && held.TrySetResult(cmd) ? FakeCentrifugoServer.NoReply : null;
+            _server.OnSubscribe = (channel, req) => new SubscribeResult { Id = (req.Flag & 1) != 0 ? 42 : 0 };
 
             _client!.Connect();
             await _client.ReadyAsync();
@@ -53,39 +53,23 @@ namespace Centrifugal.Centrifuge.Tests
             sub.Subscribed += (_, e) => subscribedEvents.Writer.TryWrite(e);
             sub.Publication += (_, e) => pubs.Writer.TryWrite(e);
             sub.Subscribe();
+            var first = await held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // The connection ends with the subscribe in flight; the next one subscribes again.
+            NoPing.Fire(_client);
             await subscribedEvents.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(2, _server.Received.Count(c => c.Subscribe != null));
 
-            var generationBeforeTeardown = _client.ConnectionGeneration;
-
-            // Real teardown: leaves Connected → generation must be bumped. The client
-            // then reconnects and the subscription resubscribes automatically.
-            await _client.HandleNoPingAsync();
-            await subscribedEvents.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
-
-            Assert.True(_client.ConnectionGeneration > generationBeforeTeardown,
-                "leaving Connected must bump the connection generation");
-
-            // Mechanism check: a reply stamped with the pre-teardown generation is
-            // discarded — it must not apply any state (the compaction ID registry
-            // gives an observable side effect to assert on).
-            var staleResult = new SubscribeResult { Id = 77 };
-            Assert.False(sub.HandleSubscribeReply(staleResult, generationBeforeTeardown),
-                "reply from a torn-down connection must be discarded");
-
-            // ID 77 was not registered; ID 42 (registered by the legitimate
-            // post-reconnect resubscribe) still routes. Ordered socket: when the
-            // second push arrives, the first was already processed and dropped.
+            // The reply to the first subscribe, delivered late: no call waits for it any more.
+            await _server.SendReplyAsync(new Reply { Id = first.Id, Subscribe = new SubscribeResult { Id = 77 } });
             await _server.PublishIdAsync(77, Encoding.UTF8.GetBytes("{\"stale\":true}"));
             await _server.PublishIdAsync(42, Encoding.UTF8.GetBytes("{\"ok\":true}"));
+
             var pub = await pubs.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal("{\"ok\":true}", Encoding.UTF8.GetString(pub.Data.Span));
-            Assert.False(pubs.Reader.TryRead(out _), "stale reply must not have registered its channel ID");
-
-            // The same reply stamped with the current generation applies normally.
-            Assert.True(sub.HandleSubscribeReply(staleResult, _client.ConnectionGeneration));
-            await _server.PublishIdAsync(77, Encoding.UTF8.GetBytes("{\"applied\":true}"));
-            pub = await pubs.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Equal("{\"applied\":true}", Encoding.UTF8.GetString(pub.Data.Span));
+            Assert.False(pubs.Reader.TryRead(out _), "the stale reply registered its channel id");
+            Assert.False(subscribedEvents.Reader.TryRead(out _), "the stale reply raised Subscribed");
+            Assert.Equal(CentrifugeSubscriptionState.Subscribed, sub.State);
         }
     }
 }

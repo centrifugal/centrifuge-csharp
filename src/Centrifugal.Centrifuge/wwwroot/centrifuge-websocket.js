@@ -3,7 +3,6 @@
 
 window.CentrifugeWebSocket = {
     sockets: {},
-    nextId: 1,
 
     debugLog: function(debug, ...args) {
         if (debug) {
@@ -12,15 +11,15 @@ window.CentrifugeWebSocket = {
     },
 
     /**
-     * Creates and opens a WebSocket connection
+     * Creates and opens a WebSocket connection. The ID comes from the caller, which can close
+     * the socket with it before this call has returned
+     * @param {number} id - Socket ID, unique across sockets
      * @param {string} url - WebSocket URL
      * @param {string} protocol - WebSocket subprotocol (e.g., "centrifuge-protobuf")
      * @param {object} dotnetRef - .NET object reference for callbacks
      * @param {boolean} debug - Enable debug logging
-     * @returns {number} Socket ID
      */
-    connect: function (url, protocol, dotnetRef, debug) {
-        const id = this.nextId++;
+    connect: function (id, url, protocol, dotnetRef, debug) {
         const self = this;
         self.debugLog(debug, '[CentrifugeWebSocket] Connecting to:', url, 'with protocol:', protocol, 'id:', id);
 
@@ -68,7 +67,6 @@ window.CentrifugeWebSocket = {
 
             this.sockets[id] = socketInfo;
             self.debugLog(debug, '[CentrifugeWebSocket] Socket registered with id:', id, 'current readyState:', socket.readyState);
-            return id;
         } catch (error) {
             console.error('[CentrifugeWebSocket] connect error:', error);
             throw error;

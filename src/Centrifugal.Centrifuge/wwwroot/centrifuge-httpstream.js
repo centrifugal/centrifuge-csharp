@@ -3,7 +3,6 @@
 
 window.CentrifugeHttpStream = {
     streams: {},
-    nextId: 1,
 
     debugLog: function(debug, ...args) {
         if (debug) {
@@ -12,74 +11,72 @@ window.CentrifugeHttpStream = {
     },
 
     /**
-     * Creates and opens an HTTP streaming connection using Fetch API
+     * Registers an HTTP streaming connection under an ID chosen by the caller, then starts opening
+     * it with Fetch API. The caller can close the stream with that ID before this call has returned
+     * and while the request still awaits its response. The result arrives via OnOpen or OnError.
+     * @param {number} id - Stream ID, unique across streams
      * @param {string} url - HTTP endpoint URL
      * @param {number[]} initialData - Initial data to send (connect command)
      * @param {object} dotnetRef - .NET object reference for callbacks
      * @param {boolean} debug - Enable debug logging
-     * @returns {number} Stream ID
      */
-    connect: async function (url, initialData, dotnetRef, debug) {
-        const id = this.nextId++;
-        const self = this;
-        self.debugLog(debug, '[CentrifugeHttpStream] Connecting to:', url, 'with stream ID:', id);
-        const abortController = new AbortController();
+    connect: function (id, url, initialData, dotnetRef, debug) {
+        this.debugLog(debug, '[CentrifugeHttpStream] Connecting to:', url, 'with stream ID:', id);
+        this.streams[id] = {
+            reader: null,
+            abortController: new AbortController(),
+            dotnetRef: dotnetRef,
+            id: id,
+            reading: false,
+            debug: debug
+        };
+        this.open(id, url, initialData);
+    },
 
+    /**
+     * Sends the open request for a registered stream and reports how it went. If the stream is
+     * closed (which aborts the request) or disposed first, nothing is reported.
+     * @param {number} id - Stream ID
+     * @param {string} url - HTTP endpoint URL
+     * @param {number[]} initialData - Initial data to send (connect command)
+     */
+    open: async function (id, url, initialData) {
+        const streamInfo = this.streams[id];
+        const debug = streamInfo.debug;
         try {
-            // Convert byte array to Uint8Array
-            const bodyData = new Uint8Array(initialData);
-            self.debugLog(debug, '[CentrifugeHttpStream] Sending POST request, body size:', bodyData.length);
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/octet-stream',
                     'Content-Type': 'application/octet-stream'
                 },
-                body: bodyData,
-                signal: abortController.signal,
+                body: new Uint8Array(initialData),
+                signal: streamInfo.abortController.signal,
                 mode: 'cors',
                 credentials: 'same-origin'
             });
 
-            self.debugLog(debug, '[CentrifugeHttpStream] Response received for stream', id, '- status:', response.status);
+            this.debugLog(debug, '[CentrifugeHttpStream] Response received for stream', id, '- status:', response.status);
+            if (!streamInfo.dotnetRef) return;
 
             if (!response.ok) {
-                const statusCode = response.status;
-                if (debug) console.error('[CentrifugeHttpStream] HTTP error for stream', id, ':', statusCode);
-                dotnetRef.invokeMethodAsync('OnError', statusCode, `HTTP error ${statusCode}`);
-                return id;
+                if (debug) console.error('[CentrifugeHttpStream] HTTP error for stream', id, ':', response.status);
+                streamInfo.dotnetRef.invokeMethodAsync('OnError', response.status, `HTTP error ${response.status}`);
+                return;
             }
 
-            const streamInfo = {
-                reader: response.body.getReader(),
-                abortController: abortController,
-                dotnetRef: dotnetRef,
-                id: id,
-                reading: false,
-                debug: debug
-            };
-
-            this.streams[id] = streamInfo;
-            self.debugLog(debug, '[CentrifugeHttpStream] Stream registered with id:', id);
-
-            // Notify connection opened
-            self.debugLog(debug, '[CentrifugeHttpStream] Stream opened, id:', id);
-            dotnetRef.invokeMethodAsync('OnOpen');
-
-            // Start reading loop
+            streamInfo.reader = response.body.getReader();
+            streamInfo.dotnetRef.invokeMethodAsync('OnOpen');
             this.readLoop(id);
-
-            return id;
         } catch (error) {
+            if (error.name === 'AbortError' || !streamInfo.dotnetRef) return;
             if (debug) console.error('[CentrifugeHttpStream] connect error for stream', id, ':', error);
-            dotnetRef.invokeMethodAsync('OnError', 0, error.message || 'Connection failed');
-            return id;
+            streamInfo.dotnetRef.invokeMethodAsync('OnError', 0, error.message || 'Connection failed');
         }
     },
 
     /**
-     * Reading loop that processes incoming chunks
+     * Reading loop that processes incoming chunks. Stops reporting once the stream is disposed.
      * @param {number} id - Stream ID
      */
     readLoop: async function (id) {
@@ -90,11 +87,10 @@ window.CentrifugeHttpStream = {
 
         streamInfo.reading = true;
         const reader = streamInfo.reader;
-        const dotnetRef = streamInfo.dotnetRef;
+        const debug = streamInfo.debug || false;
         const self = this;
 
         try {
-            const debug = streamInfo.debug || false;
             self.debugLog(debug, '[CentrifugeHttpStream] Starting read loop for stream', id);
             while (true) {
                 const { done, value } = await reader.read();
@@ -102,48 +98,54 @@ window.CentrifugeHttpStream = {
                 if (done) {
                     // Stream completed normally
                     self.debugLog(debug, '[CentrifugeHttpStream] Stream', id, 'completed normally');
-                    dotnetRef.invokeMethodAsync('OnClose', 0, 'stream closed');
+                    streamInfo.dotnetRef?.invokeMethodAsync('OnClose', 0, 'stream closed');
                     // Note: Don't delete from streams here - let dispose() clean up
                     break;
                 }
 
                 // Pass Uint8Array directly - Blazor marshals it to byte[]
-                dotnetRef.invokeMethodAsync('OnChunk', value);
+                streamInfo.dotnetRef?.invokeMethodAsync('OnChunk', value);
             }
         } catch (error) {
             self.debugLog(debug, '[CentrifugeHttpStream] Read loop error for stream', id, ':', error.name, error.message);
             if (error.name !== 'AbortError') {
                 // Only report non-abort errors
-                dotnetRef.invokeMethodAsync('OnError', 0, error.message || 'Stream read error');
+                streamInfo.dotnetRef?.invokeMethodAsync('OnError', 0, error.message || 'Stream read error');
             }
-            dotnetRef.invokeMethodAsync('OnClose', 0, error.message || 'connection closed');
+            streamInfo.dotnetRef?.invokeMethodAsync('OnClose', 0, error.message || 'connection closed');
             // Note: Don't delete from streams here - let dispose() clean up
         }
     },
 
     /**
-     * Sends data through emulation endpoint
+     * Sends data through emulation endpoint. The request shares its stream's abort signal, so
+     * closing the stream aborts it and no request outlives its session.
+     * @param {number} id - Stream ID
      * @param {string} url - Emulation endpoint URL
-     * @param {string} sessionId - Session ID
-     * @param {string} node - Node ID
-     * @param {number[]} data - Byte array to send
+     * @param {number[]} data - Encoded emulation request (session, node and commands)
+     * @returns {Promise<number>} HTTP status of the response; rejects if there was none (network error or abort)
      */
-    sendEmulation: async function (url, sessionId, node, data) {
+    sendEmulation: async function (id, url, data) {
+        const signal = this.streams[id]?.abortController?.signal;
+        if (!signal) {
+            throw new Error('stream closed');
+        }
         try {
-            // Convert byte array to Uint8Array
-            const bodyData = new Uint8Array(data);
-
-            await fetch(url, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/octet-stream'
                 },
-                body: bodyData,
+                body: new Uint8Array(data),
+                signal: signal,
                 mode: 'cors',
                 credentials: 'same-origin'
             });
+            return response.status;
         } catch (error) {
-            console.error('CentrifugeHttpStream.sendEmulation error:', error);
+            if (error.name !== 'AbortError') {
+                console.error('CentrifugeHttpStream.sendEmulation error:', error);
+            }
             throw error;
         }
     },

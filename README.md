@@ -115,7 +115,11 @@ var result = await client.RpcAsync("method", data);
 
 ### ⚠️ Important: Use Async Event Handlers
 
-The SDK invokes event handlers **synchronously** on the transport's receive thread to preserve message ordering. For best performance and responsiveness, keep callbacks fast or use `async void` event handlers:
+The state of a client and its subscriptions changes on one **event loop** per client: an application call, a frame received from the server, a timer or the result of a callback (`GetToken`, `GetState`) is one step, and steps run one at a time, in order. Event handlers run **synchronously** inside the step that raises them, so your application observes events in the order things happened: `Connected` (with the server-side subscription events and recovered publications it carries) and a subscription's `Subscribed` (followed by its recovered publications) are raised before any publication received after the corresponding reply, and a handler never runs concurrently with another handler of the same client.
+
+The loop isn't a dedicated thread: a step runs on the thread that brings it (your thread for a call, a transport's or the thread pool's otherwise) when the loop is idle, or right after the step in progress. The SDK never blocks your thread waiting for the loop: a call made from another thread while a handler runs takes effect after that handler returns.
+
+A call into the SDK from a handler (e.g. `sub.Unsubscribe()`, `client.Disconnect()`) takes effect at once, before it returns — as in centrifuge-js. For best performance and responsiveness, keep callbacks fast or use `async void` event handlers:
 
 ```csharp
 client.Connected += async (sender, e) =>
@@ -138,25 +142,30 @@ client.Connected += (sender, e) =>
 };
 ```
 
-**Why does this deadlock?**
+**Why does this deadlock?** The handler runs inside a step of the client's loop. `PublishAsync()` completes when its reply is processed — by a later step of the same loop, which can't run while your handler blocks it.
 
-Event handlers run on the receive thread. When you block waiting for `PublishAsync()` to complete:
+While a handler runs, the client processes nothing else: no replies, no pings, no publications of other subscriptions, no timers. So any synchronous wait in a handler for something that needs the client deadlocks or stalls it — including marshalling synchronously (`Dispatcher.Invoke`, `Control.Invoke`, `SynchronizationContext.Send`) to a thread that waits for the SDK, or taking a lock that a thread calling the SDK may hold while it waits for the reply. A call from another thread made while a handler runs doesn't wait for it: it takes effect right after the handler returns, in call order — so don't read `State` right after such a call to learn its outcome; use the events or `ReadyAsync()`. Replies that arrive while a handler runs are processed after it returns; a reply already received when its timeout fires is still delivered. Keep handlers fast, and post to the UI thread asynchronously (`BeginInvoke`, `SynchronizationContext.Post`).
 
-1. The callback blocks the receive thread
-2. `PublishAsync()` sends a command and waits for the server's reply
-3. The server sends the reply
-4. **The receive thread can't process the reply because it's blocked in your callback**
-5. **Deadlock!** ⚠️
+Calling `Disconnect()`, `Dispose()` or `DisposeAsync()` from a handler is safe: they take effect at once and don't wait for the connection to close.
+
+**Signalling Your Code from Event Handlers**
+
+A `TaskCompletionSource` that a handler completes should be created with `TaskCreationOptions.RunContinuationsAsynchronously`. Without it, the code awaiting its task continues inline, inside the handler: it holds the client's loop until it yields, and deadlocks if it blocks on an SDK method:
+
+```csharp
+var subscribed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+subscription.Subscribed += (sender, e) => subscribed.TrySetResult(true);
+```
 
 **Exception Handling in Event Handlers**
 
-**The SDK is not responsible for exceptions raised inside event handlers and does not provide specified behaviour if the one occurs.** You must handle all exceptions in your own code:
+When a handler throws synchronously, the SDK catches the exception and raises the `Error` event of the client or subscription, with `Type` set to the name of the failing event (`publication`, `subscribing`, ...). Nothing else changes: the remaining handlers, the state transition, reconnects and later events all proceed. An `async void` handler that throws after its first `await` is out of the SDK's reach, and the exception crashes the application. Catch exceptions yourself:
 
 ```csharp
-// ❌ BAD: Unhandled exceptions - behavior is undefined
+// ❌ BAD: throws after the first await - crashes the application
 subscription.Publication += async (sender, e) =>
 {
-    await riskyOperation();  // If this throws - undefined behavior!
+    await riskyOperation();
 };
 
 // ✅ GOOD: Always wrap your logic in try-catch
@@ -174,15 +183,14 @@ subscription.Publication += async (sender, e) =>
 };
 ```
 
-Unhandled exceptions may crash your application, close the transport, or cause other unpredictable behavior. Always handle exceptions in your event handlers.
-
 **Best Practices Summary**
 
 1. ✅ Use `async void` for event handlers that need to perform async operations
 2. ✅ Always `await` async methods - never block with `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()`
 3. ✅ Always wrap `async void` handlers in `try-catch` to prevent application crashes
 4. ✅ Keep handlers fast - heavy CPU work should be offloaded to background tasks
-5. ✅ Message order is preserved - handlers are invoked synchronously on the receive thread
+5. ✅ Event order is preserved - handlers are invoked synchronously, one at a time, on the client's event loop
+6. ✅ Pass `TaskCreationOptions.RunContinuationsAsynchronously` to any `TaskCompletionSource` a handler completes
 
 ## Subscriptions
 
@@ -223,6 +231,12 @@ await subscription.PublishAsync(message);
 // Unsubscribe when done
 subscription.Unsubscribe();
 ```
+
+To drop a subscription for good, call `subscription.Dispose()` or `client.RemoveSubscription(subscription)`. The
+client forgets it immediately, so the channel can be subscribed again with a new subscription. It is then
+unsubscribed the same way `Unsubscribe()` does it: an unsubscribe command goes to the server if the server may hold
+the subscription, followed by `StateChanged` and `Unsubscribed` (a handler of these may already create the new
+subscription). Once disposed, a subscription can't be subscribed again.
 
 ### Token Authentication
 
@@ -357,7 +371,8 @@ var options = new CentrifugeClientOptions
     MinReconnectDelay = TimeSpan.FromMilliseconds(500),
     MaxReconnectDelay = TimeSpan.FromSeconds(20),
 
-    // Timeouts
+    // Timeouts: Timeout bounds a transport open, the wait for a connection (calls made while
+    // connecting) and then a command's reply, from when it is sent (as centrifuge-js)
     Timeout = TimeSpan.FromSeconds(5),
     MaxServerPingDelay = TimeSpan.FromSeconds(10),
 
@@ -373,6 +388,14 @@ var options = new CentrifugeClientOptions
 
 var client = new CentrifugeClient("ws://localhost:8000/connection/websocket", options);
 ```
+
+Creating a client or subscription with invalid options throws `CentrifugeConfigurationException`. The checks:
+
+- no delay is negative, and no maximum delay is smaller than its minimum;
+- `Timeout` is positive;
+- `Timeout`, `MaxReconnectDelay` and the subscription `MaxResubscribeDelay` fit in `Int32.MaxValue` milliseconds;
+- for an HTTP streaming endpoint, `EmulationEndpoint` is an absolute http/https URL (in the browser it, like the
+  fallback endpoints, may also be a page-relative URL).
 
 ### Recovery and Positioning
 
@@ -450,6 +473,11 @@ catch (CentrifugeException ex)
     Console.WriteLine($"Temporary: {ex.Temporary}");
 }
 ```
+
+A `CentrifugeTimeoutException` comes either from waiting for the client or subscription to become ready
+(`ReadyAsync`, which the calls also await) or from a reply that didn't come within `Timeout`. In the second case the
+command may or may not have reached the server. Other failures use `CentrifugeException` codes: `TransportWriteError`
+when the command couldn't be written, `ConnectionClosed` when the connection went away before the reply.
 
 ## Working with JSON Data
 
@@ -741,7 +769,7 @@ The SDK follows the [Centrifuge protocol specification](https://centrifugal.dev/
 - **Transport Layer**: Abstraction over WebSocket and HTTP-streaming
 - **Exponential Backoff**: Smart reconnection with full jitter to avoid thundering herd
 - **Varint Encoding**: Efficient Protobuf message framing
-- **Event-Driven Architecture**: Thread-safe event handling for all state changes
+- **Event Loop**: every state change runs as a step of one loop per client, following [centrifuge-js](https://github.com/centrifugal/centrifuge-js) and the SDK specification; events are raised in the order of the steps
 
 ## Contributing
 

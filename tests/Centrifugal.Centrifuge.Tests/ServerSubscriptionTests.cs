@@ -139,8 +139,10 @@ namespace Centrifugal.Centrifuge.Tests
             _client.Connect();
             await _client.ReadyAsync();
 
-            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+            // A server-side subscription announced by the connect reply goes from unsubscribed to subscribed
+            // directly (TLA ServerSubTransitions, centrifuge-js): no ServerSubscribing before it.
             Assert.Equal("srv", (await ReadAsync(subscribed)).Channel);
+            Assert.False(subscribing.Reader.TryRead(out _));
 
             _server.CloseConnection();
 
@@ -171,12 +173,74 @@ namespace Centrifugal.Centrifuge.Tests
             _client.Connect();
             await _client.ReadyAsync();
 
-            Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
             Assert.Equal("srv", (await ReadAsync(subscribed)).Channel);
 
             _client.Disconnect();
 
             Assert.Equal("srv", (await ReadAsync(subscribing)).Channel);
+        }
+
+        /// <summary>
+        /// Disconnect() called from a StateChanged handler when the client starts to reconnect still
+        /// raises ServerSubscribing for the lost session; ServerSubscribed comes after the next connect.
+        /// </summary>
+        [Fact]
+        public async Task DisconnectFromReconnectHandlerKeepsServerSubscribing()
+        {
+            _server.ConnectResult = new ConnectResult
+            {
+                Client = "fake-client",
+                Version = "0.0.0",
+                Ping = 25,
+                Subs = { ["srv"] = new SubscribeResult { Recoverable = true, Positioned = true, Epoch = "e1", Offset = 7 } }
+            };
+            var events = NewChannel<string>();
+            _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions());
+            _client.ServerSubscribing += (_, e) => events.Writer.TryWrite("subscribing:" + e.Channel);
+            _client.ServerSubscribed += (_, e) => events.Writer.TryWrite("subscribed:" + e.Channel);
+            _client.Connect();
+            await _client.ReadyAsync();
+            Assert.Equal("subscribed:srv", await ReadAsync(events));
+
+            var disconnectOnce = 0;
+            _client.StateChanged += (_, e) =>
+            {
+                if (e.NewState == CentrifugeClientState.Connecting && System.Threading.Interlocked.Exchange(ref disconnectOnce, 1) == 0)
+                    _client.Disconnect();
+            };
+            _server.CloseConnection();
+
+            Assert.Equal("subscribing:srv", await ReadAsync(events));
+            _client.Connect();
+            await _client.ReadyAsync();
+            Assert.Equal("subscribed:srv", await ReadAsync(events));
+        }
+
+        /// <summary>A client-side subscription to the same channel that isn't subscribed doesn't intercept
+        /// publications or the unsubscribe push meant for the server-side subscription.</summary>
+        [Fact]
+        public async Task InactiveClientSubscriptionDoesNotShadowServerSubscription()
+        {
+            _server.ConnectResult = new ConnectResult
+            {
+                Client = "fake-client",
+                Version = "0.0.0",
+                Ping = 25,
+                Subs = { ["srv"] = new SubscribeResult() }
+            };
+            var events = NewChannel<string>();
+            _client = new CentrifugeClient(_server.Url, new CentrifugeClientOptions());
+            _client.Publication += (_, e) => events.Writer.TryWrite("publication:" + e.Channel);
+            _client.ServerUnsubscribed += (_, e) => events.Writer.TryWrite("unsubscribed:" + e.Channel);
+            _client.NewSubscription("srv");
+            _client.Connect();
+            await _client.ReadyAsync();
+
+            await _server.PublishChannelAsync("srv", new byte[] { 1 });
+            await _server.SendPushAsync(new Push { Channel = "srv", Unsubscribe = new Unsubscribe { Code = 2000 } });
+
+            Assert.Equal("publication:srv", await ReadAsync(events));
+            Assert.Equal("unsubscribed:srv", await ReadAsync(events));
         }
 
         private static Task<T> ReadAsync<T>(System.Threading.Channels.Channel<T> channel) =>

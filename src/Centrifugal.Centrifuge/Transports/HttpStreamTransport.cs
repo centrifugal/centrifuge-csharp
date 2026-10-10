@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -38,7 +39,7 @@ namespace Centrifugal.Centrifuge.Transports
         public event EventHandler? Opened;
 
         /// <inheritdoc/>
-        public event EventHandler<byte[]>? MessageReceived;
+        public event EventHandler<IReadOnlyList<byte[]>>? MessageReceived;
 
         /// <inheritdoc/>
         public event EventHandler<TransportClosedEventArgs>? Closed;
@@ -74,6 +75,8 @@ namespace Centrifugal.Centrifuge.Transports
         }
 
         /// <inheritdoc/>
+        /// <remarks>Fails on a disposed transport. After the receive loop has started, Dispose stops it
+        /// through its cancellation token.</remarks>
         public async Task OpenAsync(CancellationToken cancellationToken = default, byte[]? initialData = null)
         {
             if (_isOpen)
@@ -88,19 +91,16 @@ namespace Centrifugal.Centrifuge.Transports
 
                 lock (_openCloseLock)
                 {
+                    if (Volatile.Read(ref _disposed) != 0) throw new ObjectDisposedException(nameof(HttpStreamTransport));
                     _receiveCts = new CancellationTokenSource();
                     receiveCts = _receiveCts;
                 }
                 _receiveTask = ReceiveLoopAsync(initialData ?? Array.Empty<byte>(), openedTcs, receiveCts.Token);
 
                 // Wait for the connection to open or timeout
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
-
-                var completedTask = await Task.WhenAny(openedTcs.Task, Task.Delay(Timeout.Infinite, timeoutCts.Token)).ConfigureAwait(false);
-                if (completedTask != openedTcs.Task)
+                if (!await Utilities.CompletesBeforeCancellationAsync(openedTcs.Task, cancellationToken).ConfigureAwait(false))
                 {
-                    throw new TimeoutException("Timeout waiting for HTTP stream connection to open");
+                    openedTcs.TrySetException(new TimeoutException("Timeout waiting for HTTP stream connection to open"));
                 }
 
                 // Propagate any exception the receive loop set on openedTcs (early HTTP failure, etc.)
@@ -108,7 +108,7 @@ namespace Centrifugal.Centrifuge.Transports
             }
             catch (Exception ex)
             {
-                receiveCts?.Cancel();
+                try { receiveCts?.Cancel(); } catch (ObjectDisposedException) { }
                 throw new CentrifugeException(CentrifugeErrorCodes.TransportClosed, "Failed to open HTTP stream connection", true, ex);
             }
         }
@@ -150,7 +150,7 @@ namespace Centrifugal.Centrifuge.Transports
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
 
                 using var response = await _httpClient.PostAsync(emulationEndpoint, content, cancellationToken).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode) throw new EmulationStatusException((int)response.StatusCode);
             }
             catch (Exception ex)
             {
@@ -184,6 +184,14 @@ namespace Centrifugal.Centrifuge.Transports
             }
         }
 
+        /// <summary>
+        /// Posts the connect command, then reads the response stream. The loop races the OpenAsync
+        /// timeout to complete <paramref name="openedTcs"/> and raises Opened only if it wins.
+        /// All complete messages from one read go out as one frame (a malformed message still lets
+        /// the ones before it through); a partial message at the end waits for the next read.
+        /// Cancellation is a normal stop only when it comes from the loop's own token; any other
+        /// cancellation means the transport failed.
+        /// </summary>
         private async Task ReceiveLoopAsync(byte[] initialData, TaskCompletionSource<bool> openedTcs, CancellationToken cancellationToken)
         {
             bool connectionOpened = false;
@@ -215,18 +223,43 @@ namespace Centrifugal.Centrifuge.Transports
                     return;
                 }
 
-                connectionOpened = true;
                 lock (_openCloseLock) { _isOpen = true; }
-                openedTcs.TrySetResult(true);
+                if (!openedTcs.TrySetResult(true))
+                {
+                    lock (_openCloseLock) { _isOpen = false; }
+                    return;
+                }
+                connectionOpened = true;
                 Opened?.Invoke(this, EventArgs.Empty);
 
                 using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
 
+                var buffer = new byte[VarintCodec.ReceiveBufferSize];
+                int buffered = 0;
+                var frame = new List<byte[]>();
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    byte[]? message = await VarintCodec.ReadDelimitedMessageAsync(stream, cancellationToken).ConfigureAwait(false);
-                    if (message == null) break;
-                    MessageReceived?.Invoke(this, message);
+                    if (buffered == buffer.Length) buffer = VarintCodec.Grow(buffer, buffered);
+                    int read = await stream.ReadAsync(buffer, buffered, buffer.Length - buffered, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        if (buffered > 0) throw new IOException("Unexpected end of stream while reading message data");
+                        break;
+                    }
+
+                    buffered += read;
+                    int consumed;
+                    try
+                    {
+                        consumed = VarintCodec.ReadCompleteMessages(buffer, buffered, frame);
+                    }
+                    finally
+                    {
+                        if (frame.Count > 0) MessageReceived?.Invoke(this, frame);
+                        frame.Clear();
+                    }
+                    buffered -= consumed;
+                    buffer = VarintCodec.Compact(buffer, consumed, buffered);
                 }
 
                 // Server closed the stream (EOF) — fire Closed so the client can reconnect
@@ -235,7 +268,7 @@ namespace Centrifugal.Centrifuge.Transports
                     Closed?.Invoke(this, new TransportClosedEventArgs());
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 openedTcs.TrySetCanceled();
             }
@@ -245,7 +278,7 @@ namespace Centrifugal.Centrifuge.Transports
                 {
                     // Post-open failure: inform the client the transport died
                     Error?.Invoke(this, ex);
-                    Closed?.Invoke(this, new TransportClosedEventArgs(exception: ex));
+                    Closed?.Invoke(this, new TransportClosedEventArgs());
                 }
                 else
                 {

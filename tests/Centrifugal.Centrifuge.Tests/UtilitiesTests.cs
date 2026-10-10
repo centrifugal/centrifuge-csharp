@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Centrifugal.Centrifuge.Tests
@@ -53,6 +54,21 @@ namespace Centrifugal.Centrifuge.Tests
 
             var result = Utilities.CalculateBackoff(31, min, max);
             Assert.InRange(result, 100, 30000);
+        }
+
+        [Fact]
+        public void CalculateBackoff_ZeroDelays_ReturnsOneMillisecond()
+        {
+            Assert.Equal(1, Utilities.CalculateBackoff(3, TimeSpan.Zero, TimeSpan.Zero));
+        }
+
+        [Fact]
+        public void CalculateBackoff_DelaysAtTimerRange_DoNotOverflow()
+        {
+            var min = TimeSpan.FromMilliseconds(int.MaxValue - 1);
+
+            var result = Utilities.CalculateBackoff(1, min, Utilities.MaxTimerInterval);
+            Assert.InRange(result, int.MaxValue - 1, int.MaxValue);
         }
 
         [Fact]
@@ -123,191 +139,133 @@ namespace Centrifugal.Centrifuge.Tests
                     $"TtlToMilliseconds({ttls[i]}) < TtlToMilliseconds({ttls[i - 1]})");
             }
         }
+
+        [Theory]
+        [InlineData(25u, 10_000.0, 35_000)]
+        [InlineData(uint.MaxValue, 10_000.0, int.MaxValue)]
+        [InlineData(1u, int.MaxValue, int.MaxValue)]
+        public void PingDeadlineMilliseconds_ClampsToTimerRange(uint ping, double maxDelayMs, int expected)
+        {
+            Assert.Equal(expected, Utilities.PingDeadlineMilliseconds(ping, TimeSpan.FromMilliseconds(maxDelayMs)));
+        }
+
+        [Fact]
+        public void Raise_SubscriberException_DoesNotSkipOtherSubscribers()
+        {
+            var calls = 0;
+            string? reported = null;
+            EventHandler<EventArgs> handler = (_, _) => throw new InvalidOperationException("first");
+            handler += (_, _) => calls++;
+            EventHandler<CentrifugeErrorEventArgs> error = (_, e) => reported = e.Type;
+
+            EventDispatch.Raise(this, handler, EventArgs.Empty, "publication", error, null);
+
+            Assert.Equal(1, calls);
+            Assert.Equal("publication", reported);
+        }
+
+        [Fact]
+        public void GuardedLogger_ExceptionOfApplicationLoggerDoesNotEscape()
+        {
+            var logger = GuardedLogger.Wrap(new ThrowingLogger())!;
+
+            logger.LogError(new InvalidOperationException("failure"), "message");
+            Assert.False(logger.IsEnabled(LogLevel.Error));
+            logger.BeginScope("scope")?.Dispose();
+        }
+
+        private sealed class ThrowingLogger : ILogger
+        {
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter) => throw new InvalidOperationException("logger");
+
+            public bool IsEnabled(LogLevel logLevel) => throw new InvalidOperationException("logger");
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => throw new InvalidOperationException("logger");
+        }
+
+        [Fact]
+        public void RaiseError_CarriesCodeAndTemporaryOfCentrifugeException()
+        {
+            CentrifugeErrorEventArgs? reported = null;
+            EventHandler<CentrifugeErrorEventArgs> error = (_, e) => reported = e;
+
+            EventDispatch.RaiseError(this, error, "connect", new CentrifugeException(109, "token expired", temporary: true), null);
+
+            Assert.Equal(109, reported!.Code);
+            Assert.True(reported.Temporary);
+        }
+
+        [Fact]
+        public void ReceiveBuffer_GrowsToLargeMessageSize_AndReturnsToBaseSizeOnceConsumed()
+        {
+            using var stream = new MemoryStream();
+            VarintCodec.WriteDelimitedMessage(stream, new byte[100_000]);
+            var delimited = stream.ToArray();
+            var buffer = new byte[VarintCodec.ReceiveBufferSize];
+            Array.Copy(delimited, buffer, buffer.Length);
+
+            buffer = VarintCodec.Grow(buffer, buffer.Length);
+            Assert.Equal(2 * VarintCodec.ReceiveBufferSize, buffer.Length);
+            while (buffer.Length < delimited.Length) buffer = VarintCodec.Grow(buffer, buffer.Length);
+            Assert.Equal(delimited.Length, buffer.Length);
+            Assert.Equal(delimited[0], buffer[0]);
+
+            buffer[100] = 9;
+            buffer = VarintCodec.Compact(buffer, consumed: 100, remaining: 1);
+            Assert.Equal(VarintCodec.ReceiveBufferSize, buffer.Length);
+            Assert.Equal(9, buffer[0]);
+        }
     }
 
     public class VarintCodecTests
     {
         [Fact]
-        public void WriteAndReadDelimitedMessage_RoundTrips()
+        public void ReadCompleteMessages_LeavesIncompleteTrailingMessageUnread()
         {
-            var original = Encoding.UTF8.GetBytes("Hello, World!");
+            var large = new byte[300];
+            new Random(42).NextBytes(large);
             var stream = new MemoryStream();
-
-            VarintCodec.WriteDelimitedMessage(stream, original);
-
-            stream.Position = 0;
-            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-
-            Assert.NotNull(result);
-            Assert.Equal(original, result);
-        }
-
-        [Fact]
-        public async Task WriteAndReadDelimitedMessageAsync_RoundTrips()
-        {
-            var original = Encoding.UTF8.GetBytes("Hello, World!");
-            var stream = new MemoryStream();
-
-            VarintCodec.WriteDelimitedMessage(stream, original);
-
-            stream.Position = 0;
-            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, CancellationToken.None);
-
-            Assert.NotNull(result);
-            Assert.Equal(original, result);
-        }
-
-        [Fact]
-        public void WriteAndReadDelimitedMessage_EmptyData()
-        {
-            var original = Array.Empty<byte>();
-            var stream = new MemoryStream();
-
-            VarintCodec.WriteDelimitedMessage(stream, original);
-
-            stream.Position = 0;
-            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-
-            Assert.NotNull(result);
-            Assert.Empty(result);
-        }
-
-        [Fact]
-        public void WriteAndReadDelimitedMessage_LargeData()
-        {
-            var original = new byte[10000];
-            new Random(42).NextBytes(original);
-            var stream = new MemoryStream();
-
-            VarintCodec.WriteDelimitedMessage(stream, original);
-
-            stream.Position = 0;
-            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-
-            Assert.NotNull(result);
-            Assert.Equal(original, result);
-        }
-
-        [Fact]
-        public void ReadDelimitedMessage_EmptyStream_ReturnsNull()
-        {
-            var stream = new MemoryStream();
-            var result = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-
-            Assert.Null(result);
-        }
-
-        [Fact]
-        public async Task ReadDelimitedMessageAsync_EmptyStream_ReturnsNull()
-        {
-            var stream = new MemoryStream();
-            var result = await VarintCodec.ReadDelimitedMessageAsync(stream, CancellationToken.None);
-
-            Assert.Null(result);
-        }
-
-        [Fact]
-        public void WriteAndReadMultipleMessages_RoundTrips()
-        {
-            var msg1 = Encoding.UTF8.GetBytes("First");
-            var msg2 = Encoding.UTF8.GetBytes("Second");
-            var msg3 = Encoding.UTF8.GetBytes("Third");
-
-            var stream = new MemoryStream();
-            VarintCodec.WriteDelimitedMessage(stream, msg1);
-            VarintCodec.WriteDelimitedMessage(stream, msg2);
-            VarintCodec.WriteDelimitedMessage(stream, msg3);
-
-            stream.Position = 0;
-
-            var result1 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-            var result2 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-            var result3 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-            var result4 = VarintCodec.ReadDelimitedMessage(stream, CancellationToken.None);
-
-            Assert.Equal(msg1, result1);
-            Assert.Equal(msg2, result2);
-            Assert.Equal(msg3, result3);
-            Assert.Null(result4); // End of stream
-        }
-
-        [Fact]
-        public void ReadDelimitedMessage_TruncatedData_ThrowsIOException()
-        {
-            var stream = new MemoryStream();
-            // Write varint indicating 100 bytes, but only write 5
-            VarintCodec.WriteDelimitedMessage(stream, new byte[100]);
+            VarintCodec.WriteDelimitedMessage(stream, Encoding.UTF8.GetBytes("First"));
+            VarintCodec.WriteDelimitedMessage(stream, Array.Empty<byte>());
+            VarintCodec.WriteDelimitedMessage(stream, large);
             var bytes = stream.ToArray();
-            // Truncate: keep varint prefix + only 5 bytes of data
-            var truncated = new MemoryStream(bytes, 0, 7);
+            var complete = bytes.Length - large.Length - 2;
 
-            Assert.Throws<IOException>(() =>
-                VarintCodec.ReadDelimitedMessage(truncated, CancellationToken.None));
+            for (var count = 0; count <= bytes.Length; count++)
+            {
+                var messages = new System.Collections.Generic.List<byte[]>();
+                var consumed = VarintCodec.ReadCompleteMessages(bytes, count, messages);
+
+                var expected = count == bytes.Length ? 3 : count >= complete ? 2 : count >= 6 ? 1 : 0;
+                Assert.Equal(expected, messages.Count);
+                Assert.Equal(expected == 3 ? bytes.Length : expected == 2 ? complete : expected == 1 ? 6 : 0, consumed);
+            }
+
+            var all = new System.Collections.Generic.List<byte[]>();
+            VarintCodec.ReadCompleteMessages(bytes, bytes.Length, all);
+            Assert.Equal("First", Encoding.UTF8.GetString(all[0]));
+            Assert.Empty(all[1]);
+            Assert.Equal(large, all[2]);
+        }
+
+        /// <summary>The length prefix alone rejects a message longer than Int32 or than the largest possible byte array.</summary>
+        [Theory]
+        [InlineData(new byte[] { 0x80, 0x80, 0x80, 0x80, 0x08 })]
+        [InlineData(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF, 0x07 })]
+        public void VarintLengthBeyondLargestArray_ThrowsIOException(byte[] bytes)
+        {
+            Assert.Throws<IOException>(() => VarintCodec.ReadCompleteMessages(bytes, bytes.Length, new System.Collections.Generic.List<byte[]>()));
         }
 
         [Fact]
-        public void ReadDelimitedMessage_DoesNotAllocateDeadTempBuffer()
+        public void ReadCompleteMessages_LengthBeyondBuffer_LeavesItUnreadWithoutAllocating()
         {
-            // Regression test: ReadDelimitedMessage used to take a `buffer` parameter
-            // that every call site allocated fresh (8192 bytes) but the method never
-            // read from or wrote to it. Guard that per-call allocations stay well
-            // under that old dead-buffer size.
-            var message = Encoding.UTF8.GetBytes("regression-test-message-payload");
-            var stream = new MemoryStream();
-            VarintCodec.WriteDelimitedMessage(stream, message);
-            var bytes = stream.ToArray();
+            var bytes = new byte[] { 0x80, 0x80, 0x80, 0x80, 0x01 };
+            var messages = new System.Collections.Generic.List<byte[]>();
 
-            // Warm up JIT before measuring.
-            for (int i = 0; i < 50; i++)
-            {
-                using var warm = new MemoryStream(bytes);
-                VarintCodec.ReadDelimitedMessage(warm, CancellationToken.None);
-            }
-
-            const int iterations = 1000;
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < iterations; i++)
-            {
-                using var ms = new MemoryStream(bytes);
-                VarintCodec.ReadDelimitedMessage(ms, CancellationToken.None);
-            }
-            long after = GC.GetAllocatedBytesForCurrentThread();
-
-            double perCallBytes = (after - before) / (double)iterations;
-
-            Assert.True(
-                perCallBytes < 4096,
-                $"Expected per-call allocation well under the old 8KB dead buffer, but was {perCallBytes} bytes.");
-        }
-
-        [Fact]
-        public async Task ReadDelimitedMessageAsync_DoesNotAllocateDeadTempBuffer()
-        {
-            var message = Encoding.UTF8.GetBytes("regression-test-message-payload");
-            var stream = new MemoryStream();
-            VarintCodec.WriteDelimitedMessage(stream, message);
-            var bytes = stream.ToArray();
-
-            for (int i = 0; i < 50; i++)
-            {
-                using var warm = new MemoryStream(bytes);
-                await VarintCodec.ReadDelimitedMessageAsync(warm, CancellationToken.None);
-            }
-
-            const int iterations = 1000;
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < iterations; i++)
-            {
-                using var ms = new MemoryStream(bytes);
-                await VarintCodec.ReadDelimitedMessageAsync(ms, CancellationToken.None);
-            }
-            long after = GC.GetAllocatedBytesForCurrentThread();
-
-            double perCallBytes = (after - before) / (double)iterations;
-
-            Assert.True(
-                perCallBytes < 4096,
-                $"Expected per-call allocation well under the old 8KB dead buffer, but was {perCallBytes} bytes.");
+            Assert.Equal(0, VarintCodec.ReadCompleteMessages(bytes, bytes.Length, messages));
+            Assert.Empty(messages);
         }
     }
 

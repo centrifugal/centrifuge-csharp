@@ -88,9 +88,15 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Gets or sets the emulation endpoint for SSE and HTTP Stream transports.
         /// This endpoint is used to send commands when using unidirectional transports.
-        /// If not set, will be auto-constructed from the transport endpoint by replacing the last path segment with "emulation".
+        /// Defaults to /emulation at the root of the transport endpoint's host, which is where Centrifugo
+        /// serves it. Set it explicitly if the server sits behind a path prefix. For an HTTP streaming
+        /// endpoint the value has to be an absolute http/https URL; in the browser a page-relative URL
+        /// works too.
         /// </summary>
         public string? EmulationEndpoint { get; set; }
+
+        /// <summary>Shallow copy kept by the client, so the caller can't change its options afterwards.</summary>
+        internal CentrifugeClientOptions Clone() => (CentrifugeClientOptions)MemberwiseClone();
 
         /// <summary>
         /// Validates the options.
@@ -107,14 +113,24 @@ namespace Centrifugal.Centrifuge
                 throw new CentrifugeConfigurationException("MaxReconnectDelay must be >= MinReconnectDelay");
             }
 
-            if (Timeout <= TimeSpan.Zero)
+            if (MaxReconnectDelay > Utilities.MaxTimerInterval)
             {
-                throw new CentrifugeConfigurationException("Timeout must be positive");
+                throw new CentrifugeConfigurationException("MaxReconnectDelay must not exceed Int32.MaxValue milliseconds");
+            }
+
+            if (Timeout <= TimeSpan.Zero || Timeout > Utilities.MaxTimerInterval)
+            {
+                throw new CentrifugeConfigurationException("Timeout must be positive and not exceed Int32.MaxValue milliseconds");
             }
 
             if (MaxServerPingDelay <= TimeSpan.Zero)
             {
                 throw new CentrifugeConfigurationException("MaxServerPingDelay must be positive");
+            }
+
+            if (Name == null || Version == null || (Headers != null && Headers.ContainsValue(null!)))
+            {
+                throw new CentrifugeConfigurationException("Name, Version and header values must not be null");
             }
         }
     }

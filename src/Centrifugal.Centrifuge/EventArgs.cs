@@ -206,6 +206,10 @@ namespace Centrifugal.Centrifuge
             ConnInfo = connInfo;
             ChanInfo = chanInfo;
         }
+
+        /// <summary>Converts protocol client info to the public type.</summary>
+        internal static CentrifugeClientInfo FromProtocol(Protocol.ClientInfo info) =>
+            new CentrifugeClientInfo(info.User, info.Client, info.ConnInfo.ToByteArray(), info.ChanInfo.ToByteArray());
     }
 
     /// <summary>
@@ -435,10 +439,12 @@ namespace Centrifugal.Centrifuge
         /// </summary>
         public ulong Offset { get; }
 
+        private readonly string? _epoch;
+
         /// <summary>
-        /// Gets the epoch identifier.
+        /// Gets the epoch identifier. A default-initialized position has an empty epoch.
         /// </summary>
-        public string Epoch { get; }
+        public string Epoch => _epoch ?? string.Empty;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CentrifugeStreamPosition"/> struct.
@@ -446,7 +452,7 @@ namespace Centrifugal.Centrifuge
         public CentrifugeStreamPosition(ulong offset, string epoch)
         {
             Offset = offset;
-            Epoch = epoch ?? string.Empty;
+            _epoch = epoch ?? string.Empty;
         }
     }
 

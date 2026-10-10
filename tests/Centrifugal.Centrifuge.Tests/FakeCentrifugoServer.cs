@@ -37,6 +37,9 @@ namespace Centrifugal.Centrifuge.Tests
     ///   await server.PublishChannelAsync("news", data);   // by channel name
     ///   // Fully control any command reply (return null to fall through):
     ///   server.OnCommand = cmd => cmd.Rpc != null ? new Reply { Id = cmd.Id } : null;
+    ///   // Leave a command unanswered and reply later, batched with a push in one frame:
+    ///   server.OnCommand = cmd => cmd.Subscribe != null ? FakeCentrifugoServer.NoReply : null;
+    ///   await server.SendRepliesAsync(new Reply { Id = id, Subscribe = result }, new Reply { Push = push });
     ///   // Send anything the protocol allows:
     ///   await server.SendPushAsync(new Push { Disconnect = new Disconnect { Code = 3000 } });
     ///   // Drive a reconnect:
@@ -62,6 +65,25 @@ namespace Centrifugal.Centrifuge.Tests
         /// through to default handling.
         /// </summary>
         public Func<Command, Reply?>? OnCommand { get; set; }
+
+        /// <summary>
+        /// Same as <see cref="OnCommand"/>, except that all returned replies and pushes go out
+        /// in a single WebSocket message, so the client receives them together. Null falls
+        /// through. Consulted before OnCommand.
+        /// </summary>
+        public Func<Command, Reply[]?>? OnCommandFrame { get; set; }
+
+        /// <summary>
+        /// Returned from <see cref="OnCommand"/> to skip the reply. A test sends it later with
+        /// <see cref="SendReplyAsync"/> or <see cref="SendRepliesAsync"/>.
+        /// </summary>
+        public static readonly Reply NoReply = new();
+
+        /// <summary>
+        /// Awaited before each command is handled. Until it completes nothing more is read from
+        /// that connection, and no thread is blocked meanwhile.
+        /// </summary>
+        public Func<Command, Task>? BeforeCommand { get; set; }
 
         /// <summary>Customize the subscribe result per channel (default: empty result).</summary>
         public Func<string, SubscribeRequest, SubscribeResult>? OnSubscribe { get; set; }
@@ -133,6 +155,31 @@ namespace Centrifugal.Centrifuge.Tests
             try { ws?.Abort(); } catch { /* already gone */ }
         }
 
+        /// <summary>
+        /// Send a close frame on the active connection, after any data already sent. Does
+        /// nothing if the client closed the connection first.
+        /// </summary>
+        public async Task CloseConnectionGracefullyAsync()
+        {
+            WebSocket socket;
+            lock (_lock)
+            {
+                socket = _current ?? throw new InvalidOperationException("no active connection");
+            }
+            await _sendLock.WaitAsync();
+            try
+            {
+                await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException)
+            {
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
         private async Task ReceiveLoopAsync(WebSocket ws)
         {
             var buffer = new byte[64 * 1024];
@@ -166,13 +213,24 @@ namespace Centrifugal.Centrifuge.Tests
         private async Task DispatchAsync(WebSocket ws, Command cmd)
         {
             lock (_lock) { _received.Add(cmd); }
+            if (BeforeCommand is { } beforeCommand) await beforeCommand(cmd);
+
+            if (OnCommandFrame != null)
+            {
+                var frame = OnCommandFrame(cmd);
+                if (frame != null)
+                {
+                    await SendAsync(ws, frame);
+                    return;
+                }
+            }
 
             if (OnCommand != null)
             {
                 var reply = OnCommand(cmd);
                 if (reply != null)
                 {
-                    await SendAsync(ws, reply);
+                    if (!ReferenceEquals(reply, NoReply)) await SendAsync(ws, reply);
                     return;
                 }
             }
@@ -201,22 +259,57 @@ namespace Centrifugal.Centrifuge.Tests
 
         // --- raw escape hatches -------------------------------------------------
 
-        private static async Task SendAsync(WebSocket ws, Reply reply)
+        /// <summary>Serializes sends: tests send while the dispatch loop does, and a WebSocket can have one send in progress at most.</summary>
+        private readonly SemaphoreSlim _sendLock = new(1, 1);
+
+        private Task SendAsync(WebSocket ws, Reply reply) => SendAsync(ws, new[] { reply });
+
+        private Task SendAsync(WebSocket ws, Reply[] replies)
         {
             using var ms = new MemoryStream();
-            reply.WriteDelimitedTo(ms);
-            await ws.SendAsync(new ArraySegment<byte>(ms.ToArray()), WebSocketMessageType.Binary, true, CancellationToken.None);
+            foreach (var reply in replies) reply.WriteDelimitedTo(ms);
+            return SendAsync(ws, ms.ToArray());
         }
 
-        /// <summary>Send a raw reply to the active connection.</summary>
-        public Task SendReplyAsync(Reply reply)
+        private async Task SendAsync(WebSocket ws, byte[] data)
+        {
+            await _sendLock.WaitAsync();
+            try
+            {
+                await ws.SendAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary, true, CancellationToken.None);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
+        }
+
+        /// <summary>Send bytes unchanged as a single WebSocket message, for example a malformed frame.</summary>
+        public Task SendRawAsync(byte[] data)
         {
             WebSocket socket;
             lock (_lock)
             {
                 socket = _current ?? throw new InvalidOperationException("no active connection");
             }
-            return SendAsync(socket, reply);
+            return SendAsync(socket, data);
+        }
+
+        /// <summary>Send a raw reply to the active connection.</summary>
+        public Task SendReplyAsync(Reply reply) => SendRepliesAsync(reply);
+
+        /// <summary>
+        /// Send raw replies and pushes to the active connection packed into a single
+        /// WebSocket message, so the client receives them together.
+        /// </summary>
+        public Task SendRepliesAsync(params Reply[] replies)
+        {
+            WebSocket socket;
+            lock (_lock)
+            {
+                socket = _current ?? throw new InvalidOperationException("no active connection");
+            }
+            return SendAsync(socket, replies);
         }
 
         /// <summary>Send a raw push (wrapped in a reply) to the active connection.</summary>

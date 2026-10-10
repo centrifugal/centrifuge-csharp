@@ -193,7 +193,7 @@ namespace Centrifugal.Centrifuge.Tests
 
             // Server sends "state invalidated" disconnect — the client must clear its
             // connection token, fetch a fresh one via GetToken on reconnect, and
-            // invalidate the subscription (resubscribe with no token).
+            // resubscribe with the subscription's static token, which is kept (no GetToken).
             await _server.SendPushAsync(new Push
             {
                 Disconnect = new Disconnect { Code = CentrifugeDisconnectedCodes.StateInvalidated, Reason = "state invalidated" }
@@ -203,7 +203,7 @@ namespace Centrifugal.Centrifuge.Tests
             await subscribedEvents.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.True(connTokenCalls >= 1, "connection token getter must be called after 3014");
             Assert.Equal("conn-token-1", LastConnectToken());
-            Assert.Equal("", _server.LastSubscribe()!.Token);
+            Assert.Equal("sub-token-0", _server.LastSubscribe()!.Token);
         }
     }
 }
