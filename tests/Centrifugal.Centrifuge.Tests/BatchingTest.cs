@@ -181,7 +181,10 @@ namespace Centrifugal.Centrifuge.Tests
             // Wait for final disconnect event
             await disconnectedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            // Verify final state is disconnected
+            // A call made while a step of an earlier attempt runs (its transport opening or closing) takes
+            // effect right after that step, so the last Disconnect() may still be queued here: wait for the
+            // queued steps, then verify the final state is disconnected.
+            await client.LoopBarrierAsync().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal(CentrifugeClientState.Disconnected, client.State);
         }
 
