@@ -365,23 +365,23 @@ namespace Centrifugal.Centrifuge.Tests
         public void LoopTimerCancelledAfterItFiredButBeforeItsStepRanDoesNotRun()
         {
             // The timer fires while the loop is busy: its step is queued; the busy step cancels the timer.
+            // The timer is started by the step that holds the loop, so it can't run before the loop is busy.
             var loop = new EventLoop(null, null);
             var fired = 0;
-            var timerFired = false;
-            LoopTimer? timer = null;
-            loop.Execute(() => timer = LoopTimer.Start(loop, 20, () => Interlocked.Increment(ref fired)));
+            var cancelled = false;
             var done = new ManualResetEventSlim();
             Task.Run(() => loop.Execute(() =>
             {
-                // Hold the loop past the timer's due time, so its step is queued behind this one.
-                Thread.Sleep(200);
-                timerFired = true;
-                timer!.Cancel();
+                var timer = LoopTimer.Start(loop, 20, () => Interlocked.Increment(ref fired));
+                // Hold the loop well past the timer's due time, so its step is queued behind this one.
+                Thread.Sleep(300);
+                timer.Cancel();
+                cancelled = true;
                 done.Set();
             }));
             Assert.True(done.Wait(Wait));
             Thread.Sleep(200);
-            Assert.True(timerFired);
+            Assert.True(cancelled);
             Assert.Equal(0, Volatile.Read(ref fired));
         }
 

@@ -19,6 +19,8 @@ namespace Centrifugal.Centrifuge.Tests
             /// <summary>Requests whose first byte is in here hang until cancelled.</summary>
             public readonly HashSet<byte> Hang = new();
             public readonly ConcurrentQueue<byte> Sent = new();
+            /// <summary>Set when a request that hangs has started.</summary>
+            public readonly ManualResetEventSlim Hanging = new();
 
             public CentrifugeTransportType Type => CentrifugeTransportType.HttpStream;
             public string Name => "fake";
@@ -34,7 +36,11 @@ namespace Centrifugal.Centrifuge.Tests
 
             public async Task SendEmulationAsync(byte[] data, string session, string node, string emulationEndpoint, CancellationToken cancellationToken = default)
             {
-                if (Hang.Contains(data[0])) await Task.Delay(Timeout.Infinite, cancellationToken);
+                if (Hang.Contains(data[0]))
+                {
+                    Hanging.Set();
+                    await Task.Delay(Timeout.Infinite, cancellationToken);
+                }
                 Sent.Enqueue(data[0]);
             }
 
@@ -111,7 +117,8 @@ namespace Centrifugal.Centrifuge.Tests
             var writer = new TransportWriter(transport, (_, _) => { }, TimeSpan.FromSeconds(5));
             writer.Enqueue(new OutgoingFrame(new byte[] { 1 }, null, null));
             writer.Enqueue(new OutgoingFrame(new byte[] { 2 }, null, null));
-            Thread.Sleep(100);
+            // Frame 1 is being written (hangs), frame 2 still waits in the queue.
+            Assert.True(transport.Hanging.Wait(TimeSpan.FromSeconds(5)));
             var dropped = writer.Close();
             Assert.Single(dropped);
             Assert.Equal(2, dropped[0].Data[0]);
