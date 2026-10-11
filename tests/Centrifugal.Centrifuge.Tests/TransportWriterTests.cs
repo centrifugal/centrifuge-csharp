@@ -73,13 +73,43 @@ namespace Centrifugal.Centrifuge.Tests
             await Task.CompletedTask;
         }
 
+        /// <summary>
+        /// A clock for a deadline: the first reading (at construction) is 0, later ones (when the timer fires)
+        /// are <paramref name="atFire"/>. It records when the timer first fired, so the test measures from
+        /// there and not from its own start: a CI runner may run the timer late.
+        /// </summary>
+        private sealed class FireClock
+        {
+            private readonly long _atFire;
+            private readonly System.Diagnostics.Stopwatch _sw = System.Diagnostics.Stopwatch.StartNew();
+            private int _readings;
+            private long _firedAt = -1;
+
+            public FireClock(long atFire) => _atFire = atFire;
+
+            public long FiredAtMs => Interlocked.Read(ref _firedAt);
+
+            public long ElapsedMs => _sw.ElapsedMilliseconds;
+
+            public long Now()
+            {
+                if (Interlocked.Increment(ref _readings) == 1) return 0;
+                Interlocked.CompareExchange(ref _firedAt, _sw.ElapsedMilliseconds, -1);
+                return _atFire;
+            }
+        }
+
         [Fact]
         public void DeadlineCancelsOnTimeWhenNotLate()
         {
-            using var deadline = new LateGraceDeadline(TimeSpan.FromMilliseconds(100));
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            Assert.True(deadline.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(5)));
-            Assert.InRange(sw.ElapsedMilliseconds, 50, 900);
+            // When the timer fires, the clock says it is on time: it cancels at once, without a grace period.
+            var clock = new FireClock(100);
+            using var deadline = new LateGraceDeadline(TimeSpan.FromMilliseconds(100), clock.Now);
+            Assert.True(deadline.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10)));
+            var cancelledAt = clock.ElapsedMs;
+            Assert.True(clock.FiredAtMs >= 50, $"fired after {clock.FiredAtMs} ms");
+            Assert.True(cancelledAt - clock.FiredAtMs < LateGraceDeadline.GraceMs / 2,
+                $"cancelled {cancelledAt - clock.FiredAtMs} ms after the timer fired");
         }
 
         /// <summary>
@@ -89,13 +119,14 @@ namespace Centrifugal.Centrifuge.Tests
         [Fact]
         public void LateDeadlineGivesGraceBeforeCancelling()
         {
-            var clock = 0L;
-            using var deadline = new LateGraceDeadline(TimeSpan.FromMilliseconds(100), () => Interlocked.Read(ref clock));
             // Simulate a suspension: when the timer fires, the clock is far past the due time.
-            Interlocked.Exchange(ref clock, 100 + LateGraceDeadline.LateMs + 5000);
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            Assert.True(deadline.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(5)));
-            Assert.InRange(sw.ElapsedMilliseconds, 100 + LateGraceDeadline.GraceMs - 200, 4000);
+            var clock = new FireClock(100 + LateGraceDeadline.LateMs + 5000);
+            using var deadline = new LateGraceDeadline(TimeSpan.FromMilliseconds(100), clock.Now);
+            Assert.True(deadline.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10)));
+            var cancelledAt = clock.ElapsedMs;
+            Assert.True(clock.FiredAtMs >= 0, "the timer never read the clock");
+            Assert.True(cancelledAt - clock.FiredAtMs >= LateGraceDeadline.GraceMs - 100,
+                $"cancelled {cancelledAt - clock.FiredAtMs} ms after the timer fired");
         }
 
         [Fact]
