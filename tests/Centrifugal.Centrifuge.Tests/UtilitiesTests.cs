@@ -150,7 +150,7 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         [Fact]
-        public void Raise_SubscriberException_DoesNotSkipOtherSubscribers()
+        public void Raise_SubscriberException_IsReportedAndReturned_AndStopsTheEvent()
         {
             var calls = 0;
             string? reported = null;
@@ -158,10 +158,12 @@ namespace Centrifugal.Centrifuge.Tests
             handler += (_, _) => calls++;
             EventHandler<CentrifugeErrorEventArgs> error = (_, e) => reported = e.Type;
 
-            EventDispatch.Raise(this, handler, EventArgs.Empty, "publication", error, null);
+            var thrown = EventDispatch.Raise(this, handler, EventArgs.Empty, "publication", error, null);
 
-            Assert.Equal(1, calls);
+            // The client stops: the subscribers after the failing one don't get an outdated event.
+            Assert.Equal(0, calls);
             Assert.Equal("publication", reported);
+            Assert.Equal("first", thrown?.Message);
         }
 
         [Fact]

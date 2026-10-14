@@ -130,7 +130,8 @@ namespace Centrifugal.Centrifuge
 
     /// <summary>
     /// Event raising for clients and subscriptions. An exception thrown by a handler goes to the
-    /// owner's Error event and never interrupts the SDK's own processing.
+    /// owner's Error event and is returned to the owner, which stops the client (see
+    /// CentrifugeClient.HandlerFailed); the SDK's own processing goes on as if the handler had returned.
     /// </summary>
     internal static class EventDispatch
     {
@@ -140,33 +141,36 @@ namespace Centrifugal.Centrifuge
 
         /// <summary>
         /// Calls the subscribers of an event one after another. If one throws, the exception is raised
-        /// as an Error of type <paramref name="type"/>, or just logged when nobody listens to Error.
-        /// Either way the remaining subscribers, the state transition with its cleanup and any later
-        /// events are not affected.
+        /// as an Error of type <paramref name="type"/>, or just logged when nobody listens to Error, the
+        /// remaining subscribers are not called (the client is about to stop, the event is outdated for
+        /// them), and the exception is returned. Null when no handler threw.
         /// </summary>
-        public static void Raise<TArgs>(object sender, EventHandler<TArgs>? handler, TArgs args, string type,
+        public static Exception? Raise<TArgs>(object sender, EventHandler<TArgs>? handler, TArgs args, string type,
             EventHandler<CentrifugeErrorEventArgs>? error, ILogger? logger)
         {
-            if (handler == null) return;
+            if (handler == null) return null;
 #if NET9_0_OR_GREATER
-            if (handler.HasSingleTarget)
-            {
-                Invoke(handler);
-                return;
-            }
+            if (handler.HasSingleTarget) return Invoke(handler);
 #endif
-            foreach (var subscriber in InvocationListOf(handler)) Invoke((EventHandler<TArgs>)subscriber);
+            foreach (var subscriber in InvocationListOf(handler))
+            {
+                var failure = Invoke((EventHandler<TArgs>)subscriber);
+                if (failure != null) return failure;
+            }
+            return null;
 
-            void Invoke(EventHandler<TArgs> subscriber)
+            Exception? Invoke(EventHandler<TArgs> subscriber)
             {
                 try
                 {
                     subscriber(sender, args);
+                    return null;
                 }
                 catch (Exception ex)
                 {
                     if (error == null) Log(logger, ex, type + " handler threw");
                     else RaiseError(sender, error, type, ex, logger);
+                    return ex;
                 }
             }
         }
@@ -174,16 +178,16 @@ namespace Centrifugal.Centrifuge
         /// <summary>
         /// Calls the Error subscribers one after another, taking code and temporary flag from a
         /// <see cref="CentrifugeException"/> when there is one. An Error handler that throws has nowhere
-        /// else to report to, so its exception is only logged and does not reach the caller.
+        /// else to report to, so its exception is only logged; it is returned, like one of any handler.
         /// </summary>
-        public static void RaiseError(object sender, EventHandler<CentrifugeErrorEventArgs>? handler,
+        public static Exception? RaiseError(object sender, EventHandler<CentrifugeErrorEventArgs>? handler,
             string type, Exception exception, ILogger? logger)
         {
-            if (handler == null) return;
+            if (handler == null) return null;
             var args = exception is CentrifugeException centrifugeException
                 ? new CentrifugeErrorEventArgs(type, centrifugeException.Code, exception.Message, centrifugeException.Temporary, exception)
                 : new CentrifugeErrorEventArgs(type, 0, exception.Message, false, exception);
-            Raise(sender, handler, args, "Error event", null, logger);
+            return Raise(sender, handler, args, "Error event", null, logger);
         }
 
         private static Delegate[] InvocationListOf(Delegate handler) =>

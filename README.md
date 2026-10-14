@@ -159,7 +159,14 @@ subscription.Subscribed += (sender, e) => subscribed.TrySetResult(true);
 
 **Exception Handling in Event Handlers**
 
-When a handler throws synchronously, the SDK catches the exception and raises the `Error` event of the client or subscription, with `Type` set to the name of the failing event (`publication`, `subscribing`, ...). Nothing else changes: the remaining handlers, the state transition, reconnects and later events all proceed. An `async void` handler that throws after its first `await` is out of the SDK's reach, and the exception crashes the application. Catch exceptions yourself:
+Event handlers should not throw: catch exceptions in your handlers. The SDK can't know what a throwing handler left undone, so it fails loudly instead of going on as if nothing happened:
+
+* the exception is reported through the `Error` event of the client or subscription, with `Type` set to the name of the failing event (`publication`, `subscribing`, ...);
+* the client disconnects with code `2` (bad protocol) and the reason `exception in event handler: <message>`, and doesn't reconnect: call `Connect()` to start again;
+* the handlers after the failing one don't get that event; the SDK's own work completes as if the handler had returned, so the client is left in a consistent state;
+* a publication whose handler threw doesn't count as delivered: after `Connect()`, a recoverable subscription receives it again.
+
+An exception thrown by an `Error` handler is logged, and stops the client as well. An `async void` handler that throws after its first `await` is out of the SDK's reach, and the exception crashes the application. Catch exceptions yourself:
 
 ```csharp
 // ❌ BAD: throws after the first await - crashes the application

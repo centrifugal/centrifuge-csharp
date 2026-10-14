@@ -1269,28 +1269,81 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal(CentrifugeClientState.Disconnected, client.State);
         }
 
+        /// <summary>
+        /// A Connected handler that throws stops the client: it is reported through Error, and the client
+        /// disconnects with BadProtocol and doesn't reconnect. A Connect() afterwards subscribes the
+        /// subscription the throw left subscribing.
+        /// </summary>
         [Fact]
-        public async Task ThrowingConnectedHandlerDoesNotStrandSubscriptions()
+        public async Task ThrowingConnectedHandlerStopsTheClient()
         {
             var client = NewClient();
             var sub = client.NewSubscription("after-throw");
             sub.Subscribe();
             var errors = 0;
+            var disconnected = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
             client.Error += (_, _) => Interlocked.Increment(ref errors);
-            client.Connected += (_, _) => throw new InvalidOperationException("handler bug");
+            client.Disconnected += (_, e) => disconnected.TrySetResult(e.Code);
+            var connected = 0;
+            client.Connected += (_, _) =>
+            {
+                if (Interlocked.Increment(ref connected) == 1) throw new InvalidOperationException("handler bug");
+            };
             client.Connect();
 
-            await sub.ReadyAsync(Wait);
+            Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, await disconnected.Task.WaitAsync(Wait));
             Assert.True(Volatile.Read(ref errors) > 0);
+            await Task.Delay(200);
+            Assert.Equal(CentrifugeClientState.Disconnected, client.State);
+            Assert.Equal(1, _server.Received.Count(c => c.Connect != null));
+
+            client.Connect();
+            await sub.ReadyAsync(Wait);
         }
 
         /// <summary>
-        /// A Connected handler that throws doesn't stop the server-side subscriptions of the
-        /// connect reply from being applied: the next connect recovers them from the reply's
-        /// positions and stops asking for a channel the reply left out.
+        /// A Publication handler that throws stops the client, and the publication doesn't count as
+        /// delivered: the position stays before it, so the next subscribe recovers it again.
         /// </summary>
         [Fact]
-        public async Task ThrowingConnectedHandlerStillAppliesServerSubscriptions()
+        public async Task ThrowingPublicationHandlerLeavesThePositionBeforeIt()
+        {
+            _server.OnSubscribe = (_, req) => new SubscribeResult
+            {
+                Recoverable = true, Epoch = "e", Offset = req.Recover ? req.Offset : 0,
+                WasRecovering = req.Recover, Recovered = req.Recover,
+            };
+            var client = NewClient();
+            var sub = client.NewSubscription("positions", new CentrifugeSubscriptionOptions { Recoverable = true });
+            var publications = 0;
+            sub.Publication += (_, _) =>
+            {
+                if (Interlocked.Increment(ref publications) == 1) throw new InvalidOperationException("publication handler");
+            };
+            var disconnected = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            client.Disconnected += (_, e) => disconnected.TrySetResult(e.Code);
+            sub.Subscribe();
+            client.Connect();
+            await sub.ReadyAsync(Wait);
+
+            await _server.SendPushAsync(new Push { Channel = "positions", Pub = new Publication { Data = ByteString.CopyFromUtf8("{}"), Offset = 1 } });
+            Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, await disconnected.Task.WaitAsync(Wait));
+
+            client.Connect();
+            await sub.ReadyAsync(Wait);
+            var last = _server.LastSubscribe()!;
+            Assert.True(last.Recover);
+            Assert.Equal(0UL, last.Offset);
+        }
+
+        /// <summary>
+        /// A Connected handler that throws stops the client within the connect reply, as a handler calling
+        /// Disconnect() does: the rest of the reply, its server-side subscriptions, is not applied, since the
+        /// application didn't get their events (a stored position would hide a gap from it). The next connect
+        /// recovers from the positions known before that reply.
+        /// </summary>
+        [Fact]
+        public async Task ThrowingConnectedHandlerLeavesTheReplysServerSubscriptions()
         {
             var first = new ConnectResult { Client = "c", Version = "0.0.0", Ping = 25 };
             first.Subs.Add("gone", new SubscribeResult { Recoverable = true, Positioned = true, Epoch = "e", Offset = 1 });
@@ -1310,13 +1363,15 @@ namespace Centrifugal.Centrifuge.Tests
             _server.ConnectResult = second;
             _server.CloseConnection();
             await Until(() => Volatile.Read(ref connected) == 2);
+            // The throw stopped the client: it connects again only when the application asks.
+            await Until(() => client.State == CentrifugeClientState.Disconnected);
             _server.ConnectResult = new ConnectResult { Client = "c", Version = "0.0.0", Ping = 25 };
-            _server.CloseConnection();
+            client.Connect();
             await Until(() => _server.Received.Count(c => c.Connect != null) == 3);
 
             var subs = _server.Received.Last(c => c.Connect != null).Connect.Subs;
-            Assert.Equal(new[] { "kept" }, subs.Keys.ToArray());
-            Assert.Equal(5UL, subs["kept"].Offset);
+            Assert.Equal(new[] { "gone" }, subs.Keys.ToArray());
+            Assert.Equal(1UL, subs["gone"].Offset);
         }
 
         /// <summary>
@@ -1669,11 +1724,11 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         /// <summary>
-        /// A teardown transition handler that throws doesn't stop the reconnect: the session is
-        /// restored and the subscription subscribes again.
+        /// A teardown transition handler that throws stops the client instead of the reconnect: it
+        /// disconnects with BadProtocol and connects again only when the application asks.
         /// </summary>
         [Fact]
-        public async Task ThrowingSubscribingHandlerDoesNotStopReconnect()
+        public async Task ThrowingSubscribingHandlerInTeardownStopsTheClient()
         {
             var client = NewClient();
             client.Connect();
@@ -1681,27 +1736,50 @@ namespace Centrifugal.Centrifuge.Tests
             var sub = client.NewSubscription("reconnect");
             sub.Subscribe();
             await sub.ReadyAsync(Wait);
-            sub.Subscribing += (_, _) => throw new InvalidOperationException("subscribing handler");
+            var disconnected = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            client.Disconnected += (_, e) => disconnected.TrySetResult(e.Code);
+            var throws = 0;
+            sub.Subscribing += (_, _) =>
+            {
+                if (Interlocked.Increment(ref throws) == 1) throw new InvalidOperationException("subscribing handler");
+            };
 
             _server.CloseConnection();
-            await Until(() => _server.Received.Count(c => c.Connect != null) == 2);
+            Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, await disconnected.Task.WaitAsync(Wait));
+            await Task.Delay(300);
+            Assert.Equal(1, _server.Received.Count(c => c.Connect != null));
+
+            client.Connect();
             await sub.ReadyAsync(Wait);
         }
 
         /// <summary>
-        /// An Error handler that throws doesn't break the SDK code reporting the error: with both
-        /// Connected and Error throwing, the session is still established and usable.
+        /// An Error handler that throws while the exception of a Connected handler is reported doesn't
+        /// break the SDK code reporting it: the client stops cleanly, and a Connect() afterwards gives a
+        /// usable session.
         /// </summary>
         [Fact]
-        public async Task ThrowingErrorHandlerDoesNotBreakEstablishedSession()
+        public async Task ThrowingErrorHandlerDoesNotBreakTheStop()
         {
             _server.OnCommand = cmd => cmd.Rpc != null ? new Reply { Id = cmd.Id, Rpc = new RPCResult() } : null;
             var client = NewClient();
-            client.Connected += (_, _) => throw new InvalidOperationException("connected handler");
-            client.Error += (_, _) => throw new InvalidOperationException("error handler");
+            var disconnected = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            client.Disconnected += (_, e) => disconnected.TrySetResult(e.Code);
+            var connected = 0;
+            var errors = 0;
+            client.Connected += (_, _) =>
+            {
+                if (Interlocked.Increment(ref connected) == 1) throw new InvalidOperationException("connected handler");
+            };
+            client.Error += (_, _) =>
+            {
+                if (Interlocked.Increment(ref errors) == 1) throw new InvalidOperationException("error handler");
+            };
+            client.Connect();
+            Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, await disconnected.Task.WaitAsync(Wait));
+
             client.Connect();
             await client.ReadyAsync(Wait);
-
             await client.RpcAsync("method", ReadOnlyMemory<byte>.Empty).WaitAsync(Wait);
             Assert.Equal(CentrifugeClientState.Connected, client.State);
         }

@@ -2059,14 +2059,18 @@ namespace Centrifugal.Centrifuge
         {
             var args = CreatePublicationArgs(channel, pub);
             if (pub.Offset > 0) _pendingServerSubOffsets[channel] = pub.Offset;
+            bool failed;
             try
             {
-                Raise(Publication, args, "publication");
+                failed = Raise(Publication, args, "publication");
             }
             finally
             {
                 _pendingServerSubOffsets.Remove(channel);
             }
+            // A publication whose handler threw isn't delivered: the position stays before it, so the
+            // next recovery delivers it again.
+            if (failed) return;
             if (!_serverSubs.TryGetValue(channel, out var serverSub)) return;
             if (pub.Offset > 0) serverSub.Offset = pub.Offset;
             // The epoch of a channel that had no stream at subscribe time comes with its first publication.
@@ -2081,12 +2085,36 @@ namespace Centrifugal.Centrifuge
         // ---------------------------------------------------------------------------------------------
         // Events
 
-        /// <summary>Raises one of this object's events through <see cref="EventDispatch.Raise{TArgs}"/>.</summary>
-        private void Raise<TArgs>(EventHandler<TArgs>? handler, TArgs args, string type) =>
-            EventDispatch.Raise(this, handler, args, type, Error, _logger);
+        /// <summary>
+        /// Raises one of this object's events through <see cref="EventDispatch.Raise{TArgs}"/>. Returns
+        /// whether a handler threw, which stopped the client.
+        /// </summary>
+        private bool Raise<TArgs>(EventHandler<TArgs>? handler, TArgs args, string type) =>
+            HandlerFailed(EventDispatch.Raise(this, handler, args, type, Error, _logger));
 
         private void EmitErrorEvent(string type, Exception exception) =>
-            EventDispatch.RaiseError(this, Error, type, exception, _logger);
+            HandlerFailed(EventDispatch.RaiseError(this, Error, type, exception, _logger));
+
+        /// <summary>The number of exceptions escaped from event handlers (see <see cref="HandlerFailed"/>).</summary>
+        internal int HandlerFailures { get; private set; }
+
+        /// <summary>
+        /// An exception escaping an application event handler (already reported through Error). The SDK
+        /// can't know what the handler left undone, so it fails loudly instead of going on as if nothing
+        /// happened: the client disconnects with BadProtocol and doesn't reconnect. Its own processing
+        /// continues as if the handler had returned, as for a handler calling Disconnect(), so no state
+        /// change is left half done. Returns whether there was an exception.
+        /// </summary>
+        internal bool HandlerFailed(Exception? exception)
+        {
+            if (exception == null) return false;
+            HandlerFailures++;
+            if (_state != CentrifugeClientState.Disconnected)
+            {
+                DisconnectInternal(CentrifugeDisconnectedCodes.BadProtocol, "exception in event handler: " + exception.Message, false);
+            }
+            return true;
+        }
 
         internal static CentrifugePublicationEventArgs CreatePublicationArgs(string channel, Publication pub)
         {

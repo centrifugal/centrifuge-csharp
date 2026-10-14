@@ -733,14 +733,18 @@ namespace Centrifugal.Centrifuge
 
             var args = CentrifugeClient.CreatePublicationArgs(Channel, pub, data);
             _pendingOffset = pub.Offset > 0 ? pub.Offset : (ulong?)null;
+            bool failed;
             try
             {
-                Raise(Publication, args, "publication");
+                failed = Raise(Publication, args, "publication");
             }
             finally
             {
                 _pendingOffset = null;
             }
+            // A publication whose handler threw isn't delivered: the position stays before it, so the next
+            // recovery delivers it again. The client stopped: nothing after it is delivered either.
+            if (failed) return false;
             if (pub.Offset > 0) _offset = pub.Offset;
             // The epoch of a channel that had no stream at subscribe time comes with its first publication.
             if (!string.IsNullOrEmpty(pub.Epoch)) _epoch = pub.Epoch;
@@ -945,11 +949,14 @@ namespace Centrifugal.Centrifuge
         private static CentrifugeException UnsubscribedError() =>
             new CentrifugeException(CentrifugeErrorCodes.SubscriptionUnsubscribed, "subscription unsubscribed", false);
 
-        /// <summary>Raises one of this object's events through <see cref="EventDispatch.Raise{TArgs}"/>.</summary>
-        private void Raise<TArgs>(EventHandler<TArgs>? handler, TArgs args, string type) =>
-            EventDispatch.Raise(this, handler, args, type, Error, _client.Logger);
+        /// <summary>
+        /// Raises one of this object's events through <see cref="EventDispatch.Raise{TArgs}"/>. Returns
+        /// whether a handler threw, which stopped the client (see CentrifugeClient.HandlerFailed).
+        /// </summary>
+        private bool Raise<TArgs>(EventHandler<TArgs>? handler, TArgs args, string type) =>
+            _client.HandlerFailed(EventDispatch.Raise(this, handler, args, type, Error, _client.Logger));
 
         private void EmitErrorEvent(string type, Exception exception) =>
-            EventDispatch.RaiseError(this, Error, type, exception, _client.Logger);
+            _client.HandlerFailed(EventDispatch.RaiseError(this, Error, type, exception, _client.Logger));
     }
 }
