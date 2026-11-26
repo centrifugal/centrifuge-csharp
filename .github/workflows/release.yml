@@ -8,6 +8,12 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # The NuGet Trusted Publishing policy (nuget.org account FZambia) names this repository, release.yml
+    # and this environment.
+    environment: release
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # NuGet Trusted Publishing
 
     steps:
     - uses: actions/checkout@v6
@@ -34,8 +40,18 @@ jobs:
     - name: Pack
       run: dotnet pack src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj --configuration Release --no-build --output ./artifacts
 
+    # Trusted Publishing: the job's OIDC token buys a short-lived API key, so no long-lived key is stored.
+    # A version already on NuGet is skipped, so a rerun after a failure completes the release.
+    - name: Log in to NuGet
+      id: nuget
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+      with:
+        user: FZambia
+
     - name: Publish to NuGet
-      run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      env:
+        NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+      run: dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v3

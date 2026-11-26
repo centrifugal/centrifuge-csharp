@@ -1,213 +1,43 @@
-# Publishing Centrifuge C# SDK to NuGet
+# Publishing
 
-This guide explains how to publish the Centrifuge C# SDK to NuGet.org.
+Releases are published to [NuGet](https://www.nuget.org/packages/Centrifugal.Centrifuge/) by
+`.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed. Nobody runs `dotnet nuget push` by hand.
 
-## Prerequisites
+## Releasing
 
-1. **NuGet.org Account**
-   - Create an account at [nuget.org](https://www.nuget.org/)
-   - Verify your email address
+1. **Bump the version** in a normal commit (or PR) to `main`, titled `bump to X.Y.Z`: `<Version>` in
+   `src/Centrifugal.Centrifuge/Centrifugal.Centrifuge.csproj`. Bump by semver: before 1.0, a breaking
+   change bumps the minor version (`0.1.x` → `0.2.0`), anything else bumps the patch.
+2. **Wait for CI** to pass on `main`.
+3. **Tag it.** Either push a tag, `git tag vX.Y.Z && git push origin vX.Y.Z`, and let the workflow
+   create the GitHub release with generated notes; or create the release on GitHub first (Releases →
+   Draft a new release → new tag `vX.Y.Z` on `main`, write the notes, publish).
+4. The tag runs the release workflow: it builds and packs the package, pushes it to NuGet, and attaches
+   it to the GitHub release.
 
-2. **API Key**
-   - Go to your [NuGet API Keys page](https://www.nuget.org/account/apikeys)
-   - Click "Create"
-   - Give it a name (e.g., "centrifuge-csharp-publish")
-   - Select "Push" scope
-   - Select "Push new packages and package versions"
-   - For package glob pattern, enter: `Centrifuge.Client*`
-   - Click "Create"
-   - **IMPORTANT**: Copy the API key immediately - you won't see it again!
+A version already on NuGet is skipped, so rerunning the workflow after a failure finishes the release.
+A rerun uses the workflow file of the tagged commit: if the workflow itself had to be fixed, move the
+tag to the fixed commit before rerunning (only while the version isn't on NuGet yet).
 
-3. **GitHub Repository Setup**
-   - Create a new repository: `centrifugal/centrifuge-csharp`
-   - Add your NuGet API key as a GitHub secret:
-     - Go to repository Settings → Secrets and variables → Actions
-     - Click "New repository secret"
-     - Name: `NUGET_API_KEY`
-     - Value: (paste your NuGet API key)
-     - Click "Add secret"
+## Release setup (one time, maintainers)
 
-## Initial Setup
-
-### 1. Initialize Git Repository
-
-```bash
-cd centrifuge-csharp
-
-# Initialize git
-git init
-
-# Add files
-git add .
-
-# Commit
-git commit -m "Initial commit: Centrifuge C# SDK v1.0.0"
-
-# Add remote (replace with your repository URL)
-git remote add origin https://github.com/centrifugal/centrifuge-csharp.git
-
-# Push to GitHub
-git branch -M main
-git push -u origin main
-```
-
-## Publishing Workflow
-
-### Automatic Publishing (Recommended)
-
-Update version in Centrifuge/Centrifuge.csproj before tagging, push.
-
-The repository is configured with GitHub Actions for automatic publishing:
-
-```bash
-# 2. Create and push a version tag
-git tag v1.0.0
-git push origin v1.0.0
-
-# GitHub Actions will automatically:
-# - Build the project
-# - Run tests
-# - Pack the NuGet package
-# - Publish to NuGet.org
-# - Create a GitHub release
-```
-
-### Manual Publishing
-
-If you prefer to publish manually:
-
-Update version in Centrifuge/Centrifuge.csproj before tagging, push.
-
-```bash
-# 1. Clean and restore
-dotnet clean
-dotnet restore
-
-# 2. Build in Release mode
-dotnet build --configuration Release
-
-# 3. Run tests
-dotnet test --configuration Release
-
-# 4. Pack the NuGet package
-dotnet pack src/Centrifuge/Centrifuge.csproj --configuration Release --output ./artifacts
-
-# 5. Publish to NuGet.org
-dotnet nuget push ./artifacts/Centrifuge.Client.*.nupkg \
-    --api-key YOUR_API_KEY \
-    --source https://api.nuget.org/v3/index.json
-```
-
-## Version Management
-
-### Updating the Version
-
-Edit `src/Centrifuge/Centrifuge.csproj`:
-
-```xml
-<PropertyGroup>
-    <Version>1.0.1</Version>
-</PropertyGroup>
-```
-
-## Release Checklist
-
-Before each release:
-
-- [ ] All tests pass
-- [ ] Version updated in `.csproj`
-- [ ] CHANGELOG.md updated
-- [ ] README.md reviewed
-- [ ] Examples tested
-- [ ] Documentation updated
-- [ ] No debug code left
-
-## Publishing Pre-release Versions
-
-For beta or RC versions:
-
-```xml
-<PropertyGroup>
-    <Version>1.1.0-beta.1</Version>
-</PropertyGroup>
-```
-
-Then tag and push:
-```bash
-git tag v1.1.0-beta.1
-git push origin v1.1.0-beta.1
-```
-
-Pre-release versions won't be installed by default unless explicitly requested:
-```bash
-dotnet add package Centrifuge.Client --version 1.1.0-beta.1
-```
+1. **NuGet Trusted Publishing.** On [nuget.org](https://www.nuget.org), signed in as `FZambia` (the
+   `user` in `release.yml`), open Trusted Publishing and add a GitHub Actions policy: owner
+   `centrifugal`, repository `centrifuge-csharp`, workflow file `release.yml`, environment `release`.
+   The workflow then exchanges its GitHub OIDC token for a short-lived NuGet key at each release, so no
+   API key is stored. (NuGet API keys now last at most 30 days: keys with a longer duration expired on
+   November 1, 2026.)
+2. **GitHub environment.** Create an environment named `release` (Settings → Environments); it needs
+   no secrets. Under deployment branches and tags, allow only tags matching `v*`. Optionally add
+   required reviewers: they then approve each release.
+3. **Tag protection** (recommended). Add a tag ruleset for `v*` (Settings → Rules → Rulesets) that
+   only maintainers can bypass, so only they can create, move or delete release tags.
 
 ## Troubleshooting
 
-### Package Already Exists
-
-If you get "package already exists" error:
-- Increment the version number
-- You cannot republish the same version
-
-### Authentication Failed
-
-If authentication fails:
-- Check your API key is correct
-- Ensure API key has "Push" permissions
-- Verify package glob pattern matches "Centrifuge.Client*"
-
-### Package Not Appearing
-
-After publishing:
-- It may take 10-15 minutes to index
-- Check [nuget.org/packages/Centrifuge.Client](https://www.nuget.org/packages/Centrifuge.Client)
-- Verify no errors in GitHub Actions logs
-
-## Package Metadata
-
-The package metadata is defined in `src/Centrifuge/Centrifuge.csproj`:
-
-```xml
-<PropertyGroup>
-    <PackageId>Centrifuge.Client</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Centrifugal</Authors>
-    <Company>Centrifugal</Company>
-    <Description>C# client SDK for Centrifugo and Centrifuge</Description>
-    <PackageProjectUrl>https://github.com/centrifugal/centrifuge-csharp</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/centrifugal/centrifuge-csharp</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>centrifugo;centrifuge;websocket;real-time;messaging</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>icon.png</PackageIcon>
-</PropertyGroup>
-```
-
-## Monitoring
-
-After publishing:
-
-1. **NuGet.org Stats**
-   - View download stats at [nuget.org/packages/Centrifuge.Client](https://www.nuget.org/packages/Centrifuge.Client)
-   - Monitor for support requests
-
-2. **GitHub**
-   - Watch for issues
-   - Review pull requests
-   - Monitor discussions
-
-3. **CI/CD**
-   - Check GitHub Actions for build status
-   - Review any failed builds
-
-## Support
-
-For questions about publishing:
-- NuGet Documentation: https://docs.microsoft.com/en-us/nuget/
-- GitHub Actions: https://docs.github.com/en/actions
-
-For Centrifugo-specific questions:
-- Centrifugal Docs: https://centrifugal.dev/
-- GitHub Issues: https://github.com/centrifugal/centrifuge-csharp/issues
+- **`403` from NuGet with "API key has expired" or "is invalid":** the workflow isn't using Trusted
+  Publishing. Check that the job runs `NuGet/login` and that the policy on nuget.org names this
+  repository, `release.yml` and the `release` environment exactly.
+- **`NuGet/login` fails:** the policy doesn't match the run (repository, workflow file name or
+  environment), or the job lacks `id-token: write`.
+- **The package doesn't appear right away:** NuGet usually indexes a new version within about 15 minutes.
