@@ -11,13 +11,16 @@
 // (PROBE_WS, PROBE_TOKEN and PROBE_CHANNEL environment variables override the settings below.)
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -119,13 +122,92 @@ public static class CentrifugeProbe
 
     static async Task<int> RunAllAsync()
     {
+        // Thread-pool latency is sampled through the whole run: the SDK handles replies on the pool,
+        // so a starved pool looks exactly like a missing reply.
+        using var pool = new PoolSampler();
         LogEnvironment();
+        LogThreadPoolAndTls();
+        await LogDnsAsync();
+        await LogTlsAsync();
+        Log("thread pool latency (idle): " + pool.Snapshot());
         await RawAsync("raw JSON, no subprotocol (does the socket work at all?)", null, receiveFirst: true);
         await RawAsync("raw protobuf, receive pending before send (as the SDK does)", "centrifuge-protobuf", receiveFirst: true);
         await RawAsync("raw protobuf, send before receive", "centrifuge-protobuf", receiveFirst: false);
+        Log("thread pool latency (raw checks): " + pool.Snapshot());
         var ok = await ClientAsync();
+        Log("thread pool latency (SDK check): " + pool.Snapshot());
         Log("RESULT: client " + (ok ? "OK" : "FAILED"));
         return ok ? 0 : 1;
+    }
+
+    static void LogThreadPoolAndTls()
+    {
+        ThreadPool.GetMinThreads(out var minWorker, out var minIo);
+        ThreadPool.GetMaxThreads(out var maxWorker, out var maxIo);
+        ThreadPool.GetAvailableThreads(out var availWorker, out var availIo);
+        Log($"thread pool (worker/io): cpus={Environment.ProcessorCount} min={minWorker}/{minIo} " +
+            $"max={maxWorker}/{maxIo} available={availWorker}/{availIo}");
+        var callback = ServicePointManager.ServerCertificateValidationCallback;
+        var owner = callback?.Method.DeclaringType;
+        Log("global certificate validation callback: " +
+            (owner == null ? "none" : "SET by " + owner.FullName + " (" + owner.Assembly.GetName().Name + ")"));
+    }
+
+    static async Task LogDnsAsync()
+    {
+        var host = new Uri(Ws).Host;
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(host).ConfigureAwait(false);
+            Log($"dns {host}: {string.Join(", ", addresses.Select(a => a.ToString()))} ({sw.ElapsedMilliseconds}ms)");
+        }
+        catch (Exception e)
+        {
+            Log($"dns {host}: FAILED after {sw.ElapsedMilliseconds}ms: {e.GetType().Name}: {e.Message}");
+        }
+    }
+
+    /// <summary>Logs the server certificate and chain of a wss:// connection. Called from the validation callback,
+    /// so it must never throw.</summary>
+    static void LogCertificate(X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors)
+    {
+        try
+        {
+            Log("tls: policy errors=" + errors);
+            if (certificate != null)
+            {
+                var leaf = new X509Certificate2(certificate);
+                Log($"tls: leaf subject='{leaf.Subject}' issuer='{leaf.Issuer}' valid {leaf.NotBefore:u} .. {leaf.NotAfter:u} " +
+                    $"sig={leaf.SignatureAlgorithm.FriendlyName}");
+            }
+            // Unity's TLS stack may hand over an empty X509Chain whose members throw.
+            try
+            {
+                if (chain == null || chain.ChainElements == null || chain.ChainElements.Count == 0)
+                {
+                    Log("tls: chain not exposed by this TLS stack (the leaf issuer above names the CA)");
+                    return;
+                }
+                foreach (var element in chain.ChainElements)
+                {
+                    var status = element.ChainElementStatus != null && element.ChainElementStatus.Length > 0
+                        ? " status=" + string.Join(",", element.ChainElementStatus.Select(s => s.Status.ToString()))
+                        : "";
+                    Log("tls: chain '" + element.Certificate?.Subject + "'" + status);
+                }
+                if (chain.ChainStatus != null && chain.ChainStatus.Length > 0)
+                    Log("tls: chain status: " + string.Join("; ", chain.ChainStatus.Select(s => s.Status + " " + s.StatusInformation?.Trim())));
+            }
+            catch (Exception)
+            {
+                Log("tls: chain not exposed by this TLS stack (the leaf issuer above names the CA)");
+            }
+        }
+        catch (Exception e)
+        {
+            Log("tls: could not read the certificate: " + e.Message);
+        }
     }
 
     static void LogEnvironment()
@@ -230,6 +312,45 @@ public static class CentrifugeProbe
         }
     }
 
+    /// <summary>For wss:// only: a plain TLS handshake with the server, to see the certificate chain and the
+    /// platform's verdict. Unity's ClientWebSocket doesn't expose these (it ignores validation callbacks).</summary>
+    static async Task LogTlsAsync()
+    {
+        var uri = new Uri(Ws);
+        if (!string.Equals(uri.Scheme, "wss", StringComparison.OrdinalIgnoreCase)) return;
+        Log("--- TLS handshake (SslStream, outside the WebSocket) ---");
+        var port = uri.IsDefaultPort ? 443 : uri.Port;
+        try
+        {
+            using var tcp = new System.Net.Sockets.TcpClient();
+            var connect = tcp.ConnectAsync(uri.Host, port);
+            if (await Task.WhenAny(connect, Task.Delay(StepTimeout)).ConfigureAwait(false) != connect)
+            {
+                Log($"tls: TCP connect to port {port} did not complete within {StepTimeout.TotalSeconds}s");
+                return;
+            }
+            await connect.ConfigureAwait(false);
+            using var ssl = new SslStream(tcp.GetStream(), false, (sender, certificate, chain, errors) =>
+            {
+                LogCertificate(certificate, chain, errors);
+                return errors == SslPolicyErrors.None;
+            });
+            var auth = ssl.AuthenticateAsClientAsync(uri.Host);
+            if (await Task.WhenAny(auth, Task.Delay(StepTimeout)).ConfigureAwait(false) != auth)
+            {
+                Log($"tls: handshake did not complete within {StepTimeout.TotalSeconds}s");
+                return;
+            }
+            await auth.ConfigureAwait(false);
+            Log($"tls: handshake OK, protocol={ssl.SslProtocol} cipher={ssl.CipherAlgorithm} hash={ssl.HashAlgorithm}");
+        }
+        catch (Exception e)
+        {
+            Log("tls: handshake FAILED: " + e.GetType().Name + ": " + e.Message +
+                (e.InnerException != null ? " | " + e.InnerException.GetType().Name + ": " + e.InnerException.Message : ""));
+        }
+    }
+
     static string DecodeReplies(byte[] data, int count)
     {
         try
@@ -303,5 +424,56 @@ public static class CentrifugeProbe
     {
         public static readonly NullScope Instance = new NullScope();
         public void Dispose() { }
+    }
+
+    /// <summary>Measures how long a work item queued to the thread pool waits before it runs, every 20 ms.
+    /// It runs on its own thread, so a starved pool can't stall the measuring itself.</summary>
+    sealed class PoolSampler : IDisposable
+    {
+        const int GiveUpMs = 5000;
+        readonly object _gate = new object();
+        readonly List<double> _samples = new List<double>();
+        int _stuck;
+        volatile bool _stop;
+
+        public PoolSampler()
+        {
+            new Thread(Run) { IsBackground = true, Name = "probe-pool-sampler" }.Start();
+        }
+
+        void Run()
+        {
+            while (!_stop)
+            {
+                var sw = Stopwatch.StartNew();
+                // Not disposed: after a give-up the work item may still set it later.
+                var ran = new ManualResetEventSlim();
+                ThreadPool.QueueUserWorkItem(_ => ran.Set());
+                var ok = ran.Wait(GiveUpMs);
+                lock (_gate)
+                {
+                    if (ok) _samples.Add(sw.Elapsed.TotalMilliseconds);
+                    else _stuck++;
+                }
+                Thread.Sleep(20);
+            }
+        }
+
+        /// <summary>Stats since the previous snapshot.</summary>
+        public string Snapshot()
+        {
+            lock (_gate)
+            {
+                var s = _samples.OrderBy(x => x).ToList();
+                var stuck = _stuck;
+                _samples.Clear();
+                _stuck = 0;
+                if (s.Count == 0) return $"no samples, {stuck} not run within {GiveUpMs}ms";
+                return $"{s.Count} samples, median {s[s.Count / 2]:0.0}ms, max {s[s.Count - 1]:0.0}ms, " +
+                       $"over 100ms: {s.Count(x => x > 100)}, not run within {GiveUpMs}ms: {stuck}";
+            }
+        }
+
+        public void Dispose() => _stop = true;
     }
 }

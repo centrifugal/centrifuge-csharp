@@ -9,7 +9,11 @@ checks the SDK on Unity's Mono runtime layer by layer:
 4. The real `CentrifugeClient` with SDK logging on: connect, and subscribe/publish if a channel is set.
 
 It also reports the Unity and Mono versions, the architecture, the system proxy, the Enter Play Mode
-settings and the versions of the dependency DLLs that actually load.
+settings, the versions of the dependency DLLs that actually load, thread-pool settings and the latency
+of queued work in each phase (the SDK handles replies on the pool), DNS results, whether a global
+certificate validation callback is set, and for `wss://` a separate TLS handshake with the certificate
+chain and the platform's verdict (Unity's `ClientWebSocket` ignores validation callbacks, so the
+chain can't be observed through it).
 
 ## In your own project
 
