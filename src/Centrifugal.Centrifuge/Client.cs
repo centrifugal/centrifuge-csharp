@@ -733,13 +733,23 @@ namespace Centrifugal.Centrifuge
                 (error, _) => Loop.Complete(() => Waiters.Fail(result, error)));
             AddCommand(command);
             if (!cancellationToken.CanBeCanceled) return;
-            var registration = cancellationToken.Register(() => Loop.Execute(() =>
+            CancellationTokenRegistration registration;
+            try
             {
-                if (!_calls.TryGetValue(id, out var call)) return;
-                _calls.Remove(id);
-                call.Timer?.Cancel();
-                Loop.Complete(() => result.TrySetCanceled(cancellationToken));
-            }));
+                registration = cancellationToken.Register(() => Loop.Execute(() =>
+                {
+                    if (!_calls.TryGetValue(id, out var call)) return;
+                    _calls.Remove(id);
+                    call.Timer?.Cancel();
+                    Loop.Complete(() => result.TrySetCanceled(cancellationToken));
+                }));
+            }
+            catch (ObjectDisposedException)
+            {
+                // The application disposed the token's source meanwhile (some runtimes throw then): it can't be
+                // cancelled any more, so the call goes on without it.
+                return;
+            }
             result.Task.ContinueWith(_ => registration.Dispose(), TaskContinuationOptions.ExecuteSynchronously);
         }
 
@@ -951,7 +961,7 @@ namespace Centrifugal.Centrifuge
             if (transport.UsesEmulation)
             {
                 // The connect command goes with the request that opens the stream.
-                initialData = SendConnect(skipSending: true).ToByteArray();
+                initialData = EncodeCommand(SendConnect(skipSending: true));
             }
 
             _transportClosed = false;
@@ -1658,9 +1668,11 @@ namespace Centrifugal.Centrifuge
             catch (Exception ex)
             {
                 // Encoding failed: a broken environment (e.g. a dependency missing at run time) or an SDK bug.
-                // The commands of this frame and after it are lost, so their sends fail now; their calls fail
-                // with the teardown that the step failure leads to (see OnStepFailed).
-                FailSends(commands.Skip(frameStart).Where(entry => entry.Sent != null).Select(entry => entry.Sent!).ToList(), WriteError(ex));
+                // The commands of this frame and after it are lost: their calls and sends fail now, with the
+                // cause. The step failure then stops the client (see OnStepFailed).
+                var lost = commands.Skip(frameStart).ToList();
+                FailCalls(lost.Where(entry => entry.Command.Id > 0).Select(entry => entry.Command.Id), WriteError(ex));
+                FailSends(lost.Where(entry => entry.Sent != null).Select(entry => entry.Sent!).ToList(), WriteError(ex));
                 throw;
             }
         }
@@ -1673,6 +1685,19 @@ namespace Centrifugal.Centrifuge
             _flushNow = false;
             _flushTimer?.Cancel();
             _flushTimer = null;
+        }
+
+        /// <summary>Fails the pending calls <paramref name="ids"/> with <paramref name="error"/>, as a write
+        /// error (not replied). Call in a step.</summary>
+        private void FailCalls(IEnumerable<uint> ids, CentrifugeException error)
+        {
+            foreach (var id in ids)
+            {
+                if (!_calls.TryGetValue(id, out var call)) continue;
+                _calls.Remove(id);
+                call.Timer?.Cancel();
+                call.OnError(error, false);
+            }
         }
 
         /// <summary>
@@ -1691,16 +1716,7 @@ namespace Centrifugal.Centrifuge
             _logger?.LogDebug(error, "Error writing commands");
             FailSends(frame.Sends, WriteError(error));
             if (attempt.Id != _transportId) return;
-            if (frame.CallIds != null)
-            {
-                foreach (var id in frame.CallIds)
-                {
-                    if (!_calls.TryGetValue(id, out var call)) continue;
-                    _calls.Remove(id);
-                    call.Timer?.Cancel();
-                    call.OnError(WriteError(error), false);
-                }
-            }
+            if (frame.CallIds != null) FailCalls(frame.CallIds, WriteError(error));
             if (attempt.Transport.UsesEmulation && EmulationTransportFailed(error))
             {
                 OnTransportClose(attempt, null, string.Empty);

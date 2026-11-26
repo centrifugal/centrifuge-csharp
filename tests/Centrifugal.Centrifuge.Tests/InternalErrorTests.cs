@@ -49,12 +49,18 @@ namespace Centrifugal.Centrifuge.Tests
             public readonly TaskCompletionSource<CentrifugeErrorEventArgs> InternalError = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public readonly TaskCompletionSource<CentrifugeDisconnectedEventArgs> Disconnected = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public int Connecting;
+            public int InternalErrors;
         }
 
         private static Observed Observe(CentrifugeClient client)
         {
             var observed = new Observed();
-            client.Error += (_, e) => { if (e.Type == "internal") observed.InternalError.TrySetResult(e); };
+            client.Error += (_, e) =>
+            {
+                if (e.Type != "internal") return;
+                Interlocked.Increment(ref observed.InternalErrors);
+                observed.InternalError.TrySetResult(e);
+            };
             client.Disconnected += (_, e) => observed.Disconnected.TrySetResult(e);
             client.Connecting += (_, _) => Interlocked.Increment(ref observed.Connecting);
             return observed;
@@ -78,10 +84,11 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, disconnected.Code);
             Assert.Contains("Unsafe", disconnected.Reason);
 
-            // No reconnect: a permanent fault must not loop.
+            // No reconnect: a permanent fault must not loop, and it is reported once.
             await Task.Delay(1500);
             Assert.Equal(CentrifugeClientState.Disconnected, client.State);
             Assert.Equal(1, Volatile.Read(ref observed.Connecting));
+            Assert.Equal(1, Volatile.Read(ref observed.InternalErrors));
             Assert.DoesNotContain(_server.Received, c => c.Connect != null);
         }
 
@@ -99,7 +106,10 @@ namespace Centrifugal.Centrifuge.Tests
 
             var sendError = await Assert.ThrowsAsync<CentrifugeException>(() => send.WaitAsync(Wait));
             Assert.Equal(CentrifugeErrorCodes.TransportWriteError, sendError.Code);
-            await Assert.ThrowsAsync<CentrifugeException>(() => publish.WaitAsync(Wait));
+            Assert.IsType<FileNotFoundException>(sendError.InnerException);
+            var publishError = await Assert.ThrowsAsync<CentrifugeException>(() => publish.WaitAsync(Wait));
+            Assert.Equal(CentrifugeErrorCodes.TransportWriteError, publishError.Code);
+            Assert.IsType<FileNotFoundException>(publishError.InnerException);
             Assert.IsType<FileNotFoundException>((await observed.InternalError.Task.WaitAsync(Wait)).Exception);
             Assert.Equal(CentrifugeDisconnectedCodes.BadProtocol, (await observed.Disconnected.Task.WaitAsync(Wait)).Code);
         }

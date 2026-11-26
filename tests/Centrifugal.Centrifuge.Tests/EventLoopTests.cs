@@ -307,37 +307,41 @@ namespace Centrifugal.Centrifuge.Tests
         }
 
         /// <summary>
-        /// What a step, a deferred action or the after-step hook throws goes to the step-failed handler, each
-        /// as a step of its own after the failed step has finished (on the loop). A completion runs off the
-        /// loop, so what it throws is only logged.
+        /// The first exception of a step, whether thrown by the step, a deferred action or the after-step
+        /// hook, goes to the step-failed handler once the step's work is done, on the loop, before any other
+        /// step runs (a step queued meanwhile runs after the handler). The later exceptions of the same step
+        /// are only logged, and so is a completion's, which runs off the loop.
         /// </summary>
         [Fact]
-        public void StepFailuresGoToTheHandlerAsStepsOfTheirOwn()
+        public void FirstStepFailureGoesToTheHandlerBeforeTheNextStep()
         {
+            var logger = new CountingLogger();
             var order = new ConcurrentQueue<string>();
             var throwAfter = true;
             EventLoop loop = null!;
-            loop = new EventLoop(null, () => { if (throwAfter) { throwAfter = false; throw new InvalidOperationException("after"); } },
+            loop = new EventLoop(logger, () => { if (throwAfter) { throwAfter = false; throw new InvalidOperationException("after"); } },
                 ex => order.Enqueue("handled " + ex.Message + (loop.InStep ? " in step" : " off loop")));
             loop.Execute(() =>
             {
+                loop.Execute(() => order.Enqueue("queued step"));
                 loop.Defer(() => throw new InvalidOperationException("deferred"));
                 loop.Defer(() => order.Enqueue("rest of step"));
                 loop.Complete(() => throw new InvalidOperationException("completion"));
                 throw new InvalidOperationException("step");
             });
 
-            Until(() => order.Count == 4);
+            Until(() => order.Count == 3);
             Thread.Sleep(50);
-            Assert.Equal(new[] { "rest of step", "handled step in step", "handled deferred in step", "handled after in step" }, order);
+            Assert.Equal(new[] { "rest of step", "handled step in step", "queued step" }, order);
+            Assert.Equal(4, Volatile.Read(ref logger.Errors));
         }
 
         /// <summary>
-        /// A failure in the handler's own step, or of the handler itself, isn't handed to the handler again:
-        /// a fault that recurs on every step can't loop.
+        /// A failure in the handler's work, the handler itself or its after-step hook, isn't handed to the
+        /// handler again: a fault that recurs on every step can't loop.
         /// </summary>
         [Fact]
-        public void FailuresInTheHandlersStepAreOnlyLogged()
+        public void FailuresInTheHandlersWorkAreOnlyLogged()
         {
             var logger = new CountingLogger();
             var handled = 0;
@@ -347,12 +351,11 @@ namespace Centrifugal.Centrifuge.Tests
                 throw new InvalidOperationException("handler");
             });
             loop.Execute(() => { });
+            loop.Execute(() => { });
 
-            Until(() => Volatile.Read(ref logger.Errors) >= 3);
-            Thread.Sleep(100);
-            // The step's after-step hook, the handler, and the after-step hook of the handler's step.
-            Assert.Equal(1, Volatile.Read(ref handled));
-            Assert.Equal(3, Volatile.Read(ref logger.Errors));
+            // Per step: its after-step hook, the handler, and the after-step hook of the handler's work.
+            Assert.Equal(2, Volatile.Read(ref handled));
+            Assert.Equal(6, Volatile.Read(ref logger.Errors));
         }
 
         [Fact]

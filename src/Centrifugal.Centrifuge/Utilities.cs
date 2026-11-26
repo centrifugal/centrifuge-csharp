@@ -56,10 +56,18 @@ namespace Centrifugal.Centrifuge
             }
             if (cancellationToken.CanBeCanceled)
             {
-                waiter.Registration = cancellationToken.Register(() => _loop.Execute(() =>
+                try
                 {
-                    if (Remove(id)) reject(new OperationCanceledException(cancellationToken));
-                }));
+                    waiter.Registration = cancellationToken.Register(() => _loop.Execute(() =>
+                    {
+                        if (Remove(id)) reject(new OperationCanceledException(cancellationToken));
+                    }));
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The application disposed the token's source meanwhile (some runtimes throw then): it can't
+                    // be cancelled any more, so the wait goes on without it.
+                }
             }
         }
 

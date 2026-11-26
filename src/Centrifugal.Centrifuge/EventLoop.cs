@@ -33,9 +33,11 @@ namespace Centrifugal.Centrifuge
         private readonly ILogger? _logger;
         private readonly Action? _afterStep;
         private readonly Action<Exception>? _stepFailed;
-        /// <summary>Whether the current step is the step-failed handler's: what fails in it (e.g. in
-        /// afterStep) isn't handed to the handler again, so a recurring failure can't loop. Loop only.</summary>
-        private bool _inFailureStep;
+        /// <summary>The first exception the current step threw, for the step-failed handler; loop only.</summary>
+        private Exception? _stepFailure;
+        /// <summary>Whether the step-failed handler's work runs: what fails in it (e.g. in afterStep) isn't
+        /// handed to the handler again, so a recurring failure can't loop; loop only.</summary>
+        private bool _inFailureHandler;
         private bool _running;
         private bool _drainScheduled;
         private int _ownerThread;
@@ -44,9 +46,11 @@ namespace Centrifugal.Centrifuge
         /// <param name="afterStep">Runs at the end of each step, still on the loop (e.g. to write the commands
         /// the step queued as one frame).</param>
         /// <param name="stepFailed">Handles an exception thrown on the loop by a step, a deferred action or
-        /// <paramref name="afterStep"/> (an SDK bug or a broken environment, e.g. a missing assembly). It runs
-        /// as a step of its own, right after the one that failed, so it never sees a step half done. An
-        /// exception it throws itself is only logged. Completions run off the loop and are only logged.</param>
+        /// <paramref name="afterStep"/> (an SDK bug or a broken environment, e.g. a missing assembly): the
+        /// first one of a step, once the step's work is done and before any other step runs, so it never sees
+        /// a step half done and no other step acts on that state first. Its own deferred actions and
+        /// afterStep run after it, as for a step. What fails in that work, the handler included, is only
+        /// logged. Completions run off the loop and are only logged.</param>
         public EventLoop(ILogger? logger, Action? afterStep, Action<Exception>? stepFailed = null)
         {
             _logger = logger;
@@ -190,14 +194,31 @@ namespace Centrifugal.Centrifuge
 
         private void Run(Action step)
         {
-            _inFailureStep = false;
+            RunWork(step);
+            if (_stepFailure == null) return;
+            var failure = _stepFailure;
+            _stepFailure = null;
+            _inFailureHandler = true;
+            try
+            {
+                RunWork(() => _stepFailed!(failure));
+            }
+            finally
+            {
+                _inFailureHandler = false;
+                _stepFailure = null;
+            }
+        }
+
+        private void RunWork(Action step)
+        {
             GuardedStep(step);
             while (_deferred.Count > 0) GuardedStep(_deferred.Dequeue());
             if (_afterStep != null) GuardedStep(_afterStep);
         }
 
-        /// <summary>Runs work of a step, on the loop. An exception goes to the step-failed handler, as a step
-        /// queued after the current one.</summary>
+        /// <summary>Runs work of a step, on the loop. The first exception of the step is kept for the
+        /// step-failed handler (see <see cref="Run"/>).</summary>
         private void GuardedStep(Action action)
         {
             try
@@ -207,21 +228,7 @@ namespace Centrifugal.Centrifuge
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Centrifuge event loop step failed");
-                if (_stepFailed != null && !_inFailureStep) Execute(() => HandleStepFailure(ex));
-            }
-        }
-
-        private void HandleStepFailure(Exception exception)
-        {
-            _inFailureStep = true;
-            try
-            {
-                _stepFailed!(exception);
-            }
-            catch (Exception ex)
-            {
-                // Not handed to the handler again: a handler that keeps failing must not loop.
-                _logger?.LogError(ex, "Centrifuge step failure handler failed");
+                if (_stepFailed != null && !_inFailureHandler) _stepFailure ??= ex;
             }
         }
     }

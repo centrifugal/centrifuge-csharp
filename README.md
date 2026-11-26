@@ -166,7 +166,7 @@ Event handlers should not throw: catch exceptions in your handlers. The SDK can'
 * the handlers after the failing one don't get that event; the SDK's own work completes as if the handler had returned, so the client is left in a consistent state;
 * a publication whose handler threw doesn't count as delivered: after `Connect()`, a recoverable subscription receives it again.
 
-An exception in the SDK's own processing (an SDK bug, or a broken environment such as a dependency missing at run time) is handled the same way: it is reported through the client's `Error` event with `Type` set to `internal`, and the client disconnects with code `2` and the reason `internal error: <message>`, without reconnecting.
+An exception in the SDK's own processing (an SDK bug, or a broken environment such as a dependency missing at run time) is handled the same way: it is reported through the client's `Error` event with `Type` set to `internal`, and the client disconnects with code `2` and the reason `internal error: <message>`, without reconnecting. When it happens within an SDK call made from an event handler, the call throws into the handler, so it is reported as that handler's exception.
 
 An exception thrown by an `Error` handler is logged, and stops the client as well. An `async void` handler that throws after its first `await` is out of the SDK's reach, and the exception crashes the application. Catch exceptions yourself:
 
