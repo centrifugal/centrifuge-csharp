@@ -49,12 +49,12 @@ The SDK supports multiple transport protocols with platform-specific implementat
 
 | Transport | Server/.NET Desktop | Blazor Server | Blazor WASM | Unity Desktop/Mobile | Unity WebGL |
 |-----------|---------------------|---------------|-------------|----------------------|-------------|
-| **WebSocket** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ⚠️ Plugin Required |
+| **WebSocket** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ❌ Not Supported |
 | **HTTP Stream** | ✅ Native | ✅ Native | ✅ JS Interop* | ✅ Native | ❌ Not Supported |
 
 **\*Blazor WebAssembly**: Requires `builder.Services.AddCentrifugeClient()` in `Program.cs`. The SDK automatically uses browser-native implementations via JavaScript interop for both WebSocket and HTTP Stream transports.
 
-**Unity WebGL**: Requires a third-party WebSocket plugin. HTTP Stream is not supported in WebGL.
+**Unity WebGL**: Not supported. WebGL builds have no `System.Net` networking, and the SDK doesn't accept custom transports, so third-party WebSocket plugins can't be used with it.
 
 ## Installation
 
@@ -590,9 +590,7 @@ The library targets .NET Standard 2.1, which Unity supports since 2021.2.
 
 **Platform Support:**
 - ✅ **Editor, standalone and mobile builds**: WebSocket and HTTP-stream transports
-- ⚠️ **WebGL**: Requires a WebSocket plugin that provides `System.Net.WebSockets` support, such as:
-  - [NativeWebSocket](https://github.com/endel/NativeWebSocket)
-  - [WebSocketSharp](https://github.com/sta/websocket-sharp) with Unity WebGL wrapper
+- ❌ **WebGL**: Not supported. WebGL builds have no `System.Net` networking (no `ClientWebSocket`, no `HttpClient` streaming), and the SDK doesn't accept custom transports, so WebSocket plugins such as NativeWebSocket can't be used with it.
 
 ### Installing in Unity
 
@@ -658,8 +656,6 @@ On Unity, TLS goes through Unity's own TLS stack (UnityTLS), which checks the se
 ### Troubleshooting
 
 If the client doesn't connect in Unity, run the connection probe: copy [`unity/Project/Assets/Editor/CentrifugeProbe.cs`](unity/Project/Assets/Editor/CentrifugeProbe.cs) into your project's `Assets/Editor/`, set `Endpoint` at the top, and choose **Centrifuge → Run connection probe**. It checks the raw WebSocket, the TLS handshake, DNS and the thread pool separately, and copies a report to the clipboard that you can attach to an issue.
-
-> **Note**: Unity WebGL builds run in the browser but don't have built-in `System.Net.WebSockets` support. You'll need a third-party WebSocket library that works in Unity WebGL.
 
 ## Blazor Support
 
