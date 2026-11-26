@@ -166,6 +166,8 @@ Event handlers should not throw: catch exceptions in your handlers. The SDK can'
 * the handlers after the failing one don't get that event; the SDK's own work completes as if the handler had returned, so the client is left in a consistent state;
 * a publication whose handler threw doesn't count as delivered: after `Connect()`, a recoverable subscription receives it again.
 
+An exception in the SDK's own processing (an SDK bug, or a broken environment such as a dependency missing at run time) is handled the same way: it is reported through the client's `Error` event with `Type` set to `internal`, and the client disconnects with code `2` and the reason `internal error: <message>`, without reconnecting.
+
 An exception thrown by an `Error` handler is logged, and stops the client as well. An `async void` handler that throws after its first `await` is out of the SDK's reach, and the exception crashes the application. Catch exceptions yourself:
 
 ```csharp
@@ -601,6 +603,8 @@ Unity doesn't resolve NuGet dependencies by itself. Either install the `Centrifu
 - `System.Threading.Channels.dll`
 - `Microsoft.Extensions.Logging.Abstractions.dll`
 - `System.Runtime.CompilerServices.Unsafe.dll`: Unity doesn't ship it, and without it Unity won't load `Google.Protobuf` (the Console shows `Unable to resolve reference 'System.Runtime.CompilerServices.Unsafe'`).
+
+With NuGetForUnity, install `System.Runtime.CompilerServices.Unsafe` explicitly too. NuGetForUnity skips a dependency that a Unity package in the project already ships, and some packages do (older versions of `com.unity.collections`, for example). When such a package is updated, e.g. with a new Editor version, the DLL disappears from the project. The client then can't encode commands: it reports an `internal` error with a `FileNotFoundException` for that assembly and disconnects (see [Event Handlers and Callbacks](#event-handlers-and-callbacks)).
 
 ### Example
 

@@ -306,6 +306,55 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.False(loop.InStep);
         }
 
+        /// <summary>
+        /// What a step, a deferred action or the after-step hook throws goes to the step-failed handler, each
+        /// as a step of its own after the failed step has finished (on the loop). A completion runs off the
+        /// loop, so what it throws is only logged.
+        /// </summary>
+        [Fact]
+        public void StepFailuresGoToTheHandlerAsStepsOfTheirOwn()
+        {
+            var order = new ConcurrentQueue<string>();
+            var throwAfter = true;
+            EventLoop loop = null!;
+            loop = new EventLoop(null, () => { if (throwAfter) { throwAfter = false; throw new InvalidOperationException("after"); } },
+                ex => order.Enqueue("handled " + ex.Message + (loop.InStep ? " in step" : " off loop")));
+            loop.Execute(() =>
+            {
+                loop.Defer(() => throw new InvalidOperationException("deferred"));
+                loop.Defer(() => order.Enqueue("rest of step"));
+                loop.Complete(() => throw new InvalidOperationException("completion"));
+                throw new InvalidOperationException("step");
+            });
+
+            Until(() => order.Count == 4);
+            Thread.Sleep(50);
+            Assert.Equal(new[] { "rest of step", "handled step in step", "handled deferred in step", "handled after in step" }, order);
+        }
+
+        /// <summary>
+        /// A failure in the handler's own step, or of the handler itself, isn't handed to the handler again:
+        /// a fault that recurs on every step can't loop.
+        /// </summary>
+        [Fact]
+        public void FailuresInTheHandlersStepAreOnlyLogged()
+        {
+            var logger = new CountingLogger();
+            var handled = 0;
+            var loop = new EventLoop(logger, () => throw new InvalidOperationException("after, always"), ex =>
+            {
+                Interlocked.Increment(ref handled);
+                throw new InvalidOperationException("handler");
+            });
+            loop.Execute(() => { });
+
+            Until(() => Volatile.Read(ref logger.Errors) >= 3);
+            Thread.Sleep(100);
+            // The step's after-step hook, the handler, and the after-step hook of the handler's step.
+            Assert.Equal(1, Volatile.Read(ref handled));
+            Assert.Equal(3, Volatile.Read(ref logger.Errors));
+        }
+
         [Fact]
         public void ThrowingStepWithoutLoggerDoesNotStopTheLoop()
         {
