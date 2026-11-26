@@ -43,6 +43,16 @@ run-blazor-example:
 	cd examples/Centrifugal.Centrifuge.BlazorExample && \
 		dotnet run --urls "http://localhost:5050" --launch-profile "http"
 
+.PHONY: unity-test
+unity-test:
+	@echo "Running Unity smoke tests (needs Unity Hub + an Editor, and docker compose up)..."
+	bash unity/run.sh test $(UNITY_VERSION)
+
+.PHONY: unity-probe
+unity-probe:
+	@echo "Running the Unity connection probe..."
+	bash unity/run.sh probe $(UNITY_VERSION)
+
 .PHONY: help
 help:
 	@echo "Available targets:"
@@ -54,4 +64,6 @@ help:
 	@echo "  proto                - Regenerate C# protobuf code from client.proto"
 	@echo "  run-example          - Run the console example program"
 	@echo "  run-blazor-example   - Run the Blazor WebAssembly example (port 5050)"
+	@echo "  unity-test           - Run the SDK smoke tests in a local Unity Editor (UNITY_VERSION=... to pick one)"
+	@echo "  unity-probe          - Run the Unity connection probe (see unity/README.md)"
 	@echo "  help                 - Show this help message"
