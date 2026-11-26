@@ -86,6 +86,13 @@ dotnet test --collect:"XPlat Code Coverage"
 dotnet test --filter "Category=Integration"
 ```
 
+### Unity
+
+`make unity-test` runs smoke tests of the netstandard2.1 build inside a local Unity Editor, on Unity's
+Mono runtime (WebSocket and HTTP-stream: connect, subscribe/publish, history, presence, reconnect,
+Dispose on the main thread). It needs Unity Hub with an Editor installed (a free Personal license is
+enough) and the Centrifugo from `docker compose up -d`. See [unity/README.md](unity/README.md).
+
 ### Writing Tests
 
 - Write unit tests for all new features

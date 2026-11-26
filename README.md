@@ -584,48 +584,80 @@ See the [Blazor example](examples/Centrifugal.Centrifuge.BlazorExample/Pages/Hom
 
 ## Unity Support
 
-The library works with Unity 2021.2+ (requires .NET Standard 2.1 support).
+The library targets .NET Standard 2.1, which Unity supports since 2021.2.
+
+**Verified:** Unity 6000.0.85f2 and 6000.6.10f1, Editor on macOS (Apple Silicon, Mono): WebSocket and HTTP-stream transports, covering connect, subscribe/publish, history, presence, reconnecting after a server disconnect, and `Dispose` on the main thread (see `make unity-test`). Player builds, IL2CPP, and other platforms (Windows, Linux, iOS, Android) are expected to work but are not tested yet. Reports are welcome.
 
 **Platform Support:**
-- ✅ **Standalone builds** (Windows, macOS, Linux): Works out of the box
-- ✅ **Mobile** (iOS, Android): Works out of the box
+- ✅ **Editor, standalone and mobile builds**: WebSocket and HTTP-stream transports
 - ⚠️ **WebGL**: Requires a WebSocket plugin that provides `System.Net.WebSockets` support, such as:
   - [NativeWebSocket](https://github.com/endel/NativeWebSocket)
   - [WebSocketSharp](https://github.com/sta/websocket-sharp) with Unity WebGL wrapper
 
-Example for Unity (standalone/mobile):
+### Installing in Unity
+
+Unity doesn't resolve NuGet dependencies by itself. Either install the `Centrifugal.Centrifuge` package with [NuGetForUnity](https://github.com/GlitchEnzo/NuGetForUnity), or copy the `netstandard2.1` DLLs of the package and its dependencies into `Assets/Plugins`:
+
+- `Centrifugal.Centrifuge.dll`
+- `Google.Protobuf.dll`
+- `System.Threading.Channels.dll`
+- `Microsoft.Extensions.Logging.Abstractions.dll`
+- `System.Runtime.CompilerServices.Unsafe.dll`: Unity doesn't ship it, and without it Unity won't load `Google.Protobuf` (the Console shows `Unable to resolve reference 'System.Runtime.CompilerServices.Unsafe'`).
+
+### Example
 
 ```csharp
+using System.Collections.Concurrent;
 using UnityEngine;
 using Centrifugal.Centrifuge;
-using System.Threading.Tasks;
 
 public class CentrifugeManager : MonoBehaviour
 {
     private CentrifugeClient client;
+    private readonly ConcurrentQueue<string> messages = new ConcurrentQueue<string>();
 
-    async void Start()
+    void Start()
     {
         client = new CentrifugeClient("ws://localhost:8000/connection/websocket");
 
-        client.Connected += (sender, e) =>
-        {
-            Debug.Log($"Connected: {e.ClientId}");
-        };
+        client.Connected += (sender, e) => Debug.Log($"Connected: {e.ClientId}");
+
+        var sub = client.NewSubscription("news");
+        // Event handlers may run on a background thread: hand data over to the main thread.
+        sub.Publication += (sender, e) => messages.Enqueue(System.Text.Encoding.UTF8.GetString(e.Data.Span));
+        sub.Subscribe();
 
         client.Connect();
     }
 
+    void Update()
+    {
+        // Main thread: safe to touch GameObjects, components and UI here.
+        while (messages.TryDequeue(out var message))
+        {
+            Debug.Log($"Publication: {message}");
+        }
+    }
+
     void OnDestroy()
     {
-        if (client != null)
-        {
-            // Dispose() blocks until disconnect completes
-            client.Dispose();
-        }
+        // Blocks until the disconnect completes; it doesn't need the main thread, so it can't deadlock.
+        client?.Dispose();
     }
 }
 ```
+
+### Threading
+
+Event handlers run on whichever thread delivers the event, usually a thread-pool thread and not Unity's main thread. Most Unity APIs (GameObjects, components, UI) may only be used on the main thread, so pass data to it as in the example, or post to the `SynchronizationContext` captured in `Start()`. `Debug.Log` is safe from any thread. Awaiting SDK methods from a MonoBehaviour's `async` method resumes on the main thread as usual.
+
+### TLS (`wss://`)
+
+On Unity, TLS goes through Unity's own TLS stack (UnityTLS), which checks the server certificate against the platform's trusted root certificates. Unity's `ClientWebSocket` doesn't call .NET certificate validation callbacks (`ServicePointManager.ServerCertificateValidationCallback` or `ClientWebSocketOptions.RemoteCertificateValidationCallback`), so a self-signed certificate can't be accepted from code. It fails with `UNITYTLS_X509VERIFY_FLAG_NOT_TRUSTED`. For local development, use `ws://` or a certificate your OS trusts.
+
+### Troubleshooting
+
+If the client doesn't connect in Unity, run the connection probe: copy [`unity/Project/Assets/Editor/CentrifugeProbe.cs`](unity/Project/Assets/Editor/CentrifugeProbe.cs) into your project's `Assets/Editor/`, set `Endpoint` at the top, and choose **Centrifuge → Run connection probe**. It checks the raw WebSocket, the TLS handshake, DNS and the thread pool separately, and copies a report to the clipboard that you can attach to an issue.
 
 > **Note**: Unity WebGL builds run in the browser but don't have built-in `System.Net.WebSockets` support. You'll need a third-party WebSocket library that works in Unity WebGL.
 
