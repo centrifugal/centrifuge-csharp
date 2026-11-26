@@ -116,6 +116,10 @@ namespace Centrifugal.Centrifuge
         /// <summary>The loop the state of this client and its subscriptions changes on.</summary>
         internal EventLoop Loop { get; }
 
+        /// <summary>Encodes a command for the wire. A property so tests can make encoding fail, as a dependency
+        /// missing at run time does.</summary>
+        internal Func<Command, byte[]> EncodeCommand { get; set; } = command => command.ToByteArray();
+
         /// <summary>
         /// Gets the current client state.
         /// </summary>
@@ -276,7 +280,7 @@ namespace Centrifugal.Centrifuge
             _data = _options.Data.IsEmpty ? default : _options.Data.ToArray();
             _headers = _options.Headers != null ? new Dictionary<string, string>(_options.Headers) : null;
             _logger = GuardedLogger.Wrap(_options.Logger);
-            Loop = new EventLoop(_logger, OnStepEnd);
+            Loop = new EventLoop(_logger, OnStepEnd, OnStepFailed);
             _promises = new Waiters(Loop);
 #if NET6_0_OR_GREATER
             _jsRuntime = _options.JSRuntime ?? _globalJSRuntime;
@@ -729,13 +733,23 @@ namespace Centrifugal.Centrifuge
                 (error, _) => Loop.Complete(() => Waiters.Fail(result, error)));
             AddCommand(command);
             if (!cancellationToken.CanBeCanceled) return;
-            var registration = cancellationToken.Register(() => Loop.Execute(() =>
+            CancellationTokenRegistration registration;
+            try
             {
-                if (!_calls.TryGetValue(id, out var call)) return;
-                _calls.Remove(id);
-                call.Timer?.Cancel();
-                Loop.Complete(() => result.TrySetCanceled(cancellationToken));
-            }));
+                registration = cancellationToken.Register(() => Loop.Execute(() =>
+                {
+                    if (!_calls.TryGetValue(id, out var call)) return;
+                    _calls.Remove(id);
+                    call.Timer?.Cancel();
+                    Loop.Complete(() => result.TrySetCanceled(cancellationToken));
+                }));
+            }
+            catch (ObjectDisposedException)
+            {
+                // The application disposed the token's source meanwhile (some runtimes throw then): it can't be
+                // cancelled any more, so the call goes on without it.
+                return;
+            }
             result.Task.ContinueWith(_ => registration.Dispose(), TaskContinuationOptions.ExecuteSynchronously);
         }
 
@@ -947,7 +961,7 @@ namespace Centrifugal.Centrifuge
             if (transport.UsesEmulation)
             {
                 // The connect command goes with the request that opens the stream.
-                initialData = SendConnect(skipSending: true).ToByteArray();
+                initialData = EncodeCommand(SendConnect(skipSending: true));
             }
 
             _transportClosed = false;
@@ -1624,27 +1638,42 @@ namespace Centrifugal.Centrifuge
             }
 
             var index = 0;
-            while (index < commands.Count)
+            var frameStart = 0;
+            try
             {
-                using var ms = new MemoryStream();
-                List<uint>? callIds = null;
-                List<TaskCompletionSource<bool>>? sends = null;
-                do
+                while (index < commands.Count)
                 {
-                    var entry = commands[index++];
-                    VarintCodec.WriteDelimitedMessage(ms, entry.Command.ToByteArray());
-                    if (entry.Command.Id > 0) (callIds ??= new List<uint>()).Add(entry.Command.Id);
-                    if (entry.Sent != null) (sends ??= new List<TaskCompletionSource<bool>>()).Add(entry.Sent);
-                } while (index < commands.Count && ms.Length < MaxCommandBatchSize);
+                    frameStart = index;
+                    using var ms = new MemoryStream();
+                    List<uint>? callIds = null;
+                    List<TaskCompletionSource<bool>>? sends = null;
+                    do
+                    {
+                        var entry = commands[index++];
+                        VarintCodec.WriteDelimitedMessage(ms, EncodeCommand(entry.Command));
+                        if (entry.Command.Id > 0) (callIds ??= new List<uint>()).Add(entry.Command.Id);
+                        if (entry.Sent != null) (sends ??= new List<TaskCompletionSource<bool>>()).Add(entry.Sent);
+                    } while (index < commands.Count && ms.Length < MaxCommandBatchSize);
 
-                var frame = new OutgoingFrame(ms.ToArray(), callIds, sends);
-                if (_emulationEndpoint != null)
-                {
-                    frame.Session = _session;
-                    frame.Node = _node;
-                    frame.EmulationEndpoint = _emulationEndpoint;
+                    var frame = new OutgoingFrame(ms.ToArray(), callIds, sends);
+                    if (_emulationEndpoint != null)
+                    {
+                        frame.Session = _session;
+                        frame.Node = _node;
+                        frame.EmulationEndpoint = _emulationEndpoint;
+                    }
+                    if (!_writer.Enqueue(frame)) FailSends(sends, ConnectionClosedError());
                 }
-                if (!_writer.Enqueue(frame)) FailSends(sends, ConnectionClosedError());
+            }
+            catch (Exception ex)
+            {
+                // Encoding failed: a broken environment (e.g. a dependency missing at run time) or an SDK bug.
+                // The commands of this frame and after it are lost: their calls and sends fail now, with the
+                // cause. The step failure then stops the client (see OnStepFailed).
+                var lost = commands.Skip(frameStart).ToList();
+                FailCalls(lost.Where(entry => entry.Command.Id > 0).Select(entry => entry.Command.Id), WriteError(ex));
+                FailSends(lost.Where(entry => entry.Sent != null).Select(entry => entry.Sent!).ToList(), WriteError(ex));
+                throw;
             }
         }
 
@@ -1656,6 +1685,19 @@ namespace Centrifugal.Centrifuge
             _flushNow = false;
             _flushTimer?.Cancel();
             _flushTimer = null;
+        }
+
+        /// <summary>Fails the pending calls <paramref name="ids"/> with <paramref name="error"/>, as a write
+        /// error (not replied). Call in a step.</summary>
+        private void FailCalls(IEnumerable<uint> ids, CentrifugeException error)
+        {
+            foreach (var id in ids)
+            {
+                if (!_calls.TryGetValue(id, out var call)) continue;
+                _calls.Remove(id);
+                call.Timer?.Cancel();
+                call.OnError(error, false);
+            }
         }
 
         /// <summary>
@@ -1674,16 +1716,7 @@ namespace Centrifugal.Centrifuge
             _logger?.LogDebug(error, "Error writing commands");
             FailSends(frame.Sends, WriteError(error));
             if (attempt.Id != _transportId) return;
-            if (frame.CallIds != null)
-            {
-                foreach (var id in frame.CallIds)
-                {
-                    if (!_calls.TryGetValue(id, out var call)) continue;
-                    _calls.Remove(id);
-                    call.Timer?.Cancel();
-                    call.OnError(WriteError(error), false);
-                }
-            }
+            if (frame.CallIds != null) FailCalls(frame.CallIds, WriteError(error));
             if (attempt.Transport.UsesEmulation && EmulationTransportFailed(error))
             {
                 OnTransportClose(attempt, null, string.Empty);
@@ -2094,6 +2127,24 @@ namespace Centrifugal.Centrifuge
 
         private void EmitErrorEvent(string type, Exception exception) =>
             HandlerFailed(EventDispatch.RaiseError(this, Error, type, exception, _logger));
+
+        /// <summary>
+        /// An exception thrown by the SDK's own processing on the event loop: an SDK bug or a broken
+        /// environment, e.g. a dependency missing at run time that makes encoding commands fail (before, the
+        /// client then only timed out connecting, again and again). It is reported through Error with type
+        /// "internal". The SDK can't know what the failed step left undone, so as for an exception in an event
+        /// handler, the client disconnects with BadProtocol and doesn't reconnect: a permanent fault must not
+        /// loop silently.
+        /// </summary>
+        private void OnStepFailed(Exception exception)
+        {
+            if (IsDisposed) return;
+            EmitErrorEvent("internal", exception);
+            if (_state != CentrifugeClientState.Disconnected)
+            {
+                DisconnectInternal(CentrifugeDisconnectedCodes.BadProtocol, "internal error: " + exception.Message, false);
+            }
+        }
 
         /// <summary>The number of exceptions escaped from event handlers (see <see cref="HandlerFailed"/>).</summary>
         internal int HandlerFailures { get; private set; }

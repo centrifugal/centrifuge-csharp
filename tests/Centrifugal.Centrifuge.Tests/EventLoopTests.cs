@@ -306,6 +306,58 @@ namespace Centrifugal.Centrifuge.Tests
             Assert.False(loop.InStep);
         }
 
+        /// <summary>
+        /// The first exception of a step, whether thrown by the step, a deferred action or the after-step
+        /// hook, goes to the step-failed handler once the step's work is done, on the loop, before any other
+        /// step runs (a step queued meanwhile runs after the handler). The later exceptions of the same step
+        /// are only logged, and so is a completion's, which runs off the loop.
+        /// </summary>
+        [Fact]
+        public void FirstStepFailureGoesToTheHandlerBeforeTheNextStep()
+        {
+            var logger = new CountingLogger();
+            var order = new ConcurrentQueue<string>();
+            var throwAfter = true;
+            EventLoop loop = null!;
+            loop = new EventLoop(logger, () => { if (throwAfter) { throwAfter = false; throw new InvalidOperationException("after"); } },
+                ex => order.Enqueue("handled " + ex.Message + (loop.InStep ? " in step" : " off loop")));
+            loop.Execute(() =>
+            {
+                loop.Execute(() => order.Enqueue("queued step"));
+                loop.Defer(() => throw new InvalidOperationException("deferred"));
+                loop.Defer(() => order.Enqueue("rest of step"));
+                loop.Complete(() => throw new InvalidOperationException("completion"));
+                throw new InvalidOperationException("step");
+            });
+
+            Until(() => order.Count == 3);
+            Thread.Sleep(50);
+            Assert.Equal(new[] { "rest of step", "handled step in step", "queued step" }, order);
+            Assert.Equal(4, Volatile.Read(ref logger.Errors));
+        }
+
+        /// <summary>
+        /// A failure in the handler's work, the handler itself or its after-step hook, isn't handed to the
+        /// handler again: a fault that recurs on every step can't loop.
+        /// </summary>
+        [Fact]
+        public void FailuresInTheHandlersWorkAreOnlyLogged()
+        {
+            var logger = new CountingLogger();
+            var handled = 0;
+            var loop = new EventLoop(logger, () => throw new InvalidOperationException("after, always"), ex =>
+            {
+                Interlocked.Increment(ref handled);
+                throw new InvalidOperationException("handler");
+            });
+            loop.Execute(() => { });
+            loop.Execute(() => { });
+
+            // Per step: its after-step hook, the handler, and the after-step hook of the handler's work.
+            Assert.Equal(2, Volatile.Read(ref handled));
+            Assert.Equal(6, Volatile.Read(ref logger.Errors));
+        }
+
         [Fact]
         public void ThrowingStepWithoutLoggerDoesNotStopTheLoop()
         {
